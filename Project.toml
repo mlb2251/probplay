@@ -1,0 +1,4 @@
+name = "Atari"
+uuid = "bdc31c73-0d0f-4057-afef-0e312eaf33b0"
+authors = ["Matthew Bowers <mlbowers@mit.edu>"]
+version = "0.1.0"

@@ -1,5 +1,6 @@
 using Gen
 using Plots
+#import RecipesBase: grid
 
 
 # x = {:initial_x} ~ normal(0, 1)
@@ -83,3 +84,12 @@ function render_trace(trace; show_data=true)
 end;
 
 render_trace(trace)
+
+
+function gridd(renderer::Function, traces)
+    Plots.plot(map(renderer, traces)...)
+end;
+
+traces = [Gen.simulate(line_model, (xs,)) for _=1:12]
+gridd(render_trace, traces)
+

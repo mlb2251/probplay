@@ -29,3 +29,5 @@ end;
 
 traces = [sine_inference(sine_model, xs, ys_sine, 10000) for _=1:10];
 gridd(render_trace, traces)
+
+#ok

@@ -31,7 +31,7 @@ function render_trace(trace; show_data=true)
 end;
 
 
-function grid(renderer::Function, traces)
+function gridd(renderer::Function, traces)
     Plots.plot(map(renderer, traces)...)
 end;
 
@@ -42,9 +42,9 @@ end;
     period = ({:per} ~ gamma(1, 1))
     phase= ({:pha} ~ uniform(0, 2*pi))
 
-    print("did we make it here")
+    #print("did we make it here")
     function y(x)
-        return 1 # amplitude*sin(2*pi*x/(0.0000000001+ period)+phase) 
+        return amplitude*sin(2*pi*x/(0.0000000001+ period)+phase) 
     end
     
     for (i, x) in enumerate(xs)

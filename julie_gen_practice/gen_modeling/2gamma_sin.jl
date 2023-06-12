@@ -39,12 +39,12 @@ end;
     
     # < your code here, for sampling a phase, period, and amplitude >
     amplitude = ({:amp} ~ gamma(1, 1))
-    period = ({:per} ~ gamma(1, 1))
+    period = ({:per} ~ gamma(5, 1))
     phase= ({:pha} ~ uniform(0, 2*pi))
 
     #print("did we make it here")
     function y(x)
-        return amplitude*sin(2*pi*x/(0.0000000001+ period)+phase) 
+        return amplitude*sin(2*pi*x/(period)+phase) 
     end
     
     for (i, x) in enumerate(xs)

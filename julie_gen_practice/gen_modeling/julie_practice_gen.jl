@@ -2,6 +2,11 @@ using Gen
 using Plots
 #import RecipesBase: grid
 
+#ALL IS CODE FROM https://www.gen.dev/tutorials/intro-to-modeling/tutorial#julia-gen-jupyter
+
+
+
+
 
 # x = {:initial_x} ~ normal(0, 1)
 # if x < 0
@@ -92,4 +97,65 @@ end;
 
 traces = [Gen.simulate(line_model, (xs,)) for _=1:12]
 gridd(render_trace, traces)
+
+
+
+#INFERENCE SECTION 
+
+
+ys = [6.75003, 6.1568, 4.26414, 1.84894, 3.09686, 1.94026, 1.36411, -0.83959, -0.976, -1.93363, -2.91303];
+
+scatter(xs, ys, color="black", label=nothing, title="Observed data (linear)", xlabel="X", ylabel="Y")
+
+function do_inference(model, xs, ys, amount_of_computation)
+    
+    # Create a choice map that maps model addresses (:y, i)
+    # to observed values ys[i]. We leave :slope and :intercept
+    # unconstrained, because we want them to be inferred.
+    observations = Gen.choicemap()
+    for (i, y) in enumerate(ys)
+        observations[(:y, i)] = y
+    end
+    
+    # Call importance_resampling to obtain a likely trace consistent
+    # with our observations.
+    (trace, _) = Gen.importance_resampling(model, (xs,), observations, amount_of_computation);
+    return trace
+end;
+
+# for _ = 1:1
+#     trace = do_inference(line_model, xs, ys, 100)
+#     render_trace(trace)
+# end
+
+trace = do_inference(line_model, xs, ys, 100)#last is amount_of_computation
+render_trace(trace)
+
+
+traces = [do_inference(line_model, xs, ys, 100) for _=1:10];
+gridd(render_trace, traces)
+
+
+#to view all in same plot
+
+function overlay(renderer, traces; same_data=true, args...)
+    fig = renderer(traces[1], show_data=true, args...)
+    
+    xs, = get_args(traces[1])
+    xmin = minimum(xs)
+    xmax = maximum(xs)
+
+    for i=2:length(traces)
+        y = get_retval(traces[i])
+        test_xs = collect(range(-5, stop=5, length=1000))
+        fig = plot!(test_xs, map(y, test_xs), color="black", alpha=0.5, label=nothing,
+                    xlim=(xmin, xmax), ylim=(xmin, xmax))
+    end
+    return fig
+end;
+
+traces = [do_inference(line_model, xs, ys, 100) for _=1:10];
+overlay(render_trace, traces)
+
+#finished section 3, onto 4
 

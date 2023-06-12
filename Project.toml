@@ -2,3 +2,9 @@ name = "Atari"
 uuid = "bdc31c73-0d0f-4057-afef-0e312eaf33b0"
 authors = ["Matthew Bowers <mlbowers@mit.edu>"]
 version = "0.1.0"
+
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+Gen = "ea4f424c-a589-11e8-07c0-fd5c91b9da4a"
+Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"

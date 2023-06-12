@@ -1,0 +1,11 @@
+using Gen
+using Plots
+
+print("at least it prints")
+
+
+include("src/gen_model.jl")
+trace,_ = Gen.generate(model2, (210, 160, 100));
+gif_of_trace(trace)
+
+#hello, testing

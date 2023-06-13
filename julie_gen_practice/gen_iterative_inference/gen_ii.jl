@@ -1,6 +1,6 @@
 import Random, Logging
 using Gen, Plots
-
+import StatsBase
 include("regression_viz_import.jl")
 
 # Disable logging, because @animate is verbose otherwise
@@ -8,6 +8,10 @@ Logging.disable_logging(Logging.Info);
 
  #stuff from https://www.gen.dev/tutorials/iterative-inference/tutorial
 
+
+
+
+ 
 #!!this more complicated syntax still needed in loops!!
 # x = ({:x} ~ normal(0, 1))
 # slope = ({:slope} ~ normal(0, 1))
@@ -221,3 +225,138 @@ gif(viz)
 
 #part 6 
 
+#Random Sample Consensus RANSAC improves mcmc
+#find best line for many subsets of points, best wins 
+
+
+ 
+
+struct RANSACParams
+    """the number of random subsets to try"""
+    iters::Int
+
+    """the number of points to use to construct a hypothesis"""
+    subset_size::Int
+
+    """the error threshold below which a datum is considered an inlier"""
+    eps::Float64
+    
+    function RANSACParams(iters, subset_size, eps)
+        if iters < 1
+            error("iters < 1")
+        end
+        new(iters, subset_size, eps)
+    end
+end
+
+
+function ransac(xs::Vector{Float64}, ys::Vector{Float64}, params::RANSACParams)
+    best_num_inliers::Int = -1
+    best_slope::Float64 = NaN
+    best_intercept::Float64 = NaN
+    for i=1:params.iters
+        # select a random subset of points
+        rand_ind = StatsBase.sample(1:length(xs), params.subset_size, replace=false)
+        subset_xs = xs[rand_ind]
+        subset_ys = ys[rand_ind]
+        
+        # estimate slope and intercept using least squares
+        A = hcat(subset_xs, ones(length(subset_xs)))
+        slope, intercept = A \ subset_ys # use backslash operator for least sq soln
+        
+        ypred = intercept .+ slope * xs
+
+        # count the number of inliers for this (slope, intercept) hypothesis
+        inliers = abs.(ys - ypred) .< params.eps
+        num_inliers = sum(inliers)
+
+        #setting best slope if many in line range 
+        if num_inliers > best_num_inliers
+            best_slope, best_intercept = slope, intercept
+            best_num_inliers = num_inliers
+        end
+    end
+
+    # return the hypothesis that resulted in the most inliers
+    (best_slope, best_intercept)
+end;
+
+
+
+@gen function ransac_proposal(prev_trace, xs, ys)
+    (slope_guess, intercept_guess) = ransac(xs, ys, RANSACParams(10, 3, 1.)) #10 subsets, 3 points, within 1 dist of line
+    slope ~ normal(slope_guess, 0.1)
+    intercept ~ normal(intercept_guess, 1.0)
+end;
+
+function ransac_update(tr)
+    # Use RANSAC to (potentially) jump to a better line
+    # from wherever we are
+    (tr, _) = mh(tr, ransac_proposal, (xs, ys))
+    
+    # Spend a while refining the parameters, using Gaussian drift
+    # to tune the slope and intercept, and resimulation for the noise
+    # and outliers.
+    for j=1:20
+        (tr, _) = mh(tr, select(:prob_outlier))
+        (tr, _) = mh(tr, select(:noise))
+        (tr, _) = mh(tr, line_proposal, ())
+        # Reclassify outliers
+        for i=1:length(get_args(tr)[1])
+            (tr, _) = mh(tr, select(:data => i => :is_outlier))
+        end
+    end
+    tr
+end
+
+
+function ransac_inference(xs, ys, observations)
+    (slope, intercept) = ransac(xs, ys, RANSACParams(10, 3, 1.))
+    slope_intercept_init = choicemap()
+    slope_intercept_init[:slope] = slope
+    slope_intercept_init[:intercept] = intercept
+    (tr, _) = generate(regression_with_outliers, (xs,), merge(observations, slope_intercept_init))
+    for iter=1:5
+        tr = ransac_update(tr)
+    end
+    tr
+end
+
+scores = Vector{Float64}(undef, 10)
+for i=1:10
+    @time tr = ransac_inference(xs, ys, observations)
+    scores[i] = get_score(tr)
+end
+println("Log probability: ", logmeanexp(scores))
+
+
+#visualizing RANSAC 
+(slope, intercept) = ransac(xs, ys, RANSACParams(10, 3, 1.))
+slope_intercept_init = choicemap()
+slope_intercept_init[:slope] = slope
+slope_intercept_init[:intercept] = intercept
+(tr, _) = generate(regression_with_outliers, (xs,), merge(observations, slope_intercept_init))
+
+viz = Plots.@animate for i in 1:100
+    global tr
+
+    if i % 20 == 0
+        (tr, _) = mh(tr, ransac_proposal, (xs, ys))
+    end
+
+    # Spend a while refining the parameters, using Gaussian drift
+    # to tune the slope and intercept, and resimulation for the noise
+    # and outliers.
+    (tr, _) = mh(tr, select(:prob_outlier))
+    (tr, _) = mh(tr, select(:noise))
+    (tr, _) = mh(tr, line_proposal, ())
+    
+    # Reclassify outliers
+    for i=1:length(get_args(tr)[1])
+        (tr, _) = mh(tr, select(:data => i => :is_outlier))
+    end
+
+    visualize_trace(tr; title="Iteration $i")
+end;
+
+gif(viz)

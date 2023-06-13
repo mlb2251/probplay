@@ -87,12 +87,14 @@ Plots.scatter(xs, ys, color="black", xlabel="X", ylabel="Y",
                 constraints = Gen.choicemap()
                 for i=1:length(ys)
                     constraints[:data => i => :y] = ys[i]
+                    println(ys[i])
                 end
+                println(constraints)
                 constraints
             end;
 
 
-observations = make_constraints(ys); #what's make constraints? 
+observations = make_constraints(ys); #??make constraints what does it do (defined right above)
 
 function logmeanexp(scores)
     logsumexp(scores) - log(length(scores))
@@ -103,7 +105,7 @@ log_probs = [get_score(t) for t in traces]
 println("Average log probability: $(logmeanexp(log_probs))")
 Plots.plot([visualize_trace(t) for t in traces]...)
 
-#finished section 3
+#section 4
 
 
 # Gen's `generate` function accepts a model, a tuple of arguments to the model,
@@ -174,4 +176,48 @@ gif(viz)
 
 #part 5
 
+#more general metropolis hastings flavor (tr, did_accept) = mh(tr, custom_proposal, custom_proposal_args)
+
+#proposes new slightly diff slope and intercept 
+@gen function line_proposal(current_trace)
+    slope ~ normal(current_trace[:slope], 0.5)
+    intercept ~ normal(current_trace[:intercept], 0.5)
+end;
+
+#uses above function 
+(tr, did_accept) = mh(tr, line_proposal, ())#assumes current trace is why empty
+
+function gaussian_drift_update(tr)
+    # Gaussian drift on line params
+    (tr, _) = mh(tr, line_proposal, ())
+    
+    # Block resimulation: Update the outlier classifications
+    (xs,) = get_args(tr)
+    n = length(xs)
+    for i=1:n
+        (tr, _) = mh(tr, select(:data => i => :is_outlier))
+    end
+    
+    # Block resimulation: Update the prob_outlier parameter
+    (tr, w) = mh(tr, select(:prob_outlier))
+    (tr, w) = mh(tr, select(:noise))
+    tr
+end;
+
+tr1, = generate(regression_with_outliers, (xs,), observations)
+tr2 = tr1
+
+viz = Plots.@animate for i in 1:300
+    global tr1, tr2
+    tr1 = gaussian_drift_update(tr1)
+    tr2 = block_resimulation_update(tr2)
+    Plots.plot(visualize_trace(tr1; title="Drift Kernel (Iter $i)"), #gaussian drift is better less random
+               visualize_trace(tr2; title="Resim Kernel (Iter $i)"))
+end;
+gif(viz)
+
+#resim got more stuck on a horrestontal line 
+
+
+#part 6 
 

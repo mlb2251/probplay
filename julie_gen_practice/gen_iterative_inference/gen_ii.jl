@@ -92,7 +92,7 @@ Plots.scatter(xs, ys, color="black", xlabel="X", ylabel="Y",
             end;
 
 
-observations = make_constraints(ys);
+observations = make_constraints(ys); #what's make constraints? 
 
 function logmeanexp(scores)
     logsumexp(scores) - log(length(scores))
@@ -104,3 +104,74 @@ println("Average log probability: $(logmeanexp(log_probs))")
 Plots.plot([visualize_trace(t) for t in traces]...)
 
 #finished section 3
+
+
+# Gen's `generate` function accepts a model, a tuple of arguments to the model,
+# and a `ChoiceMap` representing observations (or constraints to satisfy). It returns
+# a complete trace consistent with the observations, and an importance weight.  
+# In this call, we ignore the weight returned.
+(tr, _) = generate(regression_with_outliers, (xs,), observations)#rwo is the func above
+
+
+#independent Metropolis Hasting, puts all the variables into a single block (to resample)
+#slow right???
+#each random choice own block is the other extreme
+
+
+
+
+# Perform a single block resimulation update of a trace.
+function block_resimulation_update(tr)
+    # Block 1: Update the line's parameters
+    line_params = select(:noise, :slope, :intercept)
+    (tr, _) = mh(tr, line_params)
+    
+    # Blocks 2-N+1: Update the outlier classifications, each one
+    (xs,) = get_args(tr)
+    n = length(xs)
+    for i=1:n
+        (tr, _) = mh(tr, select(:data => i => :is_outlier))
+    end
+    
+    # Block N+2: Update the prob_outlier parameter
+    (tr, _) = mh(tr, select(:prob_outlier))
+    
+    # Return the updated trace
+    tr
+end;
+
+
+#resimulate 500 times 
+function block_resimulation_inference(xs, ys, observations)
+    observations = make_constraints(ys)
+    #initial 
+    (tr, _) = generate(regression_with_outliers, (xs,), observations)
+    for iter=1:500
+        tr = block_resimulation_update(tr)
+    end
+    tr
+end;
+
+scores = Vector{Float64}(undef, 10)
+for i=1:10
+    @time tr = block_resimulation_inference(xs, ys, observations)
+    scores[i] = get_score(tr)
+end
+println("Log probability: ", logmeanexp(scores))
+
+
+#visualizing  WHOAAA
+
+t, = generate(regression_with_outliers, (xs,), observations)
+
+viz = Plots.@animate for i in 1:500
+    global t
+    t = block_resimulation_update(t)
+    visualize_trace(t; title="Iteration $i/500")
+end;
+gif(viz)
+
+
+#part 5
+
+

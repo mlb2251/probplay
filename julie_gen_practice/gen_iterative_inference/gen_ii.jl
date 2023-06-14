@@ -11,7 +11,7 @@ Logging.disable_logging(Logging.Info);
 
 
 
- 
+
 #!!this more complicated syntax still needed in loops!!
 # x = ({:x} ~ normal(0, 1))
 # slope = ({:slope} ~ normal(0, 1))
@@ -59,7 +59,7 @@ xs     = collect(range(-5, stop=5, length=20))
 traces = [Gen.simulate(regression_with_outliers, (xs,)) for i in 1:9];
 Plots.plot([visualize_trace(t) for t in traces]...)
 
-print("yay")
+#print("yay")
 
 
 
@@ -91,9 +91,9 @@ Plots.scatter(xs, ys, color="black", xlabel="X", ylabel="Y",
                 constraints = Gen.choicemap()
                 for i=1:length(ys)
                     constraints[:data => i => :y] = ys[i]
-                    println(ys[i])
+                    #println(ys[i])
                 end
-                println(constraints)
+                #println(constraints)
                 constraints
             end;
 
@@ -360,3 +360,5 @@ viz = Plots.@animate for i in 1:100
 end;
 
 gif(viz)
+
+#part 7 

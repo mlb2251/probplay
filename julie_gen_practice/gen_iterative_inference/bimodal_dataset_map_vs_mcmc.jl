@@ -10,7 +10,7 @@ include("gen_ii.jl")
 #sometimes they land on the less common slope. Drift switches back and forth
 
 
-(slope, intercept) = ransac(xs, ys_bimodal, RANSACParams(10, 3, 1.))
+(slope, intercept) = ransac(xs, ys_bimodal, RANSACParams(10, 3, 1.))#just once?
 slope_intercept_init = choicemap()
 slope_intercept_init[:slope] = slope
 slope_intercept_init[:intercept] = intercept
@@ -23,7 +23,7 @@ tr_map   = tr
 
 viz = Plots.@animate for i in 1:305
     global tr_map, tr_drift
-    if i < 6
+    if i < 6 #tried < 0, didn't see diff 
         tr_drift = ransac_update(tr)
         tr_map   = tr_drift
     else

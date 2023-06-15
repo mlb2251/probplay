@@ -1,6 +1,7 @@
 import Random, Logging
 using Gen, Plots
 import StatsBase
+using StatsBase: mean
 include("regression_viz_import.jl")
 
 # Disable logging, because @animate is verbose otherwise
@@ -362,3 +363,124 @@ end;
 gif(viz)
 
 #part 7 
+
+#sometimes only interested in one single likely explanation (maximum a posteriori MAP)
+
+function is_outlier_map_update(tr)
+    (xs,) = get_args(tr)
+    for i=1:length(xs)
+        constraints = choicemap(:prob_outlier => 0.1)
+        constraints[:data => i => :is_outlier] = false
+        (trace1,) = update(tr, (xs,), (NoChange(),), constraints)
+        constraints[:data => i => :is_outlier] = true
+        (trace2,) = update(tr, (xs,), (NoChange(),), constraints)
+        tr = (get_score(trace1) > get_score(trace2)) ? trace1 : trace2
+    end
+    tr
+end;
+
+tr = map_optimize(tr, select(:slope, :intercept), max_step_size=1., min_step_size=1e-5)
+
+(slope, intercept) = ransac(xs, ys, RANSACParams(10, 3, 1.))
+slope_intercept_init = choicemap()
+slope_intercept_init[:slope] = slope
+slope_intercept_init[:intercept] = intercept
+(tr,) = generate(regression_with_outliers, (xs,), merge(observations, slope_intercept_init))
+
+
+ransac_score, final_score = 0, 0
+viz = Plots.@animate for i in 1:35
+    global tr, ransac_score
+    if i < 6
+        tr = ransac_update(tr)
+    else
+        tr = map_optimize(tr, select(:slope, :intercept), max_step_size=1., min_step_size=1e-5)
+        tr = map_optimize(tr, select(:noise), max_step_size=1e-2, min_step_size=1e-5)
+        tr = is_outlier_map_update(tr)
+        optimal_prob_outlier = mean([tr[:data => i => :is_outlier] for i in 1:length(xs)])
+        optimal_prob_outlier = min(0.5, max(0.05, optimal_prob_outlier))
+        tr, = update(tr, (xs,), (NoChange(),), choicemap(:prob_outlier => optimal_prob_outlier))
+    end
+    
+    if i == 5
+        ransac_score = get_score(tr)
+    end
+    
+    visualize_trace(tr; title="Iteration $i $(i < 6 ? "(RANSAC init)" : "(MAP optimization)")")
+end
+final_score = get_score(tr)
+
+println("Score after ransac: $(ransac_score). Final score: $(final_score).")
+gif(viz)
+
+
+
+function map_inference(xs, ys, observations)
+    (slope, intercept) = ransac(xs, ys, RANSACParams(10, 3, 1.))
+    slope_intercept_init = choicemap()
+    slope_intercept_init[:slope] = slope
+    slope_intercept_init[:intercept] = intercept
+    (tr, _) = generate(regression_with_outliers, (xs,), merge(observations, slope_intercept_init))
+    for iter=1:5
+        tr = ransac_update(tr)
+    end
+    
+    for iter = 1:20
+        # Take a single gradient step on the line parameters.
+        tr = map_optimize(tr, select(:slope, :intercept), max_step_size=1., min_step_size=1e-5)
+        tr = map_optimize(tr, select(:noise), max_step_size=1e-2, min_step_size=1e-5)
+        
+        # Choose the most likely classification of outliers.
+        tr = is_outlier_map_update(tr)
+        
+        # Update the prob outlier
+        choices = get_choices(tr)
+        optimal_prob_outlier = count(i -> choices[:data => i => :is_outlier], 1:length(xs)) / length(xs)
+        optimal_prob_outlier = min(0.5, max(0.05, optimal_prob_outlier))
+        (tr, _) = update(tr, (xs,), (NoChange(),), choicemap(:prob_outlier => optimal_prob_outlier))        
+    end
+    tr
+end
+
+scores = Vector{Float64}(undef, 10)
+for i=1:10
+    @time tr = map_inference(xs,ys,observations)
+    scores[i] = get_score(tr)
+end
+println(logmeanexp(scores))
+
+
+
+
+function make_bimodal_dataset(n)
+    Random.seed!(4) 
+    prob_outlier = 0.2
+    true_inlier_noise = 0.5
+    true_outlier_noise = 5.0
+    true_slope1 = 1
+    true_intercept1 = 0
+    true_slope2 = -2/3
+    true_intercept2 = 0
+    xs = collect(range(-5, stop=5, length=n))
+    ys = Float64[]
+    for (i, x) in enumerate(xs)
+        if rand() < prob_outlier
+            y = randn() * true_outlier_noise
+        else
+            if rand((true,false))
+                y = true_slope1 * x + true_intercept1 + randn() * true_inlier_noise
+            else
+                y = true_slope2 * x + true_intercept2 + randn() * true_inlier_noise
+            end
+        end
+        push!(ys, y)
+    end
+    xs,ys,true_slope1,true_slope2,true_intercept1,true_intercept2
+end;
+
+(xs, ys_bimodal, m1,m2,b1,b2) = make_bimodal_dataset(20);
+observations_bimodal = make_constraints(ys_bimodal);
+
+Plots.scatter(xs, ys_bimodal, color="black", xlabel="X", ylabel="Y", label=nothing, title="Bimodal data")
+Plots.plot!(xs,m1.*xs.+b1, color="blue", label=nothing)
+Plots.plot!(xs,m2.*xs.+b2, color="green", label=nothing)

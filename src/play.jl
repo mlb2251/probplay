@@ -10,18 +10,25 @@ end
 
 
 
-function gen_gameplay()
+function gen_gameplay(human=false)
     gym = pyimport("gymnasium")
-    # play = pyimport("gymnasium.utils.play")
-    game = "ALE/YarsRevenge-v5"
-    # play.play(env, zoom=4, fps=30)
+    play = pyimport("gymnasium.utils.play")
+    game = "ALE/Frostbite-v5"
 
 
     games = [x for x in keys(gym.envs.registry) if occursin("-v5",x) && occursin("ALE/",x) && !occursin("-ram-",x)]
 
     for game in games
+        game = "ALE/Frostbite-v5"
+
         println("Chose: $game")
         env = gym.make(game, render_mode="rgb_array", frameskip=1, repeat_action_probability=0.0)
+
+        if human
+            play.play(env, zoom=4, fps=30)
+            return
+        end
+
 
         imgs = Matrix{RGB{Float64}}[]
 

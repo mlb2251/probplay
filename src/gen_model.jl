@@ -195,7 +195,7 @@ function color_labels(frame, orig=nothing)
     max = maximum(frame)
     colored = [RGB(HSV(h/max*360, .8, .7)) for h in frame]
     orig !== nothing && (colored = vcat(colorview(RGB,orig), colored))
-    inflate(colored)
+    colored
 end
 
 # frame = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,20]
@@ -396,9 +396,9 @@ function grid(traces; ticks=false, annotate=false)
                 end
             end
 
-            observed = color_labels(object_map)
+            observed = color_labels(object_map, observed)
 
-            push!(plots, plot(observed, xlims=(0,W), ylims=(0,H), ticks=ticks))
+            push!(plots, plot(observed, xlims=(0,size(observed,2)), ylims=(0,size(observed,1)), ticks=ticks))
             annotate && plot!(title="Step: $t\nObjects: $(trace[:N])")
         end
 

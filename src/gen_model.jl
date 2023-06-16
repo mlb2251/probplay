@@ -8,8 +8,8 @@ using Plots
 
 
 struct Position
-    x::Int
     y::Int
+    x::Int
 end
 
 struct UniformPosition <: Gen.Distribution{Position} end
@@ -19,7 +19,7 @@ function Gen.random(::UniformPosition, height, width)
 end
 
 function Gen.logpdf(::UniformPosition, pos, height, width)
-    if pos.x < 1 || pos.x > height || pos.y < 1 || pos.y > width
+    if !(0 < pos.y <= height && 0 < pos.x <= width)
         return -Inf
     else
         # uniform distribution over height*width positions
@@ -35,8 +35,8 @@ const uniform_position = UniformPosition()
 struct UniformDriftPosition <: Gen.Distribution{Position} end
 
 function Gen.random(::UniformDriftPosition, pos, max_drift)
-    Position(pos.x + rand(-max_drift:max_drift),
-             pos.y + rand(-max_drift:max_drift))
+    Position(pos.y + rand(-max_drift:max_drift),
+             pos.x + rand(-max_drift:max_drift))
 end
 
 function Gen.logpdf(::UniformDriftPosition, pos_new, pos, max_drift)
@@ -193,7 +193,9 @@ be concatenated onto to the result.
 """
 function color_labels(frame, orig=nothing)
     max = maximum(frame)
-    colored = [RGB(HSV(h/max*360, .8, .7)) for h in frame]
+    colored = [RGB(HSV(px/max*360, .8, .7)) for px in frame]
+    colored[frame .== 0] .= RGB(0,0,0)
+    
     orig !== nothing && (colored = vcat(colorview(RGB,orig), colored))
     colored
 end
@@ -243,7 +245,36 @@ function process_first_frame(frame, threshold=.05)
             end
         end
     end
-    cluster
+
+    # (start_y, start_x, end_y, end_x)
+    smallest_y = [typemax(Int) for _ in 1:curr_cluster]
+    smallest_x = [typemax(Int) for _ in 1:curr_cluster]
+    largest_y = [typemin(Int) for _ in 1:curr_cluster]
+    largest_x = [typemin(Int) for _ in 1:curr_cluster]
+    color = [[0.,0.,0.] for _ in 1:curr_cluster]
+
+    for x in 1:W, y in 1:H
+        c = cluster[y,x]
+        smallest_y[c] = min(smallest_y[c], y)
+        smallest_x[c] = min(smallest_x[c], x)
+        largest_y[c] = max(largest_y[c], y)
+        largest_x[c] = max(largest_x[c], x)
+        color[c] += frame[:,y,x]
+    end
+
+    objs = Object[]
+
+    for c in 1:curr_cluster
+        # create the sprite mask and crop it so its at 0,0
+        mask = (cluster .== c)[smallest_y[c]:largest_y[c], smallest_x[c]:largest_x[c]]
+        color[c] ./= sum(mask)
+        sprite = Sprite(mask', RGB(color[c]...))
+        object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
+        push!(objs, object)
+    end
+
+
+    (cluster,objs)
 end
 
 
@@ -251,8 +282,26 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     C,H,W,T = size(observed_images)
     
     # construct initial observations
-    init_obs = Gen.choicemap((1 => :observed_image, observed_images[:,:,:,1]))
+    (cluster, objs) = process_first_frame(observed_images[:,:,:,1])
+    init_obs = Gen.choicemap(
+        (1 => :observed_image, observed_images[:,:,:,1]),
+        (:N, length(objs)),
+        (:width => W),
+        (:height => H),
+    )
+    # @show W,H
+    for (i,obj) in enumerate(objs)
+        @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
+        # @show i,obj.pos
+        init_obs[(1 => i => :pos)] = obj.pos
+        init_obs[(i => :shape)] = obj.sprite.mask
+        init_obs[(i => :color)] = obj.sprite.color
+    end
+
+    
     state = Gen.initialize_particle_filter(model, (H,W,1), init_obs, num_particles)
+
+    # @show state.log_weights
 
     # steps
     for t in 2:T
@@ -260,6 +309,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         obs = Gen.choicemap((t => :observed_image, observed_images[:,:,:,t]))
         Gen.particle_filter_step!(state, (H,W,t), (UnknownChange(),), obs)
     end
+
+    # @show state.log_weights
     
     # return a sample of unweighted traces from the weighted collection
     return Gen.sample_unweighted_traces(state, num_samples)
@@ -384,19 +435,22 @@ function grid(traces; ticks=false, annotate=false)
         for trace in traces
             observed = colorview(RGB,trace[t => :observed_image])
             object_map = zeros(Int, H, W)
+            rendered = zeros(RGB, H, W)
 
             for i in 1:trace[:N]
                 pos = trace[t => i => :pos]
                 sprite = trace[i => :shape]
+                color = trace[i => :color]
                 for I in CartesianIndices(sprite)
                     x, y = Tuple(I)
                     if sprite[I] && 0 < pos.y+y-1 <= H && 0 < pos.x+x-1 <= W
                         object_map[pos.y+y-1, pos.x+x-1] = i
+                        rendered[pos.y+y-1, pos.x+x-1] = color
                     end 
                 end
             end
 
-            observed = color_labels(object_map, observed)
+            observed = vcat(observed, rendered) #color_labels(object_map))
 
             push!(plots, plot(observed, xlims=(0,size(observed,2)), ylims=(0,size(observed,1)), ticks=ticks))
             annotate && plot!(title="Step: $t\nObjects: $(trace[:N])")

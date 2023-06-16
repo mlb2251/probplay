@@ -264,15 +264,26 @@ function process_first_frame(frame, threshold=.05)
 
     objs = Object[]
 
+    background = 0
+    background_size = 0
     for c in 1:curr_cluster
         # create the sprite mask and crop it so its at 0,0
         mask = (cluster .== c)[smallest_y[c]:largest_y[c], smallest_x[c]:largest_x[c]]
+        # avg color
         color[c] ./= sum(mask)
+        # largest area sprite is background
+        if sum(mask) > background_size
+            background = c
+            background_size = sum(mask)
+        end
         sprite = Sprite(mask', RGB(color[c]...))
         object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
         push!(objs, object)
     end
 
+    # turn background into a big rectangle filling whole screen
+    color = objs[background].sprite.color
+    objs[background] = Object(Sprite(ones(Bool, H, W)',color), Position(1,1))
 
     (cluster,objs)
 end
@@ -313,31 +324,12 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     # @show state.log_weights
     
     # return a sample of unweighted traces from the weighted collection
+    # return rand(state.traces, num_samples)
     return Gen.sample_unweighted_traces(state, num_samples)
 end
 
 # observed_images = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,1:20]
 # traces = particle_filter(100, observed_images, 10)
-
-
-function do_inference(model, frames, amount_of_computation)
-    
-    (C,H,W,T) = size(frames)
-
-    # Create a choice map that maps model addresses (:y, i)
-    # to observed values ys[i]. We leave :slope and :intercept
-    # unconstrained, because we want them to be inferred.
-    observations = Gen.choicemap()
-    for (i, y) in enumerate(ys)
-        observations[t => :observed_image] 
-        observations[(:y, i)] = y
-    end
-    
-    # Call importance_resampling to obtain a likely trace consistent
-    # with our observations.
-    (trace, _) = Gen.importance_resampling(model, (xs,), observations, amount_of_computation);
-    return trace
-end;
 
 
 
@@ -431,9 +423,11 @@ function grid(traces; ticks=false, annotate=false)
 
     @gif for t in 1:T
         plots = []
+        observed = colorview(RGB,traces[1][t => :observed_image])
+        push!(plots, plot(observed, xlims=(0,size(observed,2)), ylims=(0,size(observed,1)), ticks=ticks, title="Ground Truth (t=$t)", titlefontsize=10))
+
 
         for trace in traces
-            observed = colorview(RGB,trace[t => :observed_image])
             object_map = zeros(Int, H, W)
             rendered = zeros(RGB, H, W)
 
@@ -450,9 +444,9 @@ function grid(traces; ticks=false, annotate=false)
                 end
             end
 
-            observed = vcat(observed, rendered) #color_labels(object_map))
+            # observed = vcat(observed, rendered) #color_labels(object_map))
 
-            push!(plots, plot(observed, xlims=(0,size(observed,2)), ylims=(0,size(observed,1)), ticks=ticks))
+            push!(plots, plot(rendered, xlims=(0,size(rendered,2)), ylims=(0,size(rendered,1)), ticks=ticks, title="score=$(round(Gen.get_score(trace),sigdigits=3))", titlefontsize=10))
             annotate && plot!(title="Step: $t\nObjects: $(trace[:N])")
         end
 

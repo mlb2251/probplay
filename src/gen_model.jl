@@ -4,7 +4,6 @@ using LinearAlgebra
 using Images
 using Distributions
 using Plots
-# using OffsetArrays
 
 
 struct Position
@@ -66,13 +65,9 @@ const bernoulli_2d = Bernoulli2D()
 
 (::Bernoulli2D)(p, h, w) = random(Bernoulli2D(), p, h, w)
 
-# bernoulli_2d(0.5, 10,20)
-
-
 struct ImageLikelihood <: Gen.Distribution{Array} end
 
 function Gen.logpdf(::ImageLikelihood, observed_image, rendered_image, var)
-    # todo is this right?
     diff = observed_image - rendered_image
     # Gen.logpdf(Gen.MultivariateNormal, diff, zeros(size(diff)), var * Matrix(I, size(diff)))
     # sum bc independent events
@@ -88,8 +83,6 @@ end
 const image_likelihood = ImageLikelihood()
 (::ImageLikelihood)(rendered_image, var) = random(ImageLikelihood(), rendered_image, var)
 
-
-
 struct RGBDist <: Gen.Distribution{RGB} end
 
 function Gen.logpdf(::RGBDist, rgb)
@@ -103,7 +96,6 @@ end
 const rgb_dist = RGBDist()
 
 (::RGBDist)() = random(RGBDist())
-
 
 
 
@@ -122,6 +114,9 @@ function canvas(height=210, width=160, background=RGB{Float64}(0,0,0))
     fill(background, height, width)
 end
 
+"""
+renders an object on a canvas
+"""
 function draw!(canvas, obj::Object)
     sprite = obj.sprite
     for I in CartesianIndices(sprite.mask)
@@ -144,7 +139,9 @@ function draw!(canvas, objs::Vector{Object})
     canvas
 end
 
-
+"""
+The generative model
+"""
 @gen function model(canvas_height, canvas_width, T)
 
     var = .1
@@ -154,8 +151,8 @@ end
 
     # initialize objects
     for i in 1:N
-        w = {(i => :width)} ~ uniform_discrete(1,100)
-        h = {(i => :height)} ~ uniform_discrete(1,100)
+        w = {(i => :width)} ~ uniform_discrete(1,canvas_width)
+        h = {(i => :height)} ~ uniform_discrete(1,canvas_height)
         shape = {(i => :shape)} ~ bernoulli_2d(0.5, h,w)
         color = {(i => :color)} ~ rgb_dist()
         sprite = Sprite(shape, color)
@@ -187,6 +184,8 @@ function inflate(frame, scale=4)
 end
 
 """
+Useful for visualizing the output of process_first_frame() etc
+
 takes an HW frame of integers and returns a version with a unique
 RGB color for each integer. If the original CHW frame orig is provided, it will
 be concatenated onto to the result.
@@ -202,6 +201,10 @@ end
 
 # frame = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,20]
 # color_labels(process_first_frame(frame),frame)
+"""
+groups adjacent same-color pixels of a frame into objects
+as a simple first pass of object detection
+"""
 function process_first_frame(frame, threshold=.05)
     (C, H, W) = size(frame)
 
@@ -288,7 +291,9 @@ function process_first_frame(frame, threshold=.05)
     (cluster,objs)
 end
 
-
+"""
+Runs a particle filter on a sequence of frames
+"""
 function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int)
     C,H,W,T = size(observed_images)
     
@@ -334,49 +339,49 @@ end
 
 
 
-function custom_proposal(current_trace, positions, scores)
-    object_id = 1
-    # pos = {(object_id => :pos_x)} ~ categorical(positions, scores);
-end
+# function custom_proposal(current_trace, positions, scores)
+#     object_id = 1
+#     # pos = {(object_id => :pos_x)} ~ categorical(positions, scores);
+# end
 
-function grid_proposal(trace, t, object_id)
-    gridding_width = 2
-    current_x = trace[t => object_id => :pos_x]
-    current_y = trace[t => object_id => :pos_y]
+"""
+Does gridding to propose new positions for an object in the vicinity
+of the current position
+"""
+@gen function grid_proposal(trace, t, obj_id)
+    @assert false, "This is not done yet"
+    # todo not done yet
+    gridding_width = 3
+
+    pos = trace[t => obj_id => :pos]
     potential_traces = [
         Gen.update(
             trace,
             Gen.choicemap(
-                (object_id => :pos_x) => x,
-                (object_id => :pos_y) => y,
+                (t => obj_id => :pos) => Position(pos.y+dy, pos.x+dx),
             )
         )
-        for x in current_x-gridding_width:current_x+gridding_width,
-            y in current_y-gridding_width:current_y+gridding_width
+        for dx in -gridding_width:gridding_width,
+            dy in -gridding_width:gridding_width
     ]
     scores = Gen.get_score.(potential_traces)
-    
-    
-    # ... 
 
-
-    new_trace = Gen.mh(trace, custom_proposal, scores)
-
-
+    # rand(potential_traces, categorical(scores))
+    label
 end
 
-function gif_of_trace(trace)
-    (H,W,T) = get_args(trace)
+# function gif_of_trace(trace)
+#     (H,W,T) = get_args(trace)
 
-    @gif for t in 1:T
-        observed = colorview(RGB,trace[t => :observed_image])
+#     @gif for t in 1:T
+#         observed = colorview(RGB,trace[t => :observed_image])
 
-        # draw!(c, objs)
-        plot(observed, xlims=(0,W), ylims=(0,H), ticks=true)
-        annotate!(-60, 20, "Step: $t")
-        annotate!(-60, 40, "Objects: $(trace[:N])")
-    end
-end
+#         # draw!(c, objs)
+#         plot(observed, xlims=(0,W), ylims=(0,H), ticks=true)
+#         annotate!(-60, 20, "Step: $t")
+#         annotate!(-60, 40, "Objects: $(trace[:N])")
+#     end
+# end
 
 function games()
     [x for x in readdir("out/gameplay") if occursin("v5",x)]
@@ -407,24 +412,17 @@ function crop(img; top=0, bottom=0, left=0, right=0)
 end
 
 
-
-# function contiguous_colors(frame)
-
-# end
-
-# frames = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20);
-
-# function do_inference()
-
-
-function grid(traces; ticks=false, annotate=false)
+"""
+render a grid of videos
+"""
+function grid(traces; ticks=false, annotate=false, ground_truth=true)
 
     (H,W,T) = get_args(traces[1])
 
     @gif for t in 1:T
         plots = []
         observed = colorview(RGB,traces[1][t => :observed_image])
-        push!(plots, plot(observed, xlims=(0,size(observed,2)), ylims=(0,size(observed,1)), ticks=ticks, title="Ground Truth (t=$t)", titlefontsize=10))
+        ground_truth && push!(plots, plot(observed, xlims=(0,size(observed,2)), ylims=(0,size(observed,1)), ticks=ticks, title="Ground Truth (t=$t)", titlefontsize=10))
 
 
         for trace in traces
@@ -456,6 +454,9 @@ end
 
 # grid([Gen.simulate(model, (66,141,50)) for _=1:4])
 
+"""
+Turns a series of rendered out gameplay frames into a gif
+"""
 function plot_gameplay(game)
     imgs =  channelview.(load.(frames(game)))
     imgs = [Float64.(x) for x in imgs]

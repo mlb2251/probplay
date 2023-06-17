@@ -344,13 +344,17 @@ end
 #     # pos = {(object_id => :pos_x)} ~ categorical(positions, scores);
 # end
 
+@gen function propose_all(trace, t)
+    for i in 1:trace[:N]
+        
+    end
+end
+
 """
 Does gridding to propose new positions for an object in the vicinity
 of the current position
 """
 @gen function grid_proposal(trace, t, obj_id)
-    @assert false, "This is not done yet"
-    # todo not done yet
     gridding_width = 3
 
     pos = trace[t => obj_id => :pos]
@@ -366,8 +370,8 @@ of the current position
     ]
     scores = Gen.get_score.(potential_traces)
 
-    # rand(potential_traces, categorical(scores))
-    label
+    trace ~ labeled_cat(potential_traces, categorical(scores))
+    trace
 end
 
 # function gif_of_trace(trace)

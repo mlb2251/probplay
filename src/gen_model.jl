@@ -404,9 +404,22 @@ Returns a (C, H, W, T) array of framges
 """
 function load_frames(path)
     files = readdir(path)
+    #print(files)
     sort!(files, by = f -> parse(Int, split(f, ".")[1]))
     stack([Float64.(channelview(load(joinpath(path, f)))) for f in files], dims=4)
 end
+
+# windows_list = ["758.png"]#["758.png", "759.png", "762.png", "764.png", "765.png", "766.png", "767.png", "770.png", "771.png", "772.png"]#, "773.png", "776.png", "798.png", "799.png", "808.png", "809.png", "819.png", "821.png", "822.png", "823.png", "825.png", "831.png", "834.png", "835.png", "836.png", "837.png", "940.png", "941.png", "942.png", "943.png", "954.png", "955.png", "956.png", "957.png", "968.png", "969.png", "980.png", "981.png", "982.png", "983.png", "992.png", "994.png", "995.png", "996.png", "997.png"]
+# [print(f) for f in windows_list]
+
+# function windows_load_frames(path)
+#     files = readdir(path)
+#     sort!(files, by = f -> parse(Int, split(f, ".")[1]))
+#     stack([Float64.(channelview(load(joinpath(path, "773.png")))) for f in 1:996], dims=4)
+# end
+
+# load_frames("out\\benchmarks\\frostbite_1\\")
+
 
 """
 crops the specified amounts off of the top, bottom, left, and right of a (C, H, W, T) array of images
@@ -419,11 +432,13 @@ end
 """
 render a grid of videos
 """
+
+
 function grid(traces; ticks=false, annotate=false, ground_truth=true)
 
     (H,W,T) = get_args(traces[1])
 
-    @gif for t in 1:T
+    anim = @animate for t in 1:T
         plots = []
         observed = colorview(RGB,traces[1][t => :observed_image])
         ground_truth && push!(plots, plot(observed, xlims=(0,size(observed,2)), ylims=(0,size(observed,1)), ticks=ticks, title="Ground Truth (t=$t)", titlefontsize=10))
@@ -450,11 +465,18 @@ function grid(traces; ticks=false, annotate=false, ground_truth=true)
 
             push!(plots, plot(rendered, xlims=(0,size(rendered,2)), ylims=(0,size(rendered,1)), ticks=ticks, title="score=$(round(Gen.get_score(trace),sigdigits=3))", titlefontsize=10))
             annotate && plot!(title="Step: $t\nObjects: $(trace[:N])")
+
         end
 
         plot(plots...)
     end
+
+    gif(anim, fps = 8)
 end
+
+
+
+
 
 # grid([Gen.simulate(model, (66,141,50)) for _=1:4])
 
@@ -476,8 +498,8 @@ function plot_gameplay(game)
     #     plot(observed, xlims=(0,160), ylims=(0,210), ticks=true)
         annotate!(-60, 20, "Step: $t")
     #     annotate!(-60, 40, "Objects: $(trace[:N])")
-    end
-end
+    end 
+end 
 
 
 # trace,_ = Gen.generate(model, (210, 160, 100));
@@ -487,3 +509,13 @@ end
 # gif_of_trace(trace)
 
 # grid([Gen.simulate(model, (66,141,50)) for _=1:4], annotate=true)
+
+
+@time traces = particle_filter(20, crop(load_frames("out\\benchmarks\\frostbite_1\\"), top=120, bottom=25, left=20)[:,:,:,1:20], 8); #20 files not 50 
+@time grid(traces)
+
+
+
+
+
+

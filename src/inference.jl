@@ -157,7 +157,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         # maybe_resample!(state, ess_threshold=num_particles/2, verbose=true)
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
         # particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()), obs)
-        particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
+        @time particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, grid_proposal, (obs,))
     end
 
@@ -192,6 +192,7 @@ of the current position
 @gen function grid_proposal(prev_trace, obs)
 
     (H,W,prev_T) = get_args(prev_trace)
+    # @show prev_T
 
     if prev_T == 1
         objs = M.objs_from_trace(prev_trace, 0)
@@ -238,7 +239,7 @@ of the current position
         # scores ./= sum(scores)
         # @show scores
 
-
+        # @show obj_id
         traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
         scores = Gen.normalize_weights(get_score.(traces))[2]
         scores = exp.(scores)

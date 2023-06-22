@@ -88,23 +88,20 @@ const bernoulli_2d = Bernoulli2D()
 struct ImageLikelihood <: Gen.Distribution{Array} end
 
 function Gen.logpdf(::ImageLikelihood, observed_image::Array{Float64,3}, rendered_image::Array{Float64,3}, var)
-    # uses `$` to precompute log(var) before broadcasting to avoid the (super slow) log() computation post-broadcasting
-    mu = 0.
-    sum(@. - (abs2((observed_image - rendered_image - mu) / var) + log(2π)) / 2 - $log(var))
-    # @assert isapprox(logpdf_fast(broadcasted_normal, diff, 0., var), Gen.logpdf(broadcasted_normal, diff, zeros(Float64,size(diff)), var))
+
+    # 0.
+    # -maximum(abs.(observed_image .- rendered_image))
+
+
+
+    # @show size(observed_image)
+    # precomputing log(var) and assuming mu=0 both give speedups here
+    log_var = log(var)
+    sum(i -> - (@inbounds abs2((observed_image[i] - rendered_image[i]) / var) + log(2π)) / 2 - log_var, eachindex(observed_image))
     # logpdf_fast(broadcasted_normal, diff, 0., var)
 end
 
-function logpdf_fast(::Gen.BroadcastedNormal,
-    x::Array{Float64,3},
-    mu,
-    std)
-# assert_has_shape(x, broadcast_shapes_or_crash(mu, std, x);
-#          msg="Shape of `x` does not agree with the sample space")
-
-    log_std = log.(std)
-    sum(@. - (abs2((x - mu) / std) + log(2π)) / 2 - log_std)
-end
+# @assert isapprox(Gen.logpdf(M.image_likelihood, vals, vals2, .1), Gen.logpdf(broadcasted_normal, vals - vals2, zeros(Float64,size(vals)), .1))
 
 
 function Gen.random(::ImageLikelihood, rendered_image, var)
@@ -135,11 +132,27 @@ function canvas(height=210, width=160)
     zeros(Float64, 3, height, width)
 end
 
+# canvas = zeros(3,100,100)
+
+# pos_x = 1
+# pos_y = 1
+# mask = reshape(rand(30,30) .< 0.5, (1,30,30))
+# values = rand(3, sum(mask))
+
+
+# full_image_mask = falses(size(canvas))
+# full_image_mask[:,pos_x: pos_x+size(mask)[2]-1, pos_y: pos_y+size(mask)[3]-1] = mask
+# canvas[:,full_image_mask] = values
+
+
 """
 renders an object on a canvas
 """
 function draw!(canvas, obj::Object)
     sprite = obj.sprite
+
+    # full_image_mask = falses(size(canvas))
+    
     for I in CartesianIndices(sprite.mask)
         i, j = Tuple(I)
         if sprite.mask[i,j]
@@ -233,6 +246,23 @@ The generative model
 
     return state
 end
+
+# @gen function per_frame_model(T, canvas_height, canvas_width)
+#     if T == 1
+#         for i in 1:4
+#             {(i,:other_stuff)} ~ normal(0.0, 1.0)
+#         end
+#     else
+#         latent ~ normal(0.0, 1.0)
+#         obs ~ normal(latent, 1.0)
+#     end
+# end
+
+# new_model = Unfold(per_frame_model)
+# (trace, _) = generate(new_model, (5, 1.0, .5))
+
+
+
 
 
 function sim(T)

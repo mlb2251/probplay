@@ -123,14 +123,17 @@ function detectwsl()
 end
 
 function open_in_default_browser(url::AbstractString)::Bool
+    url = "file://wsl.localhost/Ubuntu/home/jssteele/probabilistic-atari/$url"
     try
+    println("whatbrowser")
         if Sys.isapple()
             Base.run(`open $url`)
             return true
         elseif Sys.iswindows() || detectwsl()
-            Base.run(`cmd.exe /s /c start "" /b $url`)
+            # Base.run(`cmd.exe /s /c start "" /b $url`)
+            Base.run(`cmd.exe /s /c start chrome $url`)
             return true
-        elseif Sys.islinux()
+        elseif Sys.islinux()'
             browser = "xdg-open"
             if isfile(browser)
                 Base.run(`$browser $url`)

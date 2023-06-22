@@ -1,7 +1,7 @@
 
 
 
-function render_trace_frame(trace, t)
+function objs_from_trace(trace, t)
     (H,W,T) = get_args(trace)
     @assert t <= T
     objs = Object[]
@@ -16,7 +16,12 @@ function render_trace_frame(trace, t)
         obj = Object(Sprite(sprite,color),pos)
         push!(objs, obj)
     end
-    draw!(canvas(H, W), objs)
+    objs
+end
+
+function render_trace_frame(trace, t)
+    (H,W,T) = get_args(trace)
+    draw!(canvas(H, W), objs_from_trace(trace,t))
 end
 
 function render_trace(trace)

@@ -29,9 +29,6 @@ end
 
 include("images.jl")
 
-
-
-
 @dist labeled_cat(labels, probs) = labels[categorical(probs)]
 
 struct UniformPosition <: Gen.Distribution{Position} end
@@ -90,14 +87,23 @@ const bernoulli_2d = Bernoulli2D()
 
 struct ImageLikelihood <: Gen.Distribution{Array} end
 
-function Gen.logpdf(::ImageLikelihood, observed_image, rendered_image, var)
+function Gen.logpdf(::ImageLikelihood, observed_image::Array{Float64,3}, rendered_image::Array{Float64,3}, var)
     diff = observed_image - rendered_image
-    # Gen.logpdf(Gen.MultivariateNormal, diff, zeros(size(diff)), var * Matrix(I, size(diff)))
-    # sum bc independent events
-    # sum(Gen.logpdf.(Ref(normal),diff, 0, var))
-    # sum(Distributions.logpdf.(Normal(0, var), diff))
-    Gen.logpdf(broadcasted_normal, diff, zeros(Float64,size(diff)), var)
+    # @assert isapprox(logpdf_fast(broadcasted_normal, diff, 0., var), Gen.logpdf(broadcasted_normal, diff, zeros(Float64,size(diff)), var))
+    logpdf_fast(broadcasted_normal, diff, 0., var)
 end
+
+function logpdf_fast(::Gen.BroadcastedNormal,
+    x::Array{Float64,3},
+    mu,
+    std)
+# assert_has_shape(x, broadcast_shapes_or_crash(mu, std, x);
+#          msg="Shape of `x` does not agree with the sample space")
+
+    log_std = log.(std)
+    sum(@. - (abs2((x - mu) / std) + log(2π)) / 2 - log_std)
+end
+
 
 function Gen.random(::ImageLikelihood, rendered_image, var)
     noise = rand(Normal(0, var), size(rendered_image))
@@ -204,7 +210,7 @@ The generative model
     rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs)))
     {:init => :observed_image} ~ image_likelihood(rendered, var)
 
-    steps ~ unfold_step(T-1, State(objs), canvas_height, canvas_width, var)
+    state = {:steps} ~ unfold_step(T-1, State(objs), canvas_height, canvas_width, var)
 
     # for t in 2:T
     #     # for i in 1:N
@@ -223,7 +229,7 @@ The generative model
     #     observed_image = {t => :observed_image} ~ image_likelihood(rendered, var)
     # end
 
-    return
+    return state
 end
 
 

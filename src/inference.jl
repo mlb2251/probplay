@@ -19,6 +19,7 @@ module I
 using ..M
 import ..M: Object, Sprite, Position, model
 using Gen
+import FunctionalCollections: peek
 
 include("html.jl")
 
@@ -173,10 +174,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     add_body!(html, html_table(html, table))
 
     render(html)
-
-    # @show state.log_weights
     
-    # return a sample of unweighted traces from the weighted collection
     # return rand(state.traces, num_samples)
     
     return sample_unweighted_traces(state, num_samples)
@@ -194,8 +192,17 @@ of the current position
 @gen function grid_proposal(prev_trace, obs)
 
     (H,W,prev_T) = get_args(prev_trace)
+
+    if prev_T == 1
+        objs = M.objs_from_trace(prev_trace, 0)
+    else
+        objs = peek(get_retval(prev_trace)).objs[:]
+    end
+    
+
     t = prev_T
     grid_size = 2
+    observed_image = obs[(:steps => t => :observed_image)]
 
     # first get a proposal from the prior by just extending the trace by one timestep and also adding the new observation in
     (trace, _, _, _) = Gen.update(prev_trace, (H,W,prev_T + 1), (NoChange(), NoChange(), UnknownChange()), obs)
@@ -217,26 +224,32 @@ of the current position
         ]
         # flatten
         positions = reshape(positions, :)
-        # compute and score the trace for each position
+        
+        # base_score = sum(abs.(Array(channelview(M.draw!(M.canvas(H, W), objs))) - observed_image))
+
+        # scores = Float64[]
+        # for pos in positions
+        #     objs[obj_id] = Object(objs[obj_id].sprite, pos)
+        #     rendered = Array(channelview(M.draw!(M.canvas(H, W), objs)))
+        #     score = exp(sum(abs.(rendered - observed_image)) - base_score)
+        #     push!(scores, score)
+        # end
+
+        # scores ./= sum(scores)
+        # @show scores
+
+
         traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
-
-        # display(grid(traces));
-
-
         scores = Gen.normalize_weights(get_score.(traces))[2]
         scores = exp.(scores)
-        # @show prev_pos
-        # @show collect(zip(positions,scores))
-
-        # @show scores
 
         # sample the actual position
         pos = {:steps => t => :objs => obj_id => :pos} ~ M.labeled_cat(positions, scores)
 
         # set the curr `trace` to this trace for future iterations of this loop
         idx = findfirst(x -> x == pos, positions)
+        # objs[obj_id] = Object(objs[obj_id].sprite, positions[idx]) 
         trace = traces[idx]
-        # @show pos
     end
     nothing 
 end

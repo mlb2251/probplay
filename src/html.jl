@@ -1,3 +1,6 @@
+using Dates
+using Images
+
 Base.@kwdef mutable struct Html
     num_imgs::Int = 0
     styles::String = ""
@@ -47,21 +50,19 @@ end
 
 html_img(html::Html, img::Array{Float64,3}, attrs...; kwargs...) = html_img(html, Array(colorview(RGB,img)), attrs...; kwargs...)
 
-function html_img(html::Html, img::Matrix{RGB{Float64}}, attrs...; width="200px")
+function html_img(html::Html, img::Matrix{RGB{Float64}}, attrs...; width="200px", show=false)
     html.num_imgs += 1
     path = "imgs/img_$(html.num_imgs).png"
     save("out/html/$(html.dir)/$path", img)
     attrs = join(string.(attrs), " ")
-    if !isempty(attrs)
-        "<img src=$(path) $attrs>"
-    else
-        "<img src=$(path)>"
-    end
+    res = if !isempty(attrs) "<img src=$(path) $attrs>" else "<img src=$(path)>" end
+    show && (add_body!(html, res); render(html))
+    res
 end
 
 html_gif(html::Html, gif::Array{Float64,4}, attrs...; kwargs...) = html_gif(html, Array(colorview(RGB,gif)), attrs...; kwargs...)
 
-function html_gif(html::Html, gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px")
+function html_gif(html::Html, gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px", show=false)
     html.num_imgs += 1
     path = "imgs/img_$(html.num_imgs).gif"
     save("out/html/$(html.dir)/$path", gif, fps=fps)
@@ -69,11 +70,9 @@ function html_gif(html::Html, gif::Array{RGB{Float64},3}, attrs...; fps=3, width
     if !isnothing(width)
         attrs *= " width=$width"
     end
-    if !isempty(attrs)
-        "<img src=$(path) $attrs>"
-    else
-        "<img src=$(path)>"
-    end
+    res = if !isempty(attrs) "<img src=$(path) $attrs>" else "<img src=$(path)>" end
+    show && (add_body!(html, res); render(html))
+    res
 end
 
 function html_table(html::Html, table::Matrix, attrs...)

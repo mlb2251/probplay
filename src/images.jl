@@ -6,7 +6,11 @@ function render_trace_frame(trace, t)
     @assert t <= T
     objs = Object[]
     for i in 1:trace[:N]
-        pos = trace[t => i => :pos]
+        if t == 0
+            pos = trace[:init => :objs => i => :pos]
+        else
+            pos = trace[:steps => t => :objs => i => :pos]
+        end
         sprite = trace[i => :shape]
         color = trace[i => :color]
         obj = Object(Sprite(sprite,color),pos)
@@ -17,7 +21,7 @@ end
 
 function render_trace(trace)
     (H,W,T) = get_args(trace)
-    stack([render_trace_frame(trace, t) for t in 1:T])
+    stack([render_trace_frame(trace, t) for t in 0:T-1])
 end
 
 

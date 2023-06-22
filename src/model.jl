@@ -1,14 +1,16 @@
 
+
+module M
+
 using Gen
 using LinearAlgebra
 using Images
 using Distributions
 using Plots
 using AutoHashEquals
-using HypertextLiteral
 using Dates
 
-include("html.jl")
+# include("html.jl")
 
 @auto_hash_equals struct Position
     y::Int
@@ -143,12 +145,35 @@ function draw!(canvas, obj::Object)
     canvas
 end
 
-function draw!(canvas, objs::Vector{Object})
+function draw!(canvas, objs::T) where T <:AbstractVector
     for obj in objs
         draw!(canvas, obj)
     end
     canvas
 end
+
+
+@gen function obj_dynamics(obj::Object)
+    pos ~ uniform_drift_position(obj.pos,2);
+    return Object(obj.sprite, pos)
+end
+
+all_obj_dynamics = Map(obj_dynamics)
+
+struct State
+    objs::Vector{Object}
+end
+
+@gen function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
+    objs ~ all_obj_dynamics(prev_state.objs)
+    rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs))) # can use prev_state.objs since its the same thanks to mutability
+    observed_image ~ image_likelihood(rendered, var)
+    return State(objs)
+end
+
+unfold_step = Unfold(dynamics_and_render)
+
+
 
 """
 The generative model
@@ -168,27 +193,49 @@ The generative model
         color = {(i => :color)} ~ rgb_dist()
         sprite = Sprite(shape, color)
 
-        pos = {(1 => i => :pos)} ~ uniform_position(canvas_height, canvas_width)
+        pos = {(:init => :objs => i => :pos)} ~ uniform_position(canvas_height, canvas_width)
 
         obj = Object(sprite, pos)
         push!(objs, obj)
     end
 
     # render
-    rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs)))
-    observed_image = {1 => :observed_image} ~ image_likelihood(rendered, var)
 
-    for t in 2:T
-        for i in 1:N
-            pos = {t => i => :pos} ~ uniform_drift_position(objs[i].pos, 3)
-            objs[i] = Object(objs[i].sprite, pos)
-        end
-        rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs)))
-        observed_image = {t => :observed_image} ~ image_likelihood(rendered, var)
-    end
+    rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs)))
+    {:init => :observed_image} ~ image_likelihood(rendered, var)
+
+    steps ~ unfold_step(T-1, State(objs), canvas_height, canvas_width, var)
+
+    # for t in 2:T
+    #     # for i in 1:N
+    #     #     # pos = {*} ~ move_objects(t,i,objs[i])
+    #     #     # objs[i] = Object(objs[i].sprite, move_objects(t,i,objs[i]))
+
+    #     #     pos = {t => :pos => i => :pos} ~ uniform_drift_position(objs[i].pos, 3)
+    #     #     objs[i] = Object(objs[i].sprite, pos)
+    #     # end
+    #     {t => :pos} ~ all_obj_dynamics(objs)
+    #     # for i in 1:N
+    #     #     objs[i] = Object(objs[i].sprite, positions[i])
+    #     # end
+
+    #     rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs)))
+    #     observed_image = {t => :observed_image} ~ image_likelihood(rendered, var)
+    # end
 
     return
 end
+
+
+function sim(T)
+    (trace, _) = generate(model, (3, 3, T))
+    return trace
+end
+
+
+# @gen function foo(t::Int, prev_state::State)
+
+# end
 
 
 # grid([Gen.simulate(model, (66,141,50)) for _=1:4])
@@ -201,3 +248,5 @@ end
 # gif_of_trace(trace)
 
 # grid([Gen.simulate(model, (66,141,50)) for _=1:4], annotate=true)
+
+end # module Model

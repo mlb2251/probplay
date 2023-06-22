@@ -1,7 +1,31 @@
 # frame = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,20]
 # color_labels(process_first_frame(frame),frame)
+using Revise
+using Gen
 
-include("model.jl")
+# this silliness is necessary for revise(I) to work
+try
+    includet("model.jl")
+catch e
+    if isa(e, ErrorException) && occursin("is not a file", e.msg)
+        includet("src/model.jl")
+    else
+        rethrow(e)
+    end
+end
+
+module I
+
+using ..M
+import ..M: Object, Sprite, Position, model
+using Gen
+
+include("html.jl")
+
+# @gen function baz(x)
+#     x = {:x} ~ normal(30, 1)
+#     x
+# end
 
 """
 groups adjacent same-color pixels of a frame into objects
@@ -104,7 +128,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     # construct initial observations
     (cluster, objs) = process_first_frame(observed_images[:,:,:,1])
     init_obs = choicemap(
-        (1 => :observed_image, observed_images[:,:,:,1]),
+        (:init => :observed_image, observed_images[:,:,:,1]),
         (:N, length(objs)),
         (:width => W),
         (:height => H),
@@ -113,7 +137,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     for (i,obj) in enumerate(objs)
         @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
         # @show i,obj.pos
-        init_obs[(1 => i => :pos)] = obj.pos
+        init_obs[(:init => :objs => i => :pos)] = obj.pos
         init_obs[(i => :shape)] = obj.sprite.mask
         init_obs[(i => :color)] = obj.sprite.color
     end
@@ -126,13 +150,13 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     state = initialize_particle_filter(model, (H,W,1), init_obs, num_particles)
 
     # steps
-    for t in 2:T
+    for t in 1:T-1
         @show t
         # @show state.log_weights, weights
         # maybe_resample!(state, ess_threshold=num_particles/2, verbose=true)
-        obs = choicemap((t => :observed_image, observed_images[:,:,:,t]))
+        obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
         # particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()), obs)
-        particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()),
+        particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, grid_proposal, (obs,))
     end
 
@@ -143,7 +167,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     table = fill("", 2, length(state.traces))
     for (i,trace) in enumerate(state.traces)
         table[1,i] = "Particle $i ($(round(weights[i],sigdigits=4)))"
-        table[2,i] = html_gif(html, render_trace(trace));
+        table[2,i] = html_gif(html, M.render_trace(trace));
     end
 
     add_body!(html, html_table(html, table))
@@ -169,19 +193,23 @@ of the current position
 """
 @gen function grid_proposal(prev_trace, obs)
 
-    (H,W,prev_t) = get_args(prev_trace)
-    t = prev_t + 1
-    grid_size = 3
+    (H,W,prev_T) = get_args(prev_trace)
+    t = prev_T
+    grid_size = 2
 
     # first get a proposal from the prior by just extending the trace by one timestep and also adding the new observation in
-    (trace, _, _, _) = Gen.update(prev_trace, (H,W,t), (NoChange(), NoChange(), UnknownChange()), obs)
+    (trace, _, _, _) = Gen.update(prev_trace, (H,W,prev_T + 1), (NoChange(), NoChange(), UnknownChange()), obs)
 
     # display(grid([trace]))
 
     # now for each object, propose and sample changes 
     for obj_id in 1:trace[:N]
         # we use the prev_trace position here actually!
-        prev_pos = prev_trace[t-1 => obj_id => :pos]
+        if t == 1
+            prev_pos = prev_trace[:init => :objs => obj_id => :pos]
+        else
+            prev_pos = prev_trace[:steps => t - 1 => :objs => obj_id => :pos]
+        end
         positions = [
             Position(prev_pos.y+dy, prev_pos.x+dx)
             for dx in -grid_size:grid_size,
@@ -190,7 +218,7 @@ of the current position
         # flatten
         positions = reshape(positions, :)
         # compute and score the trace for each position
-        traces = [Gen.update(trace,choicemap((t => obj_id => :pos) => pos))[1] for pos in positions]
+        traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
 
         # display(grid(traces));
 
@@ -203,7 +231,7 @@ of the current position
         # @show scores
 
         # sample the actual position
-        pos = {t => obj_id => :pos} ~ labeled_cat(positions, scores)
+        pos = {:steps => t => :objs => obj_id => :pos} ~ M.labeled_cat(positions, scores)
 
         # set the curr `trace` to this trace for future iterations of this loop
         idx = findfirst(x -> x == pos, positions)
@@ -212,3 +240,6 @@ of the current position
     end
     nothing 
 end
+
+
+end # module Inference

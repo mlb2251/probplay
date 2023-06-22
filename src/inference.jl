@@ -106,7 +106,7 @@ function process_first_frame(frame, threshold=.05)
             background = c
             background_size = sum(mask)
         end
-        sprite = Sprite(mask, RGB(color[c]...))
+        sprite = Sprite(mask, color[c])
         object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
         push!(objs, object)
     end

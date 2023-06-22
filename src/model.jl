@@ -19,7 +19,7 @@ end
 
 struct Sprite
     mask::Matrix{Bool}
-    color::RGB{Float64}
+    color::Vector{Float64}
 end
 
 struct Object
@@ -116,14 +116,14 @@ end
 const image_likelihood = ImageLikelihood()
 (::ImageLikelihood)(rendered_image, var) = random(ImageLikelihood(), rendered_image, var)
 
-struct RGBDist <: Gen.Distribution{RGB} end
+struct RGBDist <: Gen.Distribution{Vector{Float64}} end
 
 function Gen.logpdf(::RGBDist, rgb)
     0. # uniform distribution over unit cube has density 1
 end
 
 function Gen.random(::RGBDist)
-    rand(RGB)
+    rand(3)
 end
 
 const rgb_dist = RGBDist()
@@ -131,8 +131,8 @@ const rgb_dist = RGBDist()
 (::RGBDist)() = random(RGBDist())
 
 
-function canvas(height=210, width=160, background=RGB{Float64}(0,0,0))
-    fill(background, height, width)
+function canvas(height=210, width=160)
+    zeros(Float64, 3, height, width)
 end
 
 """
@@ -145,8 +145,8 @@ function draw!(canvas, obj::Object)
         if sprite.mask[i,j]
             offy = obj.pos.y+i-1
             offx = obj.pos.x+j-1
-            if offy > 0 && offy <= size(canvas,1) && offx > 0 && offx <= size(canvas,2)
-                canvas[offy,offx] = sprite.color
+            if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
+                canvas[:,offy,offx] = sprite.color
             end
         end
     end
@@ -174,7 +174,7 @@ end
 
 @gen function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
     objs ~ all_obj_dynamics(prev_state.objs)
-    rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs))) # can use prev_state.objs since its the same thanks to mutability
+    rendered = draw!(canvas(canvas_height, canvas_width), objs)
     observed_image ~ image_likelihood(rendered, var)
     return State(objs)
 end
@@ -209,7 +209,7 @@ The generative model
 
     # render
 
-    rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs)))
+    rendered = draw!(canvas(canvas_height, canvas_width), objs)
     {:init => :observed_image} ~ image_likelihood(rendered, var)
 
     state = {:steps} ~ unfold_step(T-1, State(objs), canvas_height, canvas_width, var)
@@ -236,7 +236,7 @@ end
 
 
 function sim(T)
-    (trace, _) = generate(model, (3, 3, T))
+    (trace, _) = generate(model, (100, 100, T))
     return trace
 end
 

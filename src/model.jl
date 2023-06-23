@@ -239,8 +239,8 @@ end
 unfold_step = Unfold(dynamics_and_render)
 
 @gen (static) function make_object(i, H, W)
-    width = ~ uniform_discrete(1,W)
-    height = ~ uniform_discrete(1,H)
+    width ~ uniform_discrete(1,W)
+    height ~ uniform_discrete(1,H)
     shape ~ bernoulli_2d(0.5, height, width)
     color ~ rgb_dist()
     pos ~ uniform_position(H, W)

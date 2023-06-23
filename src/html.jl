@@ -106,10 +106,13 @@ function render(html::Html)
         </script>
 
         <body>
-            <code>rsync -avz $full_path mlbowers@login.csail.mit.edu:/afs/csail.mit.edu/u/m/mlbowers/public_html/proj/atari/ && open https://people.csail.mit.edu/mlbowers/proj/atari/$(html.dir)/index.html</code>
-
             $(html.body)
         </body>
+
+        <footer>
+        <h4>Command to publish</h4>
+        <code>rsync -avz $full_path mlbowers@login.csail.mit.edu:/afs/csail.mit.edu/u/m/mlbowers/public_html/proj/atari/ && open https://people.csail.mit.edu/mlbowers/proj/atari/$(html.dir)/index.html</code>
+        </footer>
     </html>
     """
     res = string(res)

@@ -5,14 +5,14 @@ function objs_from_trace(trace, t)
     (H,W,T) = get_args(trace)
     @assert t <= T
     objs = Object[]
-    for i in 1:trace[:N]
+    for i in 1:trace[:init => :N]
         if t == 0
-            pos = trace[:init => :objs => i => :pos]
+            pos = trace[:init => :init_objs => i => :pos]
         else
             pos = trace[:steps => t => :objs => i => :pos]
         end
-        sprite = trace[i => :shape]
-        color = trace[i => :color]
+        sprite = trace[:init => :init_objs => i => :shape]
+        color = trace[:init => :init_objs => i => :color]
         obj = Object(Sprite(sprite,color),pos)
         push!(objs, obj)
     end

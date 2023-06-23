@@ -130,17 +130,17 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     (cluster, objs) = process_first_frame(observed_images[:,:,:,1])
     init_obs = choicemap(
         (:init => :observed_image, observed_images[:,:,:,1]),
-        (:N, length(objs)),
-        (:width => W),
-        (:height => H),
+        (:init => :N, length(objs)),
+        # (:init => :width => W),
+        # (:init => :height => H),
     )
     # @show W,H
     for (i,obj) in enumerate(objs)
         @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
         # @show i,obj.pos
-        init_obs[(:init => :objs => i => :pos)] = obj.pos
-        init_obs[(i => :shape)] = obj.sprite.mask
-        init_obs[(i => :color)] = obj.sprite.color
+        init_obs[(:init => :init_objs => i => :pos)] = obj.pos
+        init_obs[(:init => :init_objs => i => :shape)] = obj.sprite.mask
+        init_obs[(:init => :init_objs => i => :color)] = obj.sprite.color
     end
 
     first_frame = html_img(html, observed_images[:,:,:,1])
@@ -211,10 +211,10 @@ of the current position
     # display(grid([trace]))
 
     # now for each object, propose and sample changes 
-    for obj_id in 1:trace[:N]
+    for obj_id in 1:trace[:init => :N]
         # we use the prev_trace position here actually!
         if t == 1
-            prev_pos = prev_trace[:init => :objs => obj_id => :pos]
+            prev_pos = prev_trace[:init => :init_objs => obj_id => :pos]
         else
             prev_pos = prev_trace[:steps => t - 1 => :objs => obj_id => :pos]
         end

@@ -219,38 +219,7 @@ function draw(H, W, objs)
     canvas
 end
 
-
-
-"""
-renders an object on a canvas
-"""
-# function draw!(canvas, obj::Object)
-#     sprite = obj.sprite
-
-#     # full_image_mask = falses(size(canvas))
-    
-#     for I in CartesianIndices(sprite.mask)
-#         i, j = Tuple(I)
-#         if sprite.mask[i,j]
-#             offy = obj.pos.y+i-1
-#             offx = obj.pos.x+j-1
-#             if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
-#                 canvas[:,offy,offx] = sprite.color
-#             end
-#         end
-#     end
-#     canvas
-# end
-
-# function draw!(canvas, objs::T) where T <:AbstractVector
-#     for obj in objs
-#         draw!(canvas, obj)
-#     end
-#     canvas
-# end
-
-
-@gen function obj_dynamics(obj::Object)
+@gen (static) function obj_dynamics(obj::Object)
     pos ~ uniform_drift_position(obj.pos,2);
     return Object(obj.sprite, pos)
 end
@@ -261,7 +230,7 @@ struct State
     objs::Vector{Object}
 end
 
-@gen function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
+@gen (static) function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
     objs ~ all_obj_dynamics(prev_state.objs)
     rendered = draw(canvas_height, canvas_width, objs)
     observed_image ~ image_likelihood(rendered, var)
@@ -270,72 +239,38 @@ end
 
 unfold_step = Unfold(dynamics_and_render)
 
+@gen (static) function make_object(i, H, W)
+    width = ~ uniform_discrete(1,W)
+    height = ~ uniform_discrete(1,H)
+    shape ~ bernoulli_2d(0.5, height, width)
+    color ~ rgb_dist()
+    pos ~ uniform_position(H, W)
 
+    return Object(Sprite(shape, color), pos)
+end
 
-"""
-The generative model
-"""
-@gen function model(canvas_height, canvas_width, T)
+make_objects = Map(make_object)
 
-    var = .1
+@gen function init_model(H,W,var)
 
     N ~ poisson(5)
-    objs = Object[]
+    objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N])
 
-    # initialize objects
-    for i in 1:N
-        w = {(i => :width)} ~ uniform_discrete(1,canvas_width)
-        h = {(i => :height)} ~ uniform_discrete(1,canvas_height)
-        shape = {(i => :shape)} ~ bernoulli_2d(0.5, h,w)
-        color = {(i => :color)} ~ rgb_dist()
-        sprite = Sprite(shape, color)
+    rendered = draw(H, W, objs)
+    {:observed_image} ~ image_likelihood(rendered, var)
 
-        pos = {(:init => :objs => i => :pos)} ~ uniform_position(canvas_height, canvas_width)
+    State(objs)
+end
 
-        obj = Object(sprite, pos)
-        push!(objs, obj)
-    end
+@gen (static) function model(H, W, T)
 
-    # render
-
-    rendered = draw(canvas_height, canvas_width, objs)
-    {:init => :observed_image} ~ image_likelihood(rendered, var)
-
-    state = {:steps} ~ unfold_step(T-1, State(objs), canvas_height, canvas_width, var)
-
-    # for t in 2:T
-    #     # for i in 1:N
-    #     #     # pos = {*} ~ move_objects(t,i,objs[i])
-    #     #     # objs[i] = Object(objs[i].sprite, move_objects(t,i,objs[i]))
-
-    #     #     pos = {t => :pos => i => :pos} ~ uniform_drift_position(objs[i].pos, 3)
-    #     #     objs[i] = Object(objs[i].sprite, pos)
-    #     # end
-    #     {t => :pos} ~ all_obj_dynamics(objs)
-    #     # for i in 1:N
-    #     #     objs[i] = Object(objs[i].sprite, positions[i])
-    #     # end
-
-    #     rendered = Array(channelview(draw!(canvas(canvas_height, canvas_width), objs)))
-    #     observed_image = {t => :observed_image} ~ image_likelihood(rendered, var)
-    # end
+    var = .1
+    init_state = {:init} ~ init_model(H,W,var)
+    state = {:steps} ~ unfold_step(T-1, init_state, H, W, var)
 
     return state
 end
 
-# @gen function per_frame_model(T, canvas_height, canvas_width)
-#     if T == 1
-#         for i in 1:4
-#             {(i,:other_stuff)} ~ normal(0.0, 1.0)
-#         end
-#     else
-#         latent ~ normal(0.0, 1.0)
-#         obs ~ normal(latent, 1.0)
-#     end
-# end
-
-# new_model = Unfold(per_frame_model)
-# (trace, _) = generate(new_model, (5, 1.0, .5))
 
 
 

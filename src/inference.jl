@@ -60,7 +60,13 @@ function process_first_frame(frame, threshold=.05)
                 # if the average difference between channel values
                 # is greater than a cutoff, then the colors are different
                 # and we can't add this to the cluster
+
+                # #fusing version
                 sum(abs.(frame[:,y+dy,x+dx] .- frame[:,y,x]))/3 < threshold || continue
+
+                #nonfusing version 
+                #sum(i -> abs(frame[i, y+dy, x+dx] - frame[i, y, x]), eachindex(frame[:, y, x])) / 3 < threshold || continue 
+
                 # isapprox(frame[:,y+dy,x+dx], frame[:,y,x]) || continue
 
                 # add to cluster
@@ -147,6 +153,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     
 
     # printstyled("initializing particle filter\n",color=:green, bold=true)
+    @show typeof(model)
     state = initialize_particle_filter(model, (H,W,1), init_obs, num_particles)
 
     # steps

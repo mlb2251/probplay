@@ -8,6 +8,7 @@ using Images
 using Distributions
 using Plots
 using AutoHashEquals
+# using OffsetArrays
 using Dates
 # import FunctionalCollections: PersistentVector
 
@@ -155,12 +156,17 @@ function draw(H, W, objs)
     # canvas = zeros(Float64, 3, H + hpad * 2, W + wpad * 2)
     canvas = zeros(Float64, 3, H, W)
 
-    
-
     for obj::Object in objs # this type annotation is a 10x speedup :0
         sprite = obj.sprite
 
         sprite_height, sprite_width = size(sprite.mask)
+        
+        # offset_sprite = OffsetArray(sprite.mask, obj.pos.x, obj.pos.y)
+
+        # @show paddedviews(0., canvas, offset_sprite)
+
+        # color = reinterpret(Tuple{Float64,Float64,Float64}, sprite.color)
+        # color = (sprite.color[1], sprite.color[2], sprite.color[3])
 
 
 
@@ -203,12 +209,13 @@ function draw(H, W, objs)
                 offy = obj.pos.y+i-1
                 offx = obj.pos.x+j-1
                 if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
-                    @inbounds canvas[:,offy,offx] = sprite.color
+                    @inbounds canvas[:, offy,offx] = sprite.color
                 end
             end
         end
     end
     # canvas[:,hpad:end-hpad, wpad:end-wpad]
+    # Array(reinterpret(reshape, Float64, canvas))
     canvas
 end
 

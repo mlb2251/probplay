@@ -21,7 +21,7 @@ end
 
 function render_trace_frame(trace, t)
     (H,W,T) = get_args(trace)
-    draw!(canvas(H, W), objs_from_trace(trace,t))
+    draw(H, W, objs_from_trace(trace,t))
 end
 
 function render_trace(trace)

@@ -9,6 +9,7 @@ using Distributions
 using Plots
 using AutoHashEquals
 using Dates
+# import FunctionalCollections: PersistentVector
 
 # include("html.jl")
 
@@ -145,33 +146,101 @@ end
 # canvas[:,full_image_mask] = values
 
 
-"""
-renders an object on a canvas
-"""
-function draw!(canvas, obj::Object)
-    sprite = obj.sprite
-
-    # full_image_mask = falses(size(canvas))
+function draw(H, W, objs)
+    # max_sprite_height = maximum([size(obj.sprite.mask)[1] for obj::Object in objs])
+    # max_sprite_width = maximum([size(obj.sprite.mask)[2] for obj::Object in objs])
     
-    for I in CartesianIndices(sprite.mask)
-        i, j = Tuple(I)
-        if sprite.mask[i,j]
-            offy = obj.pos.y+i-1
-            offx = obj.pos.x+j-1
-            if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
-                canvas[:,offy,offx] = sprite.color
+    # hpad = 20
+    # wpad = 20
+    # canvas = zeros(Float64, 3, H + hpad * 2, W + wpad * 2)
+    canvas = zeros(Float64, 3, H, W)
+
+    
+
+    for obj::Object in objs # this type annotation is a 10x speedup :0
+        sprite = obj.sprite
+
+        sprite_height, sprite_width = size(sprite.mask)
+
+
+
+        # mask = BitArray(reshape(sprite.mask, (1,sprite_height,sprite_width)))
+        # mask = BitArray(repeat(reshape(sprite.mask, (1,sprite_height,sprite_width)), outer = (3,1,1)))
+        # mask = reshape(sprite.mask, (1,sprite_height,sprite_width))
+
+        # @show size(mask)
+        # @show size(canvas[:, hpad+obj.pos.y:obj.pos.y + sprite_height - 1, wpad+obj.pos.x:obj.pos.x + sprite_width - 1])
+
+        # @show typeof(sprite.mask)
+
+        # @show size(canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1])
+        # @show size(canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1][mask])
+        # @show size(mask)
+
+        # canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1][mask] .= sprite.color
+
+        # canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1] .= 
+
+        # color_sprite = sprite.color .* mask
+
+        # z = @view canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1]
+        # n = size(z[.!mask])
+
+        # @show size(z[mask])
+
+        # z .*= .!mask
+        # z .+= color_sprite
+
+        # z[mask] .= sprite.color
+        # z[mask] .= rand()
+        # if n[1] > 1000000000000
+
+        #     println("hi")
+        # end
+
+        for i in 1:sprite_height, j in 1:sprite_width
+            if sprite.mask[i,j]
+                offy = obj.pos.y+i-1
+                offx = obj.pos.x+j-1
+                if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
+                    @inbounds canvas[:,offy,offx] = sprite.color
+                end
             end
         end
     end
+    # canvas[:,hpad:end-hpad, wpad:end-wpad]
     canvas
 end
 
-function draw!(canvas, objs::T) where T <:AbstractVector
-    for obj in objs
-        draw!(canvas, obj)
-    end
-    canvas
-end
+
+
+"""
+renders an object on a canvas
+"""
+# function draw!(canvas, obj::Object)
+#     sprite = obj.sprite
+
+#     # full_image_mask = falses(size(canvas))
+    
+#     for I in CartesianIndices(sprite.mask)
+#         i, j = Tuple(I)
+#         if sprite.mask[i,j]
+#             offy = obj.pos.y+i-1
+#             offx = obj.pos.x+j-1
+#             if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
+#                 canvas[:,offy,offx] = sprite.color
+#             end
+#         end
+#     end
+#     canvas
+# end
+
+# function draw!(canvas, objs::T) where T <:AbstractVector
+#     for obj in objs
+#         draw!(canvas, obj)
+#     end
+#     canvas
+# end
 
 
 @gen function obj_dynamics(obj::Object)
@@ -187,7 +256,7 @@ end
 
 @gen function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
     objs ~ all_obj_dynamics(prev_state.objs)
-    rendered = draw!(canvas(canvas_height, canvas_width), objs)
+    rendered = draw(canvas_height, canvas_width, objs)
     observed_image ~ image_likelihood(rendered, var)
     return State(objs)
 end
@@ -222,7 +291,7 @@ The generative model
 
     # render
 
-    rendered = draw!(canvas(canvas_height, canvas_width), objs)
+    rendered = draw(canvas_height, canvas_width, objs)
     {:init => :observed_image} ~ image_likelihood(rendered, var)
 
     state = {:steps} ~ unfold_step(T-1, State(objs), canvas_height, canvas_width, var)

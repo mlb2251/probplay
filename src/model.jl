@@ -90,17 +90,9 @@ const bernoulli_2d = Bernoulli2D()
 struct ImageLikelihood <: Gen.Distribution{Array} end
 
 function Gen.logpdf(::ImageLikelihood, observed_image::Array{Float64,3}, rendered_image::Array{Float64,3}, var)
-
-    # 0.
-    # -maximum(abs.(observed_image .- rendered_image))
-
-
-
-    # @show size(observed_image)
     # precomputing log(var) and assuming mu=0 both give speedups here
     log_var = log(var)
     sum(i -> - (@inbounds abs2((observed_image[i] - rendered_image[i]) / var) + log(2π)) / 2 - log_var, eachindex(observed_image))
-    # logpdf_fast(broadcasted_normal, diff, 0., var)
 end
 
 # @assert isapprox(Gen.logpdf(M.image_likelihood, vals, vals2, .1), Gen.logpdf(broadcasted_normal, vals - vals2, zeros(Float64,size(vals)), .1))

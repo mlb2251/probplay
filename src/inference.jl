@@ -1,5 +1,3 @@
-# frame = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,20]
-# color_labels(process_first_frame(frame),frame)
 using Revise
 using Gen
 

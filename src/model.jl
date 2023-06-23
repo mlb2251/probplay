@@ -1,7 +1,4 @@
 
-
-module M
-
 using Gen
 using LinearAlgebra
 using Images
@@ -211,6 +208,16 @@ function draw(H, W, objs)
     canvas
 end
 
+function sim(T)
+    (trace, _) = generate(model, (100, 100, T))
+    return trace
+end
+
+
+module Model
+using Gen
+import ..Position, ..Sprite, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
+
 @gen (static) function obj_dynamics(obj::Object)
     pos ~ uniform_drift_position(obj.pos,2);
     return Object(obj.sprite, pos)
@@ -262,32 +269,5 @@ end
 
     return state
 end
-
-
-
-
-
-
-function sim(T)
-    (trace, _) = generate(model, (100, 100, T))
-    return trace
-end
-
-
-# @gen function foo(t::Int, prev_state::State)
-
-# end
-
-
-# grid([Gen.simulate(model, (66,141,50)) for _=1:4])
-
-
-# trace,_ = Gen.generate(model, (210, 160, 100));
-
-# trace = Gen.simulate(model, (210, 160, 50));
-
-# gif_of_trace(trace)
-
-# grid([Gen.simulate(model, (66,141,50)) for _=1:4], annotate=true)
 
 end # module Model

@@ -2,22 +2,18 @@ using Revise
 using Gen
 
 # this silliness is necessary for revise(I) to work
-try
-    includet("model.jl")
-catch e
-    if isa(e, ErrorException) && occursin("is not a file", e.msg)
-        includet("src/model.jl")
-    else
-        rethrow(e)
-    end
-end
+# try
+#     includet("model.jl")
+# catch e
+#     if isa(e, ErrorException) && occursin("is not a file", e.msg)
+#         includet("src/model.jl")
+#     else
+#         rethrow(e)
+#     end
+# end
 
-module I
-
-using ..M
-import ..M: Object, Sprite, Position, model
 using Gen
-import FunctionalCollections: peek
+import ..Model: model
 
 include("html.jl")
 
@@ -116,6 +112,7 @@ function process_first_frame(frame, threshold=.05)
     (cluster,objs)
 end
 
+
 """
 Runs a particle filter on a sequence of frames
 """
@@ -156,7 +153,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
         # particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()), obs)
         @time particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
-            obs, grid_proposal, (obs,))
+            obs, Inference.grid_proposal, (obs,))
     end
 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
@@ -166,7 +163,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     table = fill("", 2, length(state.traces))
     for (i,trace) in enumerate(state.traces)
         table[1,i] = "Particle $i ($(round(weights[i],sigdigits=4)))"
-        table[2,i] = html_gif(html, M.render_trace(trace));
+        table[2,i] = html_gif(html, render_trace(trace));
     end
 
     add_body!(html, html_table(html, table))
@@ -181,7 +178,10 @@ end
 # observed_images = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,1:20]
 # traces = particle_filter(100, observed_images, 10)
 
-
+module Inference
+using Gen
+import ..Position, ..Sprite, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..labeled_cat
+import FunctionalCollections: peek
 
 """
 Does gridding to propose new positions for an object in the vicinity
@@ -193,7 +193,7 @@ of the current position
     # @show prev_T
 
     if prev_T == 1
-        objs = M.objs_from_trace(prev_trace, 0)
+        objs = objs_from_trace(prev_trace, 0)
     else
         objs = peek(get_retval(prev_trace)).objs[:]
     end
@@ -243,7 +243,7 @@ of the current position
         scores = exp.(scores)
 
         # sample the actual position
-        pos = {:steps => t => :objs => obj_id => :pos} ~ M.labeled_cat(positions, scores)
+        pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)
 
         # set the curr `trace` to this trace for future iterations of this loop
         idx = findfirst(x -> x == pos, positions)

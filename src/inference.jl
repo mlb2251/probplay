@@ -120,6 +120,10 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     C,H,W,T = size(observed_images)
 
     html = new_html()
+    html.head = "Particle Filter"
+    add_body!(html, "<p>C: $C, H: $H, W: $W, T: $T</p>")
+
+
     
     # construct initial observations
     (cluster, objs) = process_first_frame(observed_images[:,:,:,1])
@@ -146,7 +150,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     state = initialize_particle_filter(model, (H,W,1), init_obs, num_particles)
 
     # steps
-    for t in 1:T-1
+    elapsed=@elapsed for t in 1:T-1
         @show t
         # @show state.log_weights, weights
         # maybe_resample!(state, ess_threshold=num_particles/2, verbose=true)
@@ -155,6 +159,9 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         @time particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, Inference.grid_proposal, (obs,))
     end
+
+    time_str = "particle filter runtime: $(round(elapsed,sigdigits=3))s ($(round(elapsed/(T-1),sigdigits=3))/step)"
+    println(time_str)
 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
     weights = exp.(log_normalized_weights)
@@ -167,6 +174,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     end
 
     add_body!(html, html_table(html, table))
+
+    add_body!(html, time_str)
 
     render(html)
     

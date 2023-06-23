@@ -90,7 +90,7 @@ function html_table(html::Html, table::Matrix, attrs...)
 end
 
 function render(html::Html)
-    
+    full_path = joinpath(Base.Filesystem.pwd(), "out/html", html.dir)
     res = """
     <html>
         <head>
@@ -106,6 +106,8 @@ function render(html::Html)
         </script>
 
         <body>
+            <code>rsync -avz $full_path mlbowers@login.csail.mit.edu:/afs/csail.mit.edu/u/m/mlbowers/public_html/proj/atari/ && open https://people.csail.mit.edu/mlbowers/proj/atari/$(html.dir)/index.html</code>
+
             $(html.body)
         </body>
     </html>

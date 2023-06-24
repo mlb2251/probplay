@@ -62,10 +62,10 @@ function process_first_frame(frame, threshold=.05)
                 # and we can't add this to the cluster
 
                 # #fusing version
-                sum(abs.(frame[:,y+dy,x+dx] .- frame[:,y,x]))/3 < threshold || continue
+                #sum(abs.(frame[:,y+dy,x+dx] .- frame[:,y,x]))/3 < threshold || continue
 
                 #nonfusing version 
-                #sum(i -> abs(frame[i, y+dy, x+dx] - frame[i, y, x]), eachindex(frame[:, y, x])) / 3 < threshold || continue 
+                sum(i -> abs(frame[i, y+dy, x+dx] - frame[i, y, x]), eachindex(frame[:, y, x])) / 3 < threshold || continue 
 
                 # isapprox(frame[:,y+dy,x+dx], frame[:,y,x]) || continue
 

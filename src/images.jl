@@ -1,5 +1,20 @@
-
-
+# function objs_from_trace(trace, t)
+#     (H,W,T) = get_args(trace)
+#     @assert t <= T
+#     objs = Object[]
+#     for i in 1:trace[:init => :N]
+#         if t == 0
+#             pos = trace[:init => :init_objs => i => :pos]
+#         else
+#             pos = trace[:steps => t => :objs => i => :pos]
+#         end
+#         sprite = trace[:init => :init_objs => i => :shape]
+#         color = trace[:init => :init_objs => i => :color]
+#         obj = Object(Sprite(sprite,color),pos)
+#         push!(objs, obj)
+#     end
+#     objs
+# end
 
 function objs_from_trace(trace, t)
     (H,W,T) = get_args(trace)
@@ -11,17 +26,38 @@ function objs_from_trace(trace, t)
         else
             pos = trace[:steps => t => :objs => i => :pos]
         end
-        sprite = trace[:init => :init_objs => i => :shape]
-        color = trace[:init => :init_objs => i => :color]
-        obj = Object(Sprite(sprite,color),pos)
+        
+        sprite_index = trace[:init => :init_objs => i => :sprite_index]#? 
+        obj = Object(sprite_index, pos)
         push!(objs, obj)
     end
     objs
 end
 
+function sprites_from_trace(trace, t) #this cannot be right yet, like what's going on with the N 
+    (H,W,T) = get_args(trace)
+    @assert t <= T
+    sprites = Sprite_Type[]
+    for i in 1:trace[:init => :N]
+        # if t == 0
+        #     pos = trace[:init => :init_objs => i => :pos]
+        # else
+        #     pos = trace[:steps => t => :objs => i => :pos]
+        # end
+        #oh god no clue what to put here TODO 
+
+        color = trace[:init => :init_sprites => i => :color]
+        shape = trace[:init => :init_sprites => i => :shape]
+
+        sprite_type = Sprite_Type(shape, color)
+        push!(sprites, sprite_type)
+    end
+    sprites
+end
+
 function render_trace_frame(trace, t)
     (H,W,T) = get_args(trace)
-    draw(H, W, objs_from_trace(trace,t))
+    draw(H, W, objs_from_trace(trace,t), sprites_from_trace(trace,t))
 end
 
 function render_trace(trace)

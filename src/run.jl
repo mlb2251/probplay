@@ -11,7 +11,24 @@ include("html.jl")
 include("images.jl")	
 #render samples from forward model 
 import ..Model: model
-html_gif(new_html(), render_trace(generate(model, (100, 200, 5))[1]), show=true);
+html_gif(new_html(), render_trace(generate(model, (200, 200, 5))[1]), show=true);
+
+# trace = generate(model, (10, 5, 5))[1]
+# args = get_args(trace)
+# #@show trace
+
+# testy = trace[:init => :N]
+# @show testy
+
+# testing = objs_from_trace(trace,2)#t = 2 for testing 
+# # @show testing
+
+
+
+
+
+
+
 
 # trace = generate(model, (10, 20, 5))[1]
 

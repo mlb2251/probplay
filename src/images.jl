@@ -19,7 +19,7 @@
 function objs_from_trace(trace, t)
     (H,W,T) = get_args(trace)
     @assert t <= T
-    objs = Object[]
+    objs = Object[] #why grey? 
     for i in 1:trace[:init => :N]
         if t == 0
             pos = trace[:init => :init_objs => i => :pos]
@@ -28,6 +28,7 @@ function objs_from_trace(trace, t)
         end
         
         sprite_index = trace[:init => :init_objs => i => :sprite_index]#? 
+        #@show sprite_index
         obj = Object(sprite_index, pos)
         push!(objs, obj)
     end
@@ -38,7 +39,7 @@ function sprites_from_trace(trace, t) #this cannot be right yet, like what's goi
     (H,W,T) = get_args(trace)
     @assert t <= T
     sprites = Sprite_Type[]
-    for i in 1:trace[:init => :N]
+    for i in 1:4#?
         # if t == 0
         #     pos = trace[:init => :init_objs => i => :pos]
         # else
@@ -46,8 +47,13 @@ function sprites_from_trace(trace, t) #this cannot be right yet, like what's goi
         # end
         #oh god no clue what to put here TODO 
 
-        color = trace[:init => :init_sprites => i => :color]
+        color = trace[:init => :init_sprites => i => :color] #?
+        
         shape = trace[:init => :init_sprites => i => :shape]
+
+        # @show i
+        # @show color
+        # @show shape
 
         sprite_type = Sprite_Type(shape, color)
         push!(sprites, sprite_type)

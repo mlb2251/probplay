@@ -93,6 +93,7 @@ function process_first_frame(frame, threshold=.05)
     end
 
     objs = Object[]
+    sprites = Sprite_Type[]
 
     background = 0
     background_size = 0
@@ -106,16 +107,36 @@ function process_first_frame(frame, threshold=.05)
             background = c
             background_size = sum(mask)
         end
-        sprite = Sprite(mask, color[c])
-        object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
+
+        #v1 each sprite makes new sprite type version 
+        sprite_type = Sprite_Type(mask, color[c])
+        object = Object(c, Position(smallest_y[c], smallest_x[c]))
+        push!(sprites, sprite_type)
         push!(objs, object)
+
+        @show c
+
+        # #v0 old version 
+        # sprite = Sprite(mask, color[c])
+        # object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
+        # push!(objs, object)
     end
 
     # turn background into a big rectangle filling whole screen
-    color = objs[background].sprite.color
-    objs[background] = Object(Sprite(ones(Bool, H, W),color), Position(1,1))
 
-    (cluster,objs)
+    #v1 each sprite makes new sprite type version 
+    #c index set to the background sprite by now 
+    color = sprites[background].color # will have to change when sprite types indexing changes 
+    sprites[background] = Sprite_Type(ones(Bool, H, W),color)
+    objs[background] = Object(background, Position(1,1))
+
+    (cluster,objs,sprites)	#? 
+
+    # # v0 old version 
+    # color = objs[background].sprite.color
+    # objs[background] = Object(Sprite(ones(Bool, H, W),color), Position(1,1))
+
+    # (cluster,objs)
 end
 
 
@@ -132,7 +153,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
 
     
     # construct initial observations
-    (cluster, objs) = process_first_frame(observed_images[:,:,:,1])
+    (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
     init_obs = choicemap(
         (:init => :observed_image, observed_images[:,:,:,1]),
         (:init => :N, length(objs)),
@@ -140,13 +161,26 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         # (:init => :height => H),
     )
     # @show W,H
+
+
+    # for (i,obj) in enumerate(objs)
+    #     @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
+    #     # @show i,obj.pos
+    #     init_obs[(:init => :init_objs => i => :pos)] = obj.pos
+    #     init_obs[(:init => :init_objs => i => :shape)] = obj.sprite.mask
+    #     init_obs[(:init => :init_objs => i => :color)] = obj.sprite.color
+    # end
+
     for (i,obj) in enumerate(objs)
         @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
         # @show i,obj.pos
         init_obs[(:init => :init_objs => i => :pos)] = obj.pos
-        init_obs[(:init => :init_objs => i => :shape)] = obj.sprite.mask
-        init_obs[(:init => :init_objs => i => :color)] = obj.sprite.color
+
+        #EDIT THIS
+        init_obs[(:init => :init_objs => i => :shape)] = sprites[obj.sprite_index].mask
+        init_obs[(:init => :init_objs => i => :color)] = sprites[obj.sprite_index].color
     end
+
 
     first_frame = html_img(html, observed_images[:,:,:,1])
     add_body!(html, "<h2>Observations</h2>", html_gif(html, observed_images))
@@ -196,7 +230,7 @@ end
 
 module Inference
 using Gen
-import ..Position, ..Sprite, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..labeled_cat
+import ..Position, ..Sprite_Type, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
 import FunctionalCollections: peek
 
 """
@@ -210,8 +244,11 @@ of the current position
 
     if prev_T == 1
         objs = objs_from_trace(prev_trace, 0)
+        sprites = sprites_from_trace(prev_trace, 0)
     else
+        #what's this 
         objs = peek(get_retval(prev_trace)).objs[:]
+        sprites = peek(get_retval(prev_trace)).sprites[:]
     end
     
 
@@ -267,6 +304,9 @@ of the current position
         trace = traces[idx]
     end
     nothing 
+
+    #for each sprite type, propose and sample changes
+    #todo 
 end
 
 

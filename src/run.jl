@@ -1,21 +1,22 @@
 include("model.jl")
-#include("inference.jl")
 
-# using Revise
-# includet("inference.jl"); 
+using Revise
+includet("inference.jl"); 
 # println(Base.Filesystem.pwd())
 
 #frostbite testing 
-@time traces = particle_filter(6, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8); #termal relative to proj directory, but includes are 
+@time traces = particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=170, bottom=25, left=20, tskip=4)[:,:,:,1:4], 1); #termal relative to proj directory, but includes are #top 120 bottom 25 left 20  CROPPED top=170, bottom=25, left=20,
 
+
+#first frame testing nvm this is annoying to write
 
 include("html.jl")
 include("images.jl")	
 #render samples from forward model 
 import ..Model: model
 
-#generative model only 
-html_gif(new_html(), render_trace(generate(model, (200, 200, 5))[1]), show=true);
+# #generative model only 
+#html_gif(new_html(), render_trace(generate(model, (200, 200, 5))[1]), show=true);
 
 
 

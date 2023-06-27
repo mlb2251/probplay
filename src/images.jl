@@ -36,10 +36,11 @@ function objs_from_trace(trace, t)
 end
 
 function sprites_from_trace(trace, t) #this cannot be right yet, like what's going on with the N 
+    NUM_SPRITE_TYPES = 4
     (H,W,T) = get_args(trace)
     @assert t <= T
     sprites = Sprite_Type[]
-    for i in 1:4#?
+    for i in 1:NUM_SPRITE_TYPES#?
         # if t == 0
         #     pos = trace[:init => :init_objs => i => :pos]
         # else

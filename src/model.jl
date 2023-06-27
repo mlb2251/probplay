@@ -8,6 +8,8 @@ using AutoHashEquals
 using Dates
 # import FunctionalCollections: PersistentVector
 
+
+
 # include("html.jl")
 
 @auto_hash_equals struct Position
@@ -282,7 +284,8 @@ unfold_step = Unfold(dynamics_and_render)
 
  
 @gen (static) function make_object(i, H, W)
-    sprite_index ~ uniform_discrete(1, 4) #how to deal with number of sprite types? #TODO MAKE IT NOT 3
+    NUM_SPRITE_TYPES = 4
+    sprite_index ~ uniform_discrete(1, NUM_SPRITE_TYPES) #how to deal with number of sprite types? #TODO MAKE IT NOT 4
     #pos ~ uniform_drift_position(Position(0,0), 2)
     pos ~ uniform_position(H, W)
 
@@ -309,12 +312,13 @@ make_sprites = Map(make_type)
 
 
 @gen function init_model(H,W,var)
-
+    NUM_SPRITE_TYPES = 4
     #N = 7 i cann't believe this broke the whole thing 
     N ~ poisson(7)
     #objs = {:init_objs} ~  make_objects(collect(1:N))
     objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N])
-    sprites = {:init_sprites} ~ make_sprites(collect(1:4), [H for _ in 1:4], [W for _ in 1:4]) #thats 3 sprites
+    @show NUM_SPRITE_TYPES
+    sprites = {:init_sprites} ~ make_sprites(collect(1:NUM_SPRITE_TYPES), [H for _ in 1:NUM_SPRITE_TYPES], [W for _ in 1:NUM_SPRITE_TYPES]) 
 
     rendered = draw(H, W, objs, sprites)
     {:observed_image} ~ image_likelihood(rendered, var)
@@ -327,7 +331,7 @@ end
 # #@show testinitmodel
 
 
-@gen function model(H, W, T) #NOT STATIC ANYMORE 
+@gen (static) function model(H, W, T) #NOT STATIC ANYMORE THIS REALLY SHOULD BE STATIC 
 
     var = .1
     init_state = {:init} ~ init_model(H,W,var)

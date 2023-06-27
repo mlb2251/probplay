@@ -101,7 +101,14 @@ function process_first_frame(frame, threshold=.05)
         # create the sprite mask and crop it so its at 0,0
         mask = (cluster .== c)[smallest_y[c]:largest_y[c], smallest_x[c]:largest_x[c]]
         # avg color
+        #uncomment. correct code 
         color[c] ./= sum(mask)
+        #@show color[c]
+        #make array of 3 random numbers to assign to color
+
+        ##random colors for testing 
+        #color[c] = rand(Float64, (3)) 
+
         # largest area sprite is background
         if sum(mask) > background_size
             background = c
@@ -114,7 +121,7 @@ function process_first_frame(frame, threshold=.05)
         push!(sprites, sprite_type)
         push!(objs, object)
 
-        @show c
+        #@show sprites 
 
         # #v0 old version 
         # sprite = Sprite(mask, color[c])
@@ -128,6 +135,7 @@ function process_first_frame(frame, threshold=.05)
     #c index set to the background sprite by now 
     color = sprites[background].color # will have to change when sprite types indexing changes 
     sprites[background] = Sprite_Type(ones(Bool, H, W),color)
+    @show background
     objs[background] = Object(background, Position(1,1))
 
     (cluster,objs,sprites)	#? 
@@ -157,6 +165,9 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     init_obs = choicemap(
         (:init => :observed_image, observed_images[:,:,:,1]),
         (:init => :N, length(objs)),
+
+        #uhh
+        (:init => :NUM_SPRITE_TYPES, length(sprites)),
         # (:init => :width => W),
         # (:init => :height => H),
     )
@@ -176,9 +187,9 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         # @show i,obj.pos
         init_obs[(:init => :init_objs => i => :pos)] = obj.pos
 
-        #EDIT THIS
-        init_obs[(:init => :init_objs => i => :shape)] = sprites[obj.sprite_index].mask
-        init_obs[(:init => :init_objs => i => :color)] = sprites[obj.sprite_index].color
+        #EDIT THIS #works when swapping init_sprites w init_objs
+        init_obs[:init => :init_sprites => obj.sprite_index => :shape] = sprites[obj.sprite_index].mask # => means go into subtrace, here initializing subtraces, () are optional. => means pair!!
+        init_obs[:init => :init_sprites => obj.sprite_index => :color] = sprites[obj.sprite_index].color
     end
 
 
@@ -248,6 +259,7 @@ of the current position
     else
         #what's this 
         objs = peek(get_retval(prev_trace)).objs[:]
+        
         sprites = peek(get_retval(prev_trace)).sprites[:]
     end
     
@@ -259,10 +271,16 @@ of the current position
     # first get a proposal from the prior by just extending the trace by one timestep and also adding the new observation in
     (trace, _, _, _) = Gen.update(prev_trace, (H,W,prev_T + 1), (NoChange(), NoChange(), UnknownChange()), obs)
 
-    # display(grid([trace]))
+    #display(grid([trace]))
 
     # now for each object, propose and sample changes 
     for obj_id in 1:trace[:init => :N]
+        
+        testyindex = prev_trace[:init => :init_objs => obj_id => :sprite_index]
+        @show obj_id
+        @show testyindex
+    
+
         # we use the prev_trace position here actually!
         if t == 1
             prev_pos = prev_trace[:init => :init_objs => obj_id => :pos]
@@ -292,6 +310,8 @@ of the current position
 
         # @show obj_id
         traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
+        #update sprite index? todo?
+
         scores = Gen.normalize_weights(get_score.(traces))[2]
         scores = exp.(scores)
 
@@ -311,3 +331,5 @@ end
 
 
 end # module Inference
+
+

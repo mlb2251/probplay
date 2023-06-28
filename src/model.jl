@@ -4,28 +4,17 @@ using Images
 using Distributions
 using Plots
 using AutoHashEquals
-# using OffsetArrays
 using Dates
-# import FunctionalCollections: PersistentVector
-
-
-
-# include("html.jl")
 
 @auto_hash_equals struct Position
     y::Int
     x::Int
 end
 
-struct Sprite_Type
+mutable struct Sprite_Type
     mask::Matrix{Bool}
     color::Vector{Float64}
 end
-
-# struct Object
-#     sprite::Sprite
-#     pos::Position
-# end
 
 struct Object
     sprite_index :: Int  
@@ -129,18 +118,6 @@ function canvas(height=210, width=160)
     zeros(Float64, 3, height, width)
 end
 
-# canvas = zeros(3,100,100)
-
-# pos_x = 1
-# pos_y = 1
-# mask = reshape(rand(30,30) .< 0.5, (1,30,30))
-# values = rand(3, sum(mask))
-
-
-# full_image_mask = falses(size(canvas))
-# full_image_mask[:,pos_x: pos_x+size(mask)[2]-1, pos_y: pos_y+size(mask)[3]-1] = mask
-# canvas[:,full_image_mask] = values
-
 
 function draw(H, W, objs, sprites)
     canvas = zeros(Float64, 3, H, W)
@@ -164,77 +141,6 @@ function draw(H, W, objs, sprites)
     canvas
 end
 
-# function draw(H, W, objs)
-#     # max_sprite_height = maximum([size(obj.sprite.mask)[1] for obj::Object in objs])
-#     # max_sprite_width = maximum([size(obj.sprite.mask)[2] for obj::Object in objs])
-    
-#     # hpad = 20
-#     # wpad = 20
-#     # canvas = zeros(Float64, 3, H + hpad * 2, W + wpad * 2)
-#     canvas = zeros(Float64, 3, H, W)
-
-#     for obj::Object in objs # this type annotation is a 10x speedup :0
-#         sprite = obj.sprite
-
-#         sprite_height, sprite_width = size(sprite.mask)
-        
-#         # offset_sprite = OffsetArray(sprite.mask, obj.pos.x, obj.pos.y)
-
-#         # @show paddedviews(0., canvas, offset_sprite)
-
-#         # color = reinterpret(Tuple{Float64,Float64,Float64}, sprite.color)
-#         # color = (sprite.color[1], sprite.color[2], sprite.color[3])
-
-
-
-#         # mask = BitArray(reshape(sprite.mask, (1,sprite_height,sprite_width)))
-#         # mask = BitArray(repeat(reshape(sprite.mask, (1,sprite_height,sprite_width)), outer = (3,1,1)))
-#         # mask = reshape(sprite.mask, (1,sprite_height,sprite_width))
-
-#         # @show size(mask)
-#         # @show size(canvas[:, hpad+obj.pos.y:obj.pos.y + sprite_height - 1, wpad+obj.pos.x:obj.pos.x + sprite_width - 1])
-
-#         # @show typeof(sprite.mask)
-
-#         # @show size(canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1])
-#         # @show size(canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1][mask])
-#         # @show size(mask)
-
-#         # canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1][mask] .= sprite.color
-
-#         # canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1] .= 
-
-#         # color_sprite = sprite.color .* mask
-
-#         # z = @view canvas[:, hpad+obj.pos.y:hpad+obj.pos.y + sprite_height - 1, wpad+obj.pos.x:wpad+obj.pos.x + sprite_width - 1]
-#         # n = size(z[.!mask])
-
-#         # @show size(z[mask])
-
-#         # z .*= .!mask
-#         # z .+= color_sprite
-
-#         # z[mask] .= sprite.color
-#         # z[mask] .= rand()
-#         # if n[1] > 1000000000000
-
-#         #     println("hi")
-#         # end
-
-#         for i in 1:sprite_height, j in 1:sprite_width
-#             if sprite.mask[i,j]
-#                 offy = obj.pos.y+i-1
-#                 offx = obj.pos.x+j-1
-#                 if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
-#                     @inbounds canvas[:, offy,offx] = sprite.color
-#                 end
-#             end
-#         end
-#     end
-#     # canvas[:,hpad:end-hpad, wpad:end-wpad]
-#     # Array(reinterpret(reshape, Float64, canvas))
-#     canvas
-# end
 
 function sim(T)
     (trace, _) = generate(model, (100, 100, T))
@@ -246,10 +152,6 @@ module Model
 using Gen
 import ..Position, ..Sprite_Type, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
 
-# @gen (static) function obj_dynamics(obj::Object)
-#     pos ~ uniform_drift_position(obj.pos,2);
-#     return Object(obj.sprite, pos)
-# end
 @gen (static) function obj_dynamics(obj::Object)
     pos ~ uniform_drift_position(obj.pos,2);
     return Object(obj.sprite_index, pos)
@@ -264,7 +166,7 @@ end
 
 @gen (static) function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
     objs ~ all_obj_dynamics(prev_state.objs)
-    sprites = prev_state.sprites # or =? does it matter? 
+    sprites = prev_state.sprites 
     rendered = draw(canvas_height, canvas_width, objs, sprites)
     observed_image ~ image_likelihood(rendered, var)
     return State(objs, sprites)
@@ -272,22 +174,14 @@ end
 
 unfold_step = Unfold(dynamics_and_render)
 
-# @gen (static) function make_object(i, H, W)
-#     width ~ uniform_discrete(1,W)
-#     height ~ uniform_discrete(1,H)
-#     shape ~ bernoulli_2d(0.5, height, width)
-#     color ~ rgb_dist()
-#     pos ~ uniform_position(H, W)
-
-#     return Object(Sprite(shape, color), pos)
-# end
 
  
 @gen (static) function make_object(i, H, W)
     NUM_SPRITE_TYPES = 4
-    sprite_index ~ uniform_discrete(1, NUM_SPRITE_TYPES) #how to deal with number of sprite types? #TODO MAKE IT NOT 4
-    #pos ~ uniform_drift_position(Position(0,0), 2)
-    pos ~ uniform_position(H, W)
+    
+    sprite_index ~ uniform_discrete(1, NUM_SPRITE_TYPES) 
+    #pos ~ uniform_drift_position(Position(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
+    pos ~ uniform_position(H, W) 
 
     return Object(sprite_index, pos)
 end
@@ -310,14 +204,10 @@ make_sprites = Map(make_type)
 # #@show testsprites
 
 
-
 @gen function init_model(H,W,var)
     NUM_SPRITE_TYPES = 4
-    #N = 7 i cann't believe this broke the whole thing 
     N ~ poisson(7)
-    #objs = {:init_objs} ~  make_objects(collect(1:N))
     objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N])
-    @show NUM_SPRITE_TYPES
     sprites = {:init_sprites} ~ make_sprites(collect(1:NUM_SPRITE_TYPES), [H for _ in 1:NUM_SPRITE_TYPES], [W for _ in 1:NUM_SPRITE_TYPES]) 
 
     rendered = draw(H, W, objs, sprites)
@@ -331,7 +221,7 @@ end
 # #@show testinitmodel
 
 
-@gen (static) function model(H, W, T) #NOT STATIC ANYMORE THIS REALLY SHOULD BE STATIC 
+@gen (static) function model(H, W, T) 
 
     var = .1
     init_state = {:init} ~ init_model(H,W,var)

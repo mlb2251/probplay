@@ -1,25 +1,7 @@
-# function objs_from_trace(trace, t)
-#     (H,W,T) = get_args(trace)
-#     @assert t <= T
-#     objs = Object[]
-#     for i in 1:trace[:init => :N]
-#         if t == 0
-#             pos = trace[:init => :init_objs => i => :pos]
-#         else
-#             pos = trace[:steps => t => :objs => i => :pos]
-#         end
-#         sprite = trace[:init => :init_objs => i => :shape]
-#         color = trace[:init => :init_objs => i => :color]
-#         obj = Object(Sprite(sprite,color),pos)
-#         push!(objs, obj)
-#     end
-#     objs
-# end
-
 function objs_from_trace(trace, t)
     (H,W,T) = get_args(trace)
     @assert t <= T
-    objs = Object[] #why grey? 
+    objs = Object[] #why grey text here?
     for i in 1:trace[:init => :N]
         if t == 0
             pos = trace[:init => :init_objs => i => :pos]
@@ -27,7 +9,7 @@ function objs_from_trace(trace, t)
             pos = trace[:steps => t => :objs => i => :pos]
         end
         
-        sprite_index = trace[:init => :init_objs => i => :sprite_index]#? 
+        sprite_index = trace[:init => :init_objs => i => :sprite_index]
         #@show sprite_index
         obj = Object(sprite_index, pos)
         push!(objs, obj)
@@ -35,26 +17,16 @@ function objs_from_trace(trace, t)
     objs
 end
 
-function sprites_from_trace(trace, t) #this cannot be right yet, like what's going on with the N 
+function sprites_from_trace(trace, t)
     NUM_SPRITE_TYPES = 4
     (H,W,T) = get_args(trace)
     @assert t <= T
     sprites = Sprite_Type[]
-    for i in 1:NUM_SPRITE_TYPES#?
-        # if t == 0
-        #     pos = trace[:init => :init_objs => i => :pos]
-        # else
-        #     pos = trace[:steps => t => :objs => i => :pos]
-        # end
-        #oh god no clue what to put here TODO 
+    for i in 1:NUM_SPRITE_TYPES
 
         color = trace[:init => :init_sprites => i => :color] #?
         
         shape = trace[:init => :init_sprites => i => :shape]
-
-        # @show i
-        # @show color
-        # @show shape
 
         sprite_type = Sprite_Type(shape, color)
         push!(sprites, sprite_type)

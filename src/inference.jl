@@ -22,6 +22,12 @@ include("html.jl")
 #     x
 # end
 
+function get_mask_diff(mask1, mask2)
+
+    abs(sum(mask1) - sum(mask2))/sum(mask1) #super janky test of mask_diff just being size
+end 
+    
+
 """
 groups adjacent same-color pixels of a frame into objects
 as a simple first pass of object detection
@@ -115,38 +121,118 @@ function process_first_frame(frame, threshold=.05)
             background_size = sum(mask)
         end
 
-        #v1 each sprite makes new sprite type version 
-        sprite_type = Sprite_Type(mask, color[c])
-        object = Object(c, Position(smallest_y[c], smallest_x[c]))
-        push!(sprites, sprite_type)
-        push!(objs, object)
 
-        #@show sprites 
-
+        
         # #v0 old version 
         # sprite = Sprite(mask, color[c])
         # object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
         # push!(objs, object)
+
+
+        # #v1 each sprite makes new sprite type version 
+        # sprite_type = Sprite_Type(mask, color[c])
+        # object = Object(c, Position(smallest_y[c], smallest_x[c]))
+        # push!(sprites, sprite_type)
+        # push!(objs, object)
+
+
+        #v2 same sprite type if similar masks 
+        newsprite = true
+        mask_diff = 0
+        for sprite_i_sofar in 2:length(sprites)#not including background
+
+            #difference in sprite masks
+            mask_diff = get_mask_diff(sprites[sprite_i_sofar].mask, mask)
+            @show mask_diff
+
+            #same sprite
+            if mask_diff < 0.1
+                @show sprite_i_sofar
+                newsprite = false
+                object = Object(sprite_i_sofar, Position(smallest_y[c], smallest_x[c]))
+                push!(objs, object)
+                break
+            end
+
+            iH,iW = size(sprites[sprite_i_sofar].mask)
+            cH,cW = size(mask)
+
+            #checking for subsprites in either direction for occlusion # not fully working, feel free to delete since takes long 
+            check_for_subsprites = true 
+            if check_for_subsprites
+                if iH < cH
+                    smallmask = sprites[sprite_i_sofar].mask
+                    bigmask = mask
+                    smallH = iH
+                    bigH = cH
+                    smallW = iW
+                    bigW = cW
+                    newbigger = true
+                else 
+                    smallmask = mask
+                    bigmask = sprites[sprite_i_sofar].mask
+                    smallH = cH
+                    bigH = iH
+                    smallW = cW
+                    bigW = iW
+                    newbigger = false
+                end
+
+                for Hindex in 1:bigH-smallH-1
+                    for Windex in 1:bigW-smallW-1
+                        submask = bigmask[Hindex:Hindex+smallH, Windex:Windex+smallW] #check indicies here 
+                        mask_diff = get_mask_diff(submask, smallmask)
+
+                        if mask_diff < 0.2
+                            println("holy shit this actually worked")
+                            newsprite = false
+
+                            if newbigger
+                                #fixing old sprite type 
+                                sprites[sprite_i_sofar].mask = bigmask
+                                object = Object(sprite_i_sofar, Position(smallest_y[c], smallest_x[c]))
+                                push!(objs, object)
+                            else 
+                                #new sprite is old just starting at diff index
+                                object = Object(sprite_i_sofar, Position(max(smallest_y[c]-Hindex, 1), max(smallest_x[c]-Windex, 1))) #looks weird when <0
+                                
+                                push!(objs, object)
+                            end 
+
+                            break
+                        end
+                    end 
+                end
+            end
+
+
+        end	
+
+
+        #new sprite 
+        if newsprite
+            @show c
+            sprite_type = Sprite_Type(mask, color[c])
+            object = Object(c, Position(smallest_y[c], smallest_x[c]))
+            push!(sprites, sprite_type)
+            push!(objs, object)
+        end
+
+        #@show sprites 
+
     end
 
     # turn background into a big rectangle filling whole screen
 
-    #v1 each sprite makes new sprite type version 
-    #c index set to the background sprite by now 
-    color = sprites[background].color # will have to change when sprite types indexing changes 
+    #i think works even with spriteindex 
+    color = sprites[background].color 
     sprites[background] = Sprite_Type(ones(Bool, H, W),color)
     @show background
     objs[background] = Object(background, Position(1,1))
 
-    (cluster,objs,sprites)	#? 
+    (cluster,objs,sprites)	
 
-    # # v0 old version 
-    # color = objs[background].sprite.color
-    # objs[background] = Object(Sprite(ones(Bool, H, W),color), Position(1,1))
-
-    # (cluster,objs)
 end
-
 
 """
 Runs a particle filter on a sequence of frames
@@ -162,32 +248,30 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     
     # construct initial observations
     (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
+    
+    # #testing initial observation
+    # img = draw(H, W, objs, sprites)
+    # html_img(new_html(), img; show=true)
+    # djkfja;kljfkl; jkl;dsf
+
+
     init_obs = choicemap(
         (:init => :observed_image, observed_images[:,:,:,1]),
         (:init => :N, length(objs)),
 
-        #uhh
-        (:init => :NUM_SPRITE_TYPES, length(sprites)),
-        # (:init => :width => W),
-        # (:init => :height => H),
     )
-    # @show W,H
 
-
-    # for (i,obj) in enumerate(objs)
-    #     @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
-    #     # @show i,obj.pos
-    #     init_obs[(:init => :init_objs => i => :pos)] = obj.pos
-    #     init_obs[(:init => :init_objs => i => :shape)] = obj.sprite.mask
-    #     init_obs[(:init => :init_objs => i => :color)] = obj.sprite.color
-    # end
 
     for (i,obj) in enumerate(objs)
+
+
         @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
         # @show i,obj.pos
         init_obs[(:init => :init_objs => i => :pos)] = obj.pos
+        init_obs[(:init => :init_objs => i => :sprite_index)] = obj.sprite_index #anything not set here it makes a random choice about
+        
 
-        #EDIT THIS #works when swapping init_sprites w init_objs
+        #EDIT THIS 
         init_obs[:init => :init_sprites => obj.sprite_index => :shape] = sprites[obj.sprite_index].mask # => means go into subtrace, here initializing subtraces, () are optional. => means pair!!
         init_obs[:init => :init_sprites => obj.sprite_index => :color] = sprites[obj.sprite_index].color
     end
@@ -275,11 +359,6 @@ of the current position
 
     # now for each object, propose and sample changes 
     for obj_id in 1:trace[:init => :N]
-        
-        testyindex = prev_trace[:init => :init_objs => obj_id => :sprite_index]
-        @show obj_id
-        @show testyindex
-    
 
         # we use the prev_trace position here actually!
         if t == 1

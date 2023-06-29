@@ -160,7 +160,7 @@ function process_first_frame(frame, threshold=.05)
             #checking for subsprites in either direction for occlusion # not fully working, feel free to delete since takes long 
             check_for_subsprites = true 
             if check_for_subsprites
-                if iH < cH
+                if iH < cH | iW < cW
                     smallmask = sprites[sprite_i_sofar].mask
                     bigmask = mask
                     smallH = iH
@@ -178,17 +178,23 @@ function process_first_frame(frame, threshold=.05)
                     newbigger = false
                 end
 
-                for Hindex in 1:bigH-smallH-1
-                    for Windex in 1:bigW-smallW-1
-                        submask = bigmask[Hindex:Hindex+smallH, Windex:Windex+smallW] #check indicies here 
+                @show newbigger
+                @show sprite_i_sofar
+                @show c
+
+
+                for Hindex in 1:bigH-smallH+1
+                    for Windex in 1:bigW-smallW+1
+                        submask = bigmask[Hindex:Hindex+smallH-1, Windex:Windex+smallW-1] #check indicies here 
                         mask_diff = get_mask_diff(submask, smallmask)
+                        @show mask_diff	
 
                         if mask_diff < 0.2
                             println("holy shit this actually worked")
                             newsprite = false
 
                             if newbigger
-                                #fixing old sprite type 
+                                #fixing old sprite type #todo should also fix its pos 
                                 sprites[sprite_i_sofar].mask = bigmask
                                 object = Object(sprite_i_sofar, Position(smallest_y[c], smallest_x[c]))
                                 push!(objs, object)
@@ -199,7 +205,9 @@ function process_first_frame(frame, threshold=.05)
                                 push!(objs, object)
                             end 
 
-                            break
+                            break 
+                            break 
+                            
                         end
                     end 
                 end
@@ -211,7 +219,7 @@ function process_first_frame(frame, threshold=.05)
 
         #new sprite 
         if newsprite
-            @show c
+            println("newsprite!:", c)
             sprite_type = Sprite_Type(mask, color[c])
             object = Object(c, Position(smallest_y[c], smallest_x[c]))
             push!(sprites, sprite_type)
@@ -264,6 +272,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
 
     for (i,obj) in enumerate(objs)
 
+        @show obj.sprite_index
 
         @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
         # @show i,obj.pos

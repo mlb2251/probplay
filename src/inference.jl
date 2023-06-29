@@ -22,9 +22,18 @@ include("html.jl")
 #     x
 # end
 
-function get_mask_diff(mask1, mask2)
-
-    abs(sum(mask1) - sum(mask2))/sum(mask1) #super janky test of mask_diff just being size
+function get_mask_diff(mask1, mask2, color1, color2)
+    #doesn't use color yet 
+    if color1 != color2
+        1
+    else
+        if size(mask1) != size(mask2)
+            1
+        else
+            abs(sum(mask1 .- mask2))/sum(mask1) #pixel by pixel difference
+        end 
+    end
+    #abs(sum(mask1) - sum(mask2))/sum(mask1) #super janky test of mask_diff just being size
 end 
     
 
@@ -142,7 +151,7 @@ function process_first_frame(frame, threshold=.05)
         for sprite_i_sofar in 2:length(sprites)#not including background
 
             #difference in sprite masks
-            mask_diff = get_mask_diff(sprites[sprite_i_sofar].mask, mask)
+            mask_diff = get_mask_diff(sprites[sprite_i_sofar].mask, mask, sprites[sprite_i_sofar].color, color[c])
             @show mask_diff
 
             #same sprite
@@ -185,8 +194,9 @@ function process_first_frame(frame, threshold=.05)
 
                 for Hindex in 1:bigH-smallH+1
                     for Windex in 1:bigW-smallW+1
+                        println("Aaaaa")
                         submask = bigmask[Hindex:Hindex+smallH-1, Windex:Windex+smallW-1] #check indicies here 
-                        mask_diff = get_mask_diff(submask, smallmask)
+                        mask_diff = get_mask_diff(submask, smallmask, sprites[sprite_i_sofar].color, color[c])
                         @show mask_diff	
 
                         if mask_diff < 0.2

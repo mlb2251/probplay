@@ -7,9 +7,9 @@ includet("inference.jl");
 #frostbite testing 
 
 #big version
-#@time traces = particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8); 
+@time traces = particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:4], 8); #120
 #mid version 
-@time traces = particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8); 
+#@time traces = particle_filter(3, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8); 
 #small version 
 #@time traces = particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=170, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8);
 #tiny version 

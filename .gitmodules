@@ -1,0 +1,3 @@
+[submodule "atari-benchmarks"]
+	path = atari-benchmarks
+	url = https://github.com/mlb2251/atari-benchmarks

@@ -11,7 +11,7 @@ using Dates
     x::Int
 end
 
-mutable struct Sprite_Type
+struct SpriteType
     mask::Matrix{Bool}
     color::Vector{Float64}
 end
@@ -150,7 +150,7 @@ end
 
 module Model
 using Gen
-import ..Position, ..Sprite_Type, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
+import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
 
 @gen (static) function obj_dynamics(obj::Object)
     pos ~ uniform_drift_position(obj.pos,2);
@@ -161,7 +161,7 @@ all_obj_dynamics = Map(obj_dynamics)
 
 struct State
     objs::Vector{Object}
-    sprites::Vector{Sprite_Type}
+    sprites::Vector{SpriteType}
 end
 
 @gen (static) function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
@@ -191,7 +191,7 @@ end
     height ~ uniform_discrete(1,H)
     shape ~ bernoulli_2d(0.5, height, width)
     color ~ rgb_dist()
-    return Sprite_Type(shape, color)
+    return SpriteType(shape, color)
 end
 
 make_objects = Map(make_object)

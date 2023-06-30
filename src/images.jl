@@ -21,14 +21,14 @@ function sprites_from_trace(trace, t)
     NUM_SPRITE_TYPES = 4
     (H,W,T) = get_args(trace)
     @assert t <= T
-    sprites = Sprite_Type[]
+    sprites = SpriteType[]
     for i in 1:NUM_SPRITE_TYPES
 
         color = trace[:init => :init_sprites => i => :color] #?
         
         shape = trace[:init => :init_sprites => i => :shape]
 
-        sprite_type = Sprite_Type(shape, color)
+        sprite_type = SpriteType(shape, color)
         push!(sprites, sprite_type)
     end
     sprites

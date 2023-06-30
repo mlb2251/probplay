@@ -23,16 +23,12 @@ include("html.jl")
 # end
 
 function get_mask_diff(mask1, mask2, color1, color2)
-    #doesn't use color yet 
-    if color1 != color2
-        1
-    else
-        if size(mask1) != size(mask2)
-            1
-        else
-            abs(sum(mask1 .- mask2))/sum(mask1) #pixel by pixel difference
-        end 
-    end
+    #doesn't use color yet
+    # isapprox(color1, color2) && return 1
+    !isapprox(color1, color2) && return 1
+    size(mask1) != size(mask2) && return 1
+    # sum(abs.(mask1 .- mask2))/sum(mask1) # pixel by pixel difference
+    abs(sum((mask1 .- mask2)))/sum(mask1) # pixel by pixel difference
     #abs(sum(mask1) - sum(mask2))/sum(mask1) #super janky test of mask_diff just being size
 end 
     
@@ -108,7 +104,7 @@ function process_first_frame(frame, threshold=.05)
     end
 
     objs = Object[]
-    sprites = Sprite_Type[]
+    sprites = SpriteType[]
 
     background = 0
     background_size = 0
@@ -139,7 +135,7 @@ function process_first_frame(frame, threshold=.05)
 
 
         # #v1 each sprite makes new sprite type version 
-        # sprite_type = Sprite_Type(mask, color[c])
+        # sprite_type = SpriteType(mask, color[c])
         # object = Object(c, Position(smallest_y[c], smallest_x[c]))
         # push!(sprites, sprite_type)
         # push!(objs, object)
@@ -152,11 +148,11 @@ function process_first_frame(frame, threshold=.05)
 
             #difference in sprite masks
             mask_diff = get_mask_diff(sprites[sprite_i_sofar].mask, mask, sprites[sprite_i_sofar].color, color[c])
-            @show mask_diff
+            # @show mask_diff
 
             #same sprite
             if mask_diff < 0.1
-                @show sprite_i_sofar
+                # @show sprite_i_sofar
                 newsprite = false
                 object = Object(sprite_i_sofar, Position(smallest_y[c], smallest_x[c]))
                 push!(objs, object)
@@ -169,7 +165,7 @@ function process_first_frame(frame, threshold=.05)
             #checking for subsprites in either direction for occlusion # not fully working, feel free to delete since takes long 
             check_for_subsprites = true 
             if check_for_subsprites
-                if iH < cH | iW < cW
+                if iH < cH || iW < cW
                     smallmask = sprites[sprite_i_sofar].mask
                     bigmask = mask
                     smallH = iH
@@ -187,9 +183,9 @@ function process_first_frame(frame, threshold=.05)
                     newbigger = false
                 end
 
-                @show newbigger
-                @show sprite_i_sofar
-                @show c
+                # @show newbigger
+                # @show sprite_i_sofar
+                # @show c
 
 
                 for Hindex in 1:bigH-smallH+1
@@ -205,7 +201,7 @@ function process_first_frame(frame, threshold=.05)
 
                             if newbigger
                                 #fixing old sprite type #todo should also fix its pos 
-                                sprites[sprite_i_sofar].mask = bigmask
+                                sprites[sprite_i_sofar] = SpriteType(bigmask,sprites[sprite_i_sofar].color)
                                 object = Object(sprite_i_sofar, Position(smallest_y[c], smallest_x[c]))
                                 push!(objs, object)
                             else 
@@ -214,8 +210,6 @@ function process_first_frame(frame, threshold=.05)
                                 
                                 push!(objs, object)
                             end 
-
-                            break 
                             break 
                             
                         end
@@ -230,7 +224,7 @@ function process_first_frame(frame, threshold=.05)
         #new sprite 
         if newsprite
             println("newsprite!:", c)
-            sprite_type = Sprite_Type(mask, color[c])
+            sprite_type = SpriteType(mask, color[c])
             object = Object(c, Position(smallest_y[c], smallest_x[c]))
             push!(sprites, sprite_type)
             push!(objs, object)
@@ -244,7 +238,7 @@ function process_first_frame(frame, threshold=.05)
 
     #i think works even with spriteindex 
     color = sprites[background].color 
-    sprites[background] = Sprite_Type(ones(Bool, H, W),color)
+    sprites[background] = SpriteType(ones(Bool, H, W),color)
     @show background
     objs[background] = Object(background, Position(1,1))
 
@@ -344,7 +338,7 @@ end
 
 module Inference
 using Gen
-import ..Position, ..Sprite_Type, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
+import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
 import FunctionalCollections: peek
 
 """

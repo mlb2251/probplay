@@ -2,7 +2,7 @@
 
 julia_version = "1.9.1"
 manifest_format = "2.0"
-project_hash = "dbfb8a23ddc5ec457d86b508e3a856e56c207067"
+project_hash = "b0621f9baf3fe39bb39ffac09d861d68980d7fab"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -458,12 +458,6 @@ version = "1.8.0"
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
-
-[[deps.Gym]]
-deps = ["PyCall"]
-git-tree-sha1 = "fd11703b08e2402d2b8db06c4483fb5c02c70750"
-uuid = "b0807396-df37-52ae-a4b9-7a7124410845"
-version = "1.1.4"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]

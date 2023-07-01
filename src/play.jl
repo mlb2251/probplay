@@ -11,33 +11,38 @@ end
 
 
 
-function gen_gameplay(human=false)
+function gen_gameplay(;game=nothing, human=false)
     gym = pyimport("gymnasium")
     play = pyimport("gymnasium.utils.play")
     #game = "ALE/Frostbite-v5"
-    game = "ALE/Boxing-v5"
-
-
+    # game = "ALE/Boxing-v5"
+    is_rand = isnothing(game)
     games = [x for x in keys(gym.envs.registry) if occursin("-v5",x) && occursin("ALE/",x) && !occursin("-ram-",x)]
+
+    if human
+        while true
+            if is_rand
+                game = rand(games)
+            end
+            println("Playing: $game")
+            env = gym.make(game, render_mode="rgb_array", frameskip=1, repeat_action_probability=0.0)
+            play.play(env, zoom=4, fps=30)
+            sleep(3)
+        end
+        return
+    end
+
 
     for game in games
         #game = "ALE/Frostbite-v5"
-        game = "ALE/Boxing-v5"
+        # game = "ALE/Boxing-v5"
 
-        println("Chose: $game")
+        println("Playing: $game")
         env = gym.make(game, render_mode="rgb_array", frameskip=1, repeat_action_probability=0.0)
-
-        if human
-            play.play(env, zoom=4, fps=30)
-            return
-        end
-
 
         imgs = Matrix{RGB{Float64}}[]
 
         observation, info = env.reset(seed=42)
-
-        println("Playing game...")
 
         for i in 1:1000
             action = env.action_space.sample()

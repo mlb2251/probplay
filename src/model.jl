@@ -19,7 +19,7 @@ end
 struct Object
     sprite_index :: Int  
     pos :: Position
-end 
+end
 
 include("images.jl")
 
@@ -148,9 +148,9 @@ function sim(T)
 end
 
 
-module Model
-using Gen
-import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
+# module Model
+# using Gen
+# import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
 
 @gen (static) function obj_dynamics(obj::Object)
     pos ~ uniform_drift_position(obj.pos,2);
@@ -236,5 +236,5 @@ end
 # @show testmodel
 
 
-end # module Model
+# end # module Model
 

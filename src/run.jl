@@ -1,7 +1,7 @@
 include("model.jl")
+include("inference.jl"); 
 
-using Revise
-includet("inference.jl"); 
+# using Revise
 # println(Base.Filesystem.pwd())
 
 #frostbite testing 
@@ -17,10 +17,10 @@ includet("inference.jl");
 
 #first frame testing nvm this is annoying to write
 
-include("html.jl")
-include("images.jl")	
+# include("html.jl")
+# include("images.jl")	
 #render samples from forward model 
-import ..Model: model
+# import ..Model: model
 
 # # #generative model only 
 # html_gif(new_html(), render_trace(generate(model, (2, 2, 3))[1]), show=true)

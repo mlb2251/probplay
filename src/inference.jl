@@ -12,15 +12,8 @@ using Gen
 #     end
 # end
 
-using Gen
-import ..Model: model
-
-include("html.jl")
-
-# @gen function baz(x)
-#     x = {:x} ~ normal(30, 1)
-#     x
-# end
+# using Gen
+# import ..Model: model
 
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
@@ -306,7 +299,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
         # particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()), obs)
         @time particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
-            obs, Inference.grid_proposal, (obs,))
+            obs, grid_proposal, (obs,))
     end
 
     time_str = "particle filter runtime: $(round(elapsed,sigdigits=3))s ($(round(elapsed/(T-1),sigdigits=3))/step)"
@@ -336,10 +329,10 @@ end
 # observed_images = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,1:20]
 # traces = particle_filter(100, observed_images, 10)
 
-module Inference
-using Gen
-import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
-import FunctionalCollections: peek
+# module Inference
+# using Gen
+# import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
+import FunctionalCollections
 
 """
 Does gridding to propose new positions for an object in the vicinity
@@ -355,9 +348,9 @@ of the current position
         sprites = sprites_from_trace(prev_trace, 0)
     else
         #what's this 
-        objs = peek(get_retval(prev_trace)).objs[:]
+        objs = FunctionalCollections.peek(get_retval(prev_trace)).objs[:]
         
-        sprites = peek(get_retval(prev_trace)).sprites[:]
+        sprites = FunctionalCollections.peek(get_retval(prev_trace)).sprites[:]
     end
     
 
@@ -422,6 +415,6 @@ of the current position
 end
 
 
-end # module Inference
+# end # module Inference
 
 

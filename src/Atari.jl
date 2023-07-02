@@ -1,6 +1,5 @@
 module Atari
-# using Revise
-# export particle_filter,crop,load_frames
-# includet("inference.jl")
-
+include("model.jl")
+include("html.jl")
+include("inference.jl"); 
 end # module Atari

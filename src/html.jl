@@ -109,7 +109,10 @@ function html_table(table::Matrix, attrs...)
     res
 end
 
-function html_render()
+function html_render(;open=true, publish::Union{Bool,Nothing}=nothing)
+    if isnothing(publish)
+        publish = occursin("csail.mit.edu", gethostname())
+    end
     full_path = joinpath(Base.Filesystem.pwd(), "out/html", curr_html.dir)
     res = """
     <html>
@@ -138,7 +141,38 @@ function html_render()
     res = string(res)
     # println(res)
     write("out/html/$(curr_html.dir)/index.html",res)
-    open_in_default_browser("out/html/$(curr_html.dir)/index.html")
+    println("wrote to out/html/$(curr_html.dir)/index.html")
+    open && open_in_default_browser("out/html/$(curr_html.dir)/index.html")
+    publish && html_publish(full_path)
+    
+end
+
+function html_publish(path)
+    @assert isdir(path)
+    while endswith(path,"/")
+        path = path[:end-1] # we need to trim trailing "/" to make basename() work
+    end
+    publish_dir = get_secret("publish_dir") * "/" * basename(path)
+    publish_site = get_secret("publish_site") * "/" * basename(path)
+    if occursin("csail.mit.edu", gethostname())
+        println("On CSAIL network: copying files to public site")
+        cp(path, publish_dir)
+        println("See results at: $publish_site")
+    else
+        println("Not on CSAIL network: attempting rsync")
+        publish_ssh = get_secret("publish_ssh")
+        Base.run(`rsync -avz $full_path $publish_ssh:$publish_dir`)
+        open_in_default_browser(publish_site)
+    end
+end
+
+function get_secret(key)
+    file = ".secret_$key"
+    isfile(file) || error("file $file does not exist. If you'd like to use this feature, add the secret locally but do NOT commit it to git.")
+
+    open(file) do f
+        return read(f, String)
+    end
 end
 
 function detectwsl()

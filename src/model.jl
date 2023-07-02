@@ -2,7 +2,7 @@ using Gen
 using LinearAlgebra
 using Images
 using Distributions
-using Plots
+# using Plots
 using AutoHashEquals
 using Dates
 

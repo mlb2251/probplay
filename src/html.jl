@@ -11,7 +11,7 @@ Base.@kwdef mutable struct Html
     dir::String
 end
 
-function new_html(styles=atari_styles(), scripts=atari_scripts())
+function html_new(styles=atari_styles(), scripts=atari_scripts())
     timestamp = Dates.now()
     dir = "$(Dates.format(timestamp, "yyyy-mm-dd__HH-MM-SS"))"
     mkpath("out/html/$dir/imgs")
@@ -35,47 +35,67 @@ function atari_scripts()
     """
 end
 
+global curr_html::Html = html_new()
 
-function add_body!(html::Html, body...)
+function html_get()
+    curr_html
+end
+
+"""
+Sets the global html, returning the old one
+"""
+function html_set(html::Html)
+    global curr_html
+    old = curr_html
+    curr_html = html
+    old
+end
+
+"""
+Makes a fresh global html, returning the old one
+"""
+function html_fresh()
+    html_set(html_new())
+end
+
+function html_body(body...)
     for b in body
-        html.body *= "\n\n" * string(b)
+        curr_html.body *= "\n\n" * string(b)
     end
 end
 
-function add_style!(html::Html, style)
-    html.styles *= "\n\n" * string(style)
+function add_style!(style)
+    curr_html.styles *= "\n\n" * string(style)
 end
 
 
 
-html_img(html::Html, img::Array{Float64,3}, attrs...; kwargs...) = html_img(html, Array(colorview(RGB,img)), attrs...; kwargs...)
+html_img(img::Array{Float64,3}, attrs...; kwargs...) = html_img(Array(colorview(RGB,img)), attrs...; kwargs...)
 
-function html_img(html::Html, img::Matrix{RGB{Float64}}, attrs...; width="200px", show=false)
-    html.num_imgs += 1
-    path = "imgs/img_$(html.num_imgs).png"
-    save("out/html/$(html.dir)/$path", img)
+function html_img(img::Matrix{RGB{Float64}}, attrs...; width="200px")
+    curr_html.num_imgs += 1
+    path = "imgs/img_$(curr_html.num_imgs).png"
+    save("out/html/$(curr_html.dir)/$path", img)
     attrs = join(string.(attrs), " ")
     res = if !isempty(attrs) "<img src=$(path) $attrs>" else "<img src=$(path)>" end
-    show && (add_body!(html, res); render(html))
     res
 end
 
-html_gif(html::Html, gif::Array{Float64,4}, attrs...; kwargs...) = html_gif(html, Array(colorview(RGB,gif)), attrs...; kwargs...)
+html_gif(gif::Array{Float64,4}, attrs...; kwargs...) = html_gif(Array(colorview(RGB,gif)), attrs...; kwargs...)
 
-function html_gif(html::Html, gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px", show=false)
-    html.num_imgs += 1
-    path = "imgs/img_$(html.num_imgs).gif"
-    save("out/html/$(html.dir)/$path", gif, fps=fps)
+function html_gif(gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px")
+    curr_html.num_imgs += 1
+    path = "imgs/img_$(curr_html.num_imgs).gif"
+    save("out/html/$(curr_html.dir)/$path", gif, fps=fps)
     attrs = join(string.(attrs), " ")
     if !isnothing(width)
         attrs *= " width=$width"
     end
     res = if !isempty(attrs) "<img src=$(path) $attrs>" else "<img src=$(path)>" end
-    show && (add_body!(html, res); render(html))
     res
 end
 
-function html_table(html::Html, table::Matrix, attrs...)
+function html_table(table::Matrix, attrs...)
     attrs = join(string.(attrs), " ")
     res = if isempty(attrs) "<table>" else "<table $attrs>" end
     for row in eachrow(table)
@@ -89,36 +109,36 @@ function html_table(html::Html, table::Matrix, attrs...)
     res
 end
 
-function render(html::Html)
-    full_path = joinpath(Base.Filesystem.pwd(), "out/html", html.dir)
+function html_render()
+    full_path = joinpath(Base.Filesystem.pwd(), "out/html", curr_html.dir)
     res = """
     <html>
         <head>
-            <h1>$(html.head) @ $(Dates.format(html.timestamp, "yyyy-mm-dd HH:MM:SS"))</h1>
+            <h1>$(curr_html.head) @ $(Dates.format(curr_html.timestamp, "yyyy-mm-dd HH:MM:SS"))</h1>
         </head>
         <style>
-            $(html.styles)
+            $(curr_html.styles)
         </style>
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
         <script>
-            $(html.scripts)
+            $(curr_html.scripts)
         </script>
 
         <body>
-            $(html.body)
+            $(curr_html.body)
         </body>
 
         <footer>
         <h4>Command to publish</h4>
-        <code>rsync -avz $full_path mlbowers@login.csail.mit.edu:/afs/csail.mit.edu/u/m/mlbowers/public_html/proj/atari/ && open https://people.csail.mit.edu/mlbowers/proj/atari/$(html.dir)/index.html</code>
+        <code>rsync -avz $full_path mlbowers@login.csail.mit.edu:/afs/csail.mit.edu/u/m/mlbowers/public_html/proj/atari/ && open https://people.csail.mit.edu/mlbowers/proj/atari/$(curr_html.dir)/index.html</code>
         </footer>
     </html>
     """
     res = string(res)
     # println(res)
-    write("out/html/$(html.dir)/index.html",res)
-    open_in_default_browser("out/html/$(html.dir)/index.html")
+    write("out/html/$(curr_html.dir)/index.html",res)
+    open_in_default_browser("out/html/$(curr_html.dir)/index.html")
 end
 
 function detectwsl()
@@ -153,3 +173,7 @@ function open_in_default_browser(url::AbstractString)::Bool
         return false
     end
 end
+
+
+const fresh = html_fresh
+const render = html_render

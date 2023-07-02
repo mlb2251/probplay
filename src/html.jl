@@ -134,7 +134,7 @@ function html_render(;open=true, publish::Union{Bool,Nothing}=nothing)
 
         <footer>
         <h4>Command to publish</h4>
-        <code>rsync -avz $full_path mlbowers@login.csail.mit.edu:/afs/csail.mit.edu/u/m/mlbowers/public_html/proj/atari/ && open https://people.csail.mit.edu/mlbowers/proj/atari/$(curr_html.dir)/index.html</code>
+        <code>julia> using Atari; Atari.html_publish("$full_path")</code>
         </footer>
     </html>
     """
@@ -142,7 +142,7 @@ function html_render(;open=true, publish::Union{Bool,Nothing}=nothing)
     # println(res)
     write("out/html/$(curr_html.dir)/index.html",res)
     println("wrote to out/html/$(curr_html.dir)/index.html")
-    open && open_in_default_browser("out/html/$(curr_html.dir)/index.html")
+    open && !publish && open_in_default_browser("out/html/$(curr_html.dir)/index.html")
     publish && html_publish(full_path)
     
 end
@@ -152,16 +152,17 @@ function html_publish(path)
     while endswith(path,"/")
         path = path[:end-1] # we need to trim trailing "/" to make basename() work
     end
-    publish_dir = get_secret("publish_dir") * "/" * basename(path)
     publish_site = get_secret("publish_site") * "/" * basename(path)
     if occursin("csail.mit.edu", gethostname())
+        publish_dir = get_secret("publish_dir") * "/" * basename(path)
         println("On CSAIL network: copying files to public site")
         cp(path, publish_dir)
         println("See results at: $publish_site")
     else
         println("Not on CSAIL network: attempting rsync")
+        publish_dir = get_secret("publish_dir")
         publish_ssh = get_secret("publish_ssh")
-        Base.run(`rsync -avz $full_path $publish_ssh:$publish_dir`)
+        Base.run(`rsync -avz $path $publish_ssh:$publish_dir/`)
         open_in_default_browser(publish_site)
     end
 end

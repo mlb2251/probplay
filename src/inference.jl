@@ -183,10 +183,9 @@ function process_first_frame(frame, threshold=.05)
 
                 for Hindex in 1:bigH-smallH+1
                     for Windex in 1:bigW-smallW+1
-                        println("Aaaaa")
                         submask = bigmask[Hindex:Hindex+smallH-1, Windex:Windex+smallW-1] #check indicies here 
                         mask_diff = get_mask_diff(submask, smallmask, sprites[sprite_i_sofar].color, color[c])
-                        @show mask_diff	
+                        # @show mask_diff	
 
                         if mask_diff < 0.2
                             println("holy shit this actually worked")
@@ -232,7 +231,7 @@ function process_first_frame(frame, threshold=.05)
     #i think works even with spriteindex 
     color = sprites[background].color 
     sprites[background] = SpriteType(ones(Bool, H, W),color)
-    @show background
+    # @show background
     objs[background] = Object(background, Position(1,1))
 
     (cluster,objs,sprites)	
@@ -286,7 +285,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     
 
     # printstyled("initializing particle filter\n",color=:green, bold=true)
-    @show typeof(model)
+    # @show typeof(model)
     state = initialize_particle_filter(model, (H,W,1), init_obs, num_particles)
 
     # steps

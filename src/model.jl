@@ -119,6 +119,43 @@ function canvas(height=210, width=160)
 end
 
 
+function draw_section(objs, sprites, ymin, ymax, xmin, xmax)
+    canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
+    for obj::Object in objs
+        sprite_index = obj.sprite_index
+        sprite_type = sprites[sprite_index]
+
+        sprite_height, sprite_width = size(sprite_type.mask)
+
+        #not at all in bounds
+        if obj.pos.y > ymax || obj.pos.x > xmax || obj.pos.y+sprite_height-1 < ymin || obj.pos.x+sprite_width-1 < xmin
+            continue
+        end
+        
+        #starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
+        starti = max(1, ymin-obj.pos.y+1)
+        startj = max(1, xmin-obj.pos.x+1)	
+        stopi = min(sprite_height, ymax-obj.pos.y+1) 
+        stopj = min(sprite_width, xmax-obj.pos.x+1)
+
+        for i in starti:stopi, j in startj:stopj #there could be a faster way 
+            if sprite_type.mask[i,j]
+                offy = obj.pos.y+i-1
+                offx = obj.pos.x+j-1
+                if ymin <= offy <= ymax && xmin <= offx <= xmax
+                    @inbounds canvas[:, offy-ymin+1,offx-xmin+1] = sprite_type.color
+                else 
+                    println("i made a mistake")
+                end
+            end
+        end
+    end
+    canvas 
+end 
+
+
+
+
 function draw(H, W, objs, sprites)
     canvas = zeros(Float64, 3, H, W)
 
@@ -128,7 +165,8 @@ function draw(H, W, objs, sprites)
 
         sprite_height, sprite_width = size(sprite_type.mask)
 
-        for i in 1:sprite_height, j in 1:sprite_width
+        
+        for i in 1:sprite_height, j in 1:sprite_width 
             if sprite_type.mask[i,j]
                 offy = obj.pos.y+i-1
                 offx = obj.pos.x+j-1
@@ -172,6 +210,10 @@ end
     return State(objs, sprites)
 end
 
+
+# @gen (static) function d
+
+
 unfold_step = Unfold(dynamics_and_render)
 
 
@@ -210,7 +252,8 @@ make_sprites = Map(make_type)
     objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N])
     sprites = {:init_sprites} ~ make_sprites(collect(1:NUM_SPRITE_TYPES), [H for _ in 1:NUM_SPRITE_TYPES], [W for _ in 1:NUM_SPRITE_TYPES]) 
 
-    rendered = draw(H, W, objs, sprites)
+    #rendered = draw(H, W, objs, sprites)
+    rendered = draw_section(objs, sprites, 1, H, 1, W)
     {:observed_image} ~ image_likelihood(rendered, var)
 
     State(objs, sprites) 

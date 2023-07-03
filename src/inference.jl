@@ -12,15 +12,8 @@ using Gen
 #     end
 # end
 
-using Gen
-import ..Model: model
-
-include("html.jl")
-
-# @gen function baz(x)
-#     x = {:x} ~ normal(30, 1)
-#     x
-# end
+# using Gen
+# import ..Model: model
 
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
@@ -252,9 +245,7 @@ Runs a particle filter on a sequence of frames
 function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int)
     C,H,W,T = size(observed_images)
 
-    html = new_html()
-    html.head = "Particle Filter"
-    add_body!(html, "<p>C: $C, H: $H, W: $W, T: $T</p>")
+    html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
 
 
     
@@ -263,7 +254,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     
     # #testing initial observation
     # img = draw(H, W, objs, sprites)
-    # html_img(new_html(), img; show=true)
+    # html_img(html_new(), img; show=true)
     # djkfja;kljfkl; jkl;dsf
 
 
@@ -290,8 +281,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     end
 
 
-    first_frame = html_img(html, observed_images[:,:,:,1])
-    add_body!(html, "<h2>Observations</h2>", html_gif(html, observed_images))
+    first_frame = html_img(observed_images[:,:,:,1])
+    html_body("<h2>Observations</h2>", html_gif(observed_images))
     
 
     # printstyled("initializing particle filter\n",color=:green, bold=true)
@@ -306,7 +297,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
         # particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()), obs)
         @time particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
-            obs, Inference.grid_proposal, (obs,))
+            obs, grid_proposal, (obs,))
     end
 
     time_str = "particle filter runtime: $(round(elapsed,sigdigits=3))s ($(round(elapsed/(T-1),sigdigits=3))/step)"
@@ -315,18 +306,19 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
     weights = exp.(log_normalized_weights)
 
+    html_body("<h2>Reconstructed Images</h2>")
 
     table = fill("", 2, length(state.traces))
     for (i,trace) in enumerate(state.traces)
         table[1,i] = "Particle $i ($(round(weights[i],sigdigits=4)))"
-        table[2,i] = html_gif(html, render_trace(trace));
+        table[2,i] = html_gif(render_trace(trace));
     end
 
-    add_body!(html, html_table(html, table))
+    html_body(html_table(table))
 
-    add_body!(html, time_str)
+    html_body(time_str)
 
-    render(html)
+    # html_render()
     
     # return rand(state.traces, num_samples)
     
@@ -336,10 +328,10 @@ end
 # observed_images = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,1:20]
 # traces = particle_filter(100, observed_images, 10)
 
-module Inference
-using Gen
-import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
-import FunctionalCollections: peek
+# module Inference
+# using Gen
+# import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
+import FunctionalCollections
 
 """
 Does gridding to propose new positions for an object in the vicinity
@@ -355,9 +347,9 @@ of the current position
         sprites = sprites_from_trace(prev_trace, 0)
     else
         #what's this 
-        objs = peek(get_retval(prev_trace)).objs[:]
+        objs = FunctionalCollections.peek(get_retval(prev_trace)).objs[:]
         
-        sprites = peek(get_retval(prev_trace)).sprites[:]
+        sprites = FunctionalCollections.peek(get_retval(prev_trace)).sprites[:]
     end
     
 
@@ -422,6 +414,6 @@ of the current position
 end
 
 
-end # module Inference
+# end # module Inference
 
 

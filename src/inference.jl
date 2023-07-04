@@ -304,27 +304,12 @@ of the current position
 @gen function grid_proposal(prev_trace, obs)
 
     (H,W,prev_T) = get_args(prev_trace)
-    # @show prev_T
-
-    if prev_T == 1
-        objs = objs_from_trace(prev_trace, 0)
-        sprites = sprites_from_trace(prev_trace, 0)
-    else
-        #what's this 
-        objs = FunctionalCollections.peek(get_retval(prev_trace)).objs[:]
-        
-        sprites = FunctionalCollections.peek(get_retval(prev_trace)).sprites[:]
-    end
-    
+    objs = objs_from_trace(prev_trace, 0)
+    sprites = sprites_from_trace(prev_trace, 0)
 
     t = prev_T
     grid_size = 2
     observed_image = obs[(:steps => t => :observed_image)]
-
-    # first get a proposal from the prior by just extending the trace by one timestep and also adding the new observation in
-    # (trace, _, _, _) = Gen.update(prev_trace, (H,W,prev_T + 1), (NoChange(), NoChange(), UnknownChange()), obs)
-
-    #display(grid([trace]))
 
     # now for each object, propose and sample changes 
     for obj_id in 1:prev_trace[:init => :N]
@@ -349,20 +334,12 @@ of the current position
                 push!(positions, Position(prev_pos.y+dy, prev_pos.x+dx))
             end
         end
-
-
-        # positions = [
-        #     Position(prev_pos.y+dy, prev_pos.x+dx)
-        #     for dx in -grid_size:grid_size,
-        #         dy in -grid_size:grid_size
-        # ]
         
         # flatten
         positions = reshape(positions, :)
         
         # # total update slower version 
         # traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
-
 
         #manually update, partial draw
         scores_v2 = Float64[]
@@ -382,18 +359,12 @@ of the current position
             relevant_box_min_x = min(pos.x, prev_pos.x)
             relevant_box_max_x = min(max(pos.x + sprite_width, prev_pos.x + sprite_width), W)
 
-            #@show (relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x)
-
-
             drawn_moved_obj = draw_region(objects_one_moved, sprites, relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x) 
             #is it likely
             score = Gen.logpdf(image_likelihood, observed_image[:, relevant_box_min_y:relevant_box_max_y, relevant_box_min_x:relevant_box_max_x], drawn_moved_obj, 0.1)#can I hardcode that
 
-            #@show score 
             push!(scores_v2, score)
         end 
-        #@show scores_v2
-
 
         #update sprite index? todo?
         
@@ -406,17 +377,12 @@ of the current position
         #scores = Gen.normalize_weights(get_score.(traces))[2]
         #scores = exp.(scores)
 
-        
-        # @show scores 
-        # @show scores_v2_normalized
-        # println("TESTTTYYY")
-
         scores = scores_v2_normalized
 
         # sample the actual position
         pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)
 
-        # set the curr `trace` to this trace for future iterations of this loop
+        # old version: set the curr `trace` to this trace for future iterations of this loop
         # idx = findfirst(x -> x == pos, positions)
         # objs[obj_id] = Object(objs[obj_id].sprite, positions[idx]) 
         # trace = traces[idx]

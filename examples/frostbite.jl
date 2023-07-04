@@ -9,34 +9,60 @@ function full1()
     particle_large()
 end
 
+function segment_table(masks, mask_imgs)
+    table = fill("", 8, length(masks)+1)
+    keys = ["predicted_iou", "area", "stability_score", "bbox", "point_coords", "crop_box"]
+    table[1,1] = "Segmentation"
+    table[2,1] = "Mask ID"
+    for (k,key) in enumerate(keys)
+        table[k+2,1] = key
+    end
+
+    for i in eachindex(masks)
+        table[1,i+1] = html_img(mask_imgs[i]);
+        table[2,i+1] = "Mask $i"
+        for (k,key) in enumerate(keys)
+            value = masks[i][key]
+            if key == "predicted_iou" || key == "stability_score"
+                value = round(value,sigdigits=6)
+            end
+            table[k+2,i+1] = "$value"
+        end
+    end
+    html_table(table)
+end
+
 function sam()
     sam_init(device=0)
     # frames = crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20, tstart=200, tskip=4)[:,:,:,1:20]
     frames = crop(load_frames("atari-benchmarks/frostbite_1"), tstart=200, tskip=4)[:,:,:,1:20]
     masks = sam_masks(frames)
-    clusters,separated = Atari.sam_clusters(masks)
+    clusters, separated = Atari.sam_clusters(masks)
+    mask_imgs = color_labels(separated...)
 
     html_body(
-        "<h3>Observation</h3>",
-        html_img(frames[:,:,:,1]),
-        # "<h3>Segmentation</h3>",
-        html_img(color_labels(clusters)),
-        "<h3>Individual Segments</h3>",
-        html_img(color_labels(separated), width="$(100*length(masks))px")
+        "<h3>Frostbite</h3>",
+        html_table(["Observation" "Segmentation"; html_img(frames[:,:,:,1]) html_img(color_labels(clusters)[1])]),
+        "<h3>Segments</h3>",
+        segment_table(masks,mask_imgs)
     )
+
 end
 
 function sam_everything()
     sam_init(device=0)
-    for game_path in filter(x -> occursin("-v5",x), readdir("atari-benchmarks/variety",join=true))
+    for (i,game_path) in enumerate(filter(x -> occursin("-v5",x), readdir("atari-benchmarks/variety",join=true)))
+        @show i
         frames = load_frames(game_path)
         masks = sam_masks(frames)
         clusters, separated = Atari.sam_clusters(masks)
+        mask_imgs = color_labels(separated...)
+
         html_body(
-            "<h3>$game_path</h3>",
-            html_img(frames[:,:,:,1]),
-            html_img(color_labels(clusters)),
-            html_img(color_labels(separated), width="$(100*length(masks))px")
+            "<h2>$game_path</h2>",
+            html_table(["Observation" "Segmentation"; html_img(frames[:,:,:,1]) html_img(color_labels(clusters)[1])]),
+            "<h3>Segments</h3>",
+            segment_table(masks,mask_imgs)
         )
     end
 end

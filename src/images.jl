@@ -18,11 +18,10 @@ function objs_from_trace(trace, t)
 end
 
 function sprites_from_trace(trace, t)
-    NUM_SPRITE_TYPES = 4
     (H,W,T) = get_args(trace)
     @assert t <= T
     sprites = SpriteType[]
-    for i in 1:NUM_SPRITE_TYPES
+    for i in 1:trace[:init => :num_sprite_types]
 
         color = trace[:init => :init_sprites => i => :color] #?
         

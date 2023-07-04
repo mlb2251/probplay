@@ -198,23 +198,20 @@ function process_first_frame(frame, threshold=.05)
 
         #new sprite 
         if newsprite
-            println("newsprite!:", c)
+            println("newsprite $(length(sprites)) from cluster $c")
             sprite_type = SpriteType(mask, color[c])
-            object = Object(c, Position(smallest_y[c], smallest_x[c]))
             push!(sprites, sprite_type)
+            object = Object(length(sprites), Position(smallest_y[c], smallest_x[c]))
             push!(objs, object)
         end
-
-        #@show sprites 
 
     end
 
     # turn background into a big rectangle filling whole screen
 
     #i think works even with spriteindex 
-    color = sprites[background].color 
+    color = sprites[background].color
     sprites[background] = SpriteType(ones(Bool, H, W),color)
-    # @show background
     objs[background] = Object(background, Position(1,1))
 
     (cluster,objs,sprites)	
@@ -225,6 +222,7 @@ function build_init_obs(H,W, sprites, objs, observed_images)
     init_obs = choicemap(
         (:init => :observed_image, observed_images[:,:,:,1]),
         (:init => :N, length(objs)),
+        (:init => :num_sprite_types, length(sprites)),
     )
 
     for (i,obj) in enumerate(objs)

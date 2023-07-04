@@ -7,7 +7,7 @@ using Gen
 function full1()
     html_body("<h2>Samples from the prior</h2>")
     for _ in 1:8 gen_large() end
-    particle_large()
+    particle_large_birds()
 end
 
 function segment_table(masks, mask_imgs)
@@ -68,10 +68,15 @@ function sam_everything()
     end
 end
 
-
-function particle_large()
+function particle_large_birds()
     @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:30], 8);
 end
+
+function particle_large()
+    @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=1, tskip=4)[:,:,:,1:30], 8);
+end
+
+# particle_large_birds();
 
 function particle_mid()
     @time particle_filter(3, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8); 

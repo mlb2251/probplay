@@ -217,10 +217,8 @@ unfold_step = Unfold(dynamics_and_render)
 
 
  
-@gen (static) function make_object(i, H, W)
-    NUM_SPRITE_TYPES = 4
-    
-    sprite_index ~ uniform_discrete(1, NUM_SPRITE_TYPES) 
+@gen (static) function make_object(i, H, W, num_sprite_types)    
+    sprite_index ~ uniform_discrete(1, num_sprite_types) 
     #pos ~ uniform_drift_position(Position(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
 
@@ -244,12 +242,13 @@ make_sprites = Map(make_type)
 # testsprites = make_sprites(collect(1:4), [10 for _ in 1:4], [20 for _ in 1:4])
 # #@show testsprites
 
+@dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
 @gen function init_model(H,W,var)
-    NUM_SPRITE_TYPES = 4
+    num_sprite_types ~ poisson_plus_1(4)
     N ~ poisson(7)
-    objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N])
-    sprites = {:init_sprites} ~ make_sprites(collect(1:NUM_SPRITE_TYPES), [H for _ in 1:NUM_SPRITE_TYPES], [W for _ in 1:NUM_SPRITE_TYPES]) 
+    sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprite_types), [H for _ in 1:num_sprite_types], [W for _ in 1:num_sprite_types]) 
+    objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprite_types for _ in 1:N])
 
     #rendered = draw(H, W, objs, sprites)
     rendered = draw_region(objs, sprites, 1, H, 1, W)

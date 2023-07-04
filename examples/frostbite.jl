@@ -9,6 +9,21 @@ function full1()
     particle_large()
 end
 
+function sam()
+    sam_init(device=0)
+    frames = crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:20]
+    masks = sam_masks(frames)
+    clusters,separated = Atari.sam_clusters(masks)
+    html_body(
+        "<h3>Observation</h3>",
+        html_img(frames[:,:,:,1]),
+        "<h3>Segmentation</h3>",
+        html_img(color_labels(clusters)),
+        "<h3>Individual Segments</h3>",
+        html_img(color_labels(separated), width="$(200*length(masks))px")
+    )
+end
+
 function particle_large()
     @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:20], 8);
 end

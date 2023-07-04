@@ -94,6 +94,6 @@ end
 """
 crops the specified amounts off of the top, bottom, left, and right of a (C, H, W, T) array of images
 """
-function crop(img; top=0, bottom=0, left=0, right=0, tstart=0, tend=0, tskip=1)
+function crop(img; top=1, bottom=0, left=1, right=0, tstart=0, tend=0, tskip=1)
     img[:, top:end-bottom, left:end-right, 1+tstart:tskip:end-tend]
 end

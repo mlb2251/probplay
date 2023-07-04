@@ -1,5 +1,6 @@
 using Revise
 using Gen
+using GenParticleFilters
 
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
@@ -220,47 +221,37 @@ function process_first_frame(frame, threshold=.05)
 
 end
 
+function build_init_obs(H,W, sprites, objs, observed_images)
+    init_obs = choicemap(
+        (:init => :observed_image, observed_images[:,:,:,1]),
+        (:init => :N, length(objs)),
+    )
+
+    for (i,obj) in enumerate(objs)
+        # @show obj.sprite_index
+        @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
+        init_obs[(:init => :init_objs => i => :pos)] = obj.pos
+        init_obs[(:init => :init_objs => i => :sprite_index)] = obj.sprite_index #anything not set here it makes a random choice about
+
+        #EDIT THIS 
+        init_obs[:init => :init_sprites => obj.sprite_index => :shape] = sprites[obj.sprite_index].mask # => means go into subtrace, here initializing subtraces, () are optional. => means pair!!
+        init_obs[:init => :init_sprites => obj.sprite_index => :color] = sprites[obj.sprite_index].color
+    end
+    init_obs
+end
+
 """
 Runs a particle filter on a sequence of frames
 """
 function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int)
     C,H,W,T = size(observed_images)
 
-    
     # construct initial observations
     (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
-    
-    # #testing initial observation
-    # img = draw(H, W, objs, sprites)
-    # html_img(html_new(), img; show=true)
-    # djkfja;kljfkl; jkl;dsf
 
+    init_obs = build_init_obs(H,W, sprites, objs, observed_images)
 
-    init_obs = choicemap(
-        (:init => :observed_image, observed_images[:,:,:,1]),
-        (:init => :N, length(objs)),
-
-    )
-
-
-    for (i,obj) in enumerate(objs)
-
-        @show obj.sprite_index
-
-        @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
-        # @show i,obj.pos
-        init_obs[(:init => :init_objs => i => :pos)] = obj.pos
-        init_obs[(:init => :init_objs => i => :sprite_index)] = obj.sprite_index #anything not set here it makes a random choice about
-        
-
-        #EDIT THIS 
-        init_obs[:init => :init_sprites => obj.sprite_index => :shape] = sprites[obj.sprite_index].mask # => means go into subtrace, here initializing subtraces, () are optional. => means pair!!
-        init_obs[:init => :init_sprites => obj.sprite_index => :color] = sprites[obj.sprite_index].color
-    end
-
-    # printstyled("initializing particle filter\n",color=:green, bold=true)
-    # @show typeof(model)
-    state = initialize_particle_filter(model, (H,W,1), init_obs, num_particles)
+    state = pf_initialize(model, (H,W,1), init_obs, num_particles)
 
     # steps
     elapsed=@elapsed for t in 1:T-1
@@ -269,16 +260,19 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         # maybe_resample!(state, ess_threshold=num_particles/2, verbose=true)
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
         # particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()), obs)
-        @time particle_filter_step!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
+        @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, grid_proposal, (obs,))
     end
-
-    time_str = "particle filter runtime: $(round(elapsed,sigdigits=3))s ($(round(elapsed/(T-1),sigdigits=3))/step)"
-    println(time_str)
 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
     weights = exp.(log_normalized_weights)
 
+    # print and render results
+
+    secs_per_step = round(elapsed/(T-1),sigdigits=3)
+    fps = round(1/secs_per_step,sigdigits=3)
+    time_str = "particle filter runtime: $(round(elapsed,sigdigits=3))s; $(secs_per_step)s/frame; $fps fps ($num_particles particles))"
+    println(time_str)
 
     html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
     html_body("<h2>Observations</h2>", html_gif(observed_images))
@@ -296,7 +290,6 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     end
 
     html_body(html_table(table))
-
     html_body(time_str)
     
     return sample_unweighted_traces(state, num_samples)

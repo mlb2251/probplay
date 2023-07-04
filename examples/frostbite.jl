@@ -19,12 +19,28 @@ function sam()
     html_body(
         "<h3>Observation</h3>",
         html_img(frames[:,:,:,1]),
-        "<h3>Segmentation</h3>",
+        # "<h3>Segmentation</h3>",
         html_img(color_labels(clusters)),
         "<h3>Individual Segments</h3>",
         html_img(color_labels(separated), width="$(100*length(masks))px")
     )
 end
+
+function sam_everything()
+    sam_init(device=0)
+    for game_path in filter(x -> occursin("-v5",x), readdir("atari-benchmarks/variety",join=true))
+        frames = load_frames(game_path)
+        masks = sam_masks(frames)
+        clusters, separated = Atari.sam_clusters(masks)
+        html_body(
+            "<h3>$game_path</h3>",
+            html_img(frames[:,:,:,1]),
+            html_img(color_labels(clusters)),
+            html_img(color_labels(separated), width="$(100*length(masks))px")
+        )
+    end
+end
+
 
 function particle_large()
     @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:20], 8);

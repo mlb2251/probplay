@@ -72,3 +72,13 @@ function gen_gameplay(;game=nothing, human=false)
     end
     println("Done")
 end
+
+
+function copy_data()
+    for game in filter(x -> occursin("-v5",x), readdir("out/gameplay"))
+        mkpath("atari-benchmarks/variety/$game")
+        for t in 200:220
+            cp("out/gameplay/$game/$t.png", "atari-benchmarks/variety/$game/$t.png")
+        end
+    end
+end

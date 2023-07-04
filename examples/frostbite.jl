@@ -32,10 +32,10 @@ function segment_table(masks, mask_imgs)
     html_table(table)
 end
 
-function sam()
+function sam(path="atari-benchmarks/frostbite_1")
     sam_init(device=0)
     # frames = crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20, tstart=200, tskip=4)[:,:,:,1:20]
-    frames = crop(load_frames("atari-benchmarks/frostbite_1"), tstart=200, tskip=4)[:,:,:,1:20]
+    frames = load_frames(path)
     masks = sam_masks(frames)
     clusters, separated = Atari.sam_clusters(masks)
     mask_imgs = color_labels(separated...)

@@ -8,15 +8,15 @@ end
 
 global global_sam::Union{Nothing,SAM} = nothing
 
-function sam_init(;device)
+function sam_init(;device, force=false)
     global global_sam
-    if isnothing(global_sam)
+    if isnothing(global_sam) || force
         println("initializing SAM")
         SA = pyimport("segment_anything")
         # torch = pyimport("torch")
         sam = SA.sam_model_registry["vit_h"](checkpoint="../shared/sam/sam_vit_h_4b8939.pth")
         # sam = torch.ao.quantization.quantize_dynamic(sam)
-        mask_generator = SA.SamAutomaticMaskGenerator(sam)
+        mask_generator = SA.SamAutomaticMaskGenerator(sam, points_per_side=64, points_per_batch=64)
         global_sam = SAM(sam, mask_generator)
     end
 

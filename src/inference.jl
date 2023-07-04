@@ -8,6 +8,7 @@ function get_mask_diff(mask1, mask2, color1, color2)
     size(mask1) != size(mask2) && return 1.
     # average difference in mask
     sum(i -> abs(mask1[i] - mask2[i]), eachindex(mask1)) / length(mask1)
+    #look into the similarity of max overlap thing 
 end 
     
 
@@ -338,36 +339,86 @@ of the current position
         # we use the prev_trace position here actually!
         if t == 1
             prev_pos = prev_trace[:init => :init_objs => obj_id => :pos]
+            prev_objs = objs_from_trace(prev_trace, 0) #ok? 
         else
             prev_pos = prev_trace[:steps => t - 1 => :objs => obj_id => :pos]
+            prev_objs = objs_from_trace(prev_trace, t - 1)
         end
-        positions = [
-            Position(prev_pos.y+dy, prev_pos.x+dx)
-            for dx in -grid_size:grid_size,
-                dy in -grid_size:grid_size
-        ]
+
+        #way to get positions that avoids negatives, todo fix 
+        positions = Position[]
+        for dx in -grid_size:grid_size,
+            dy in -grid_size:grid_size
+            #hacky since it cant handle negatives rn
+            if prev_pos.x + dx < 1 || prev_pos.x + dx > W || prev_pos.y + dy < 1 || prev_pos.y + dy > H
+                push!(positions, Position(prev_pos.y, prev_pos.x))
+            else
+                push!(positions, Position(prev_pos.y+dy, prev_pos.x+dx))
+            end
+        end
+
+
+        # positions = [
+        #     Position(prev_pos.y+dy, prev_pos.x+dx)
+        #     for dx in -grid_size:grid_size,
+        #         dy in -grid_size:grid_size
+        # ]
+        
         # flatten
         positions = reshape(positions, :)
         
-        # base_score = sum(abs.(Array(channelview(M.draw!(M.canvas(H, W), objs))) - observed_image))
+        # # total update slower version 
+        # traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
 
-        # scores = Float64[]
-        # for pos in positions
-        #     objs[obj_id] = Object(objs[obj_id].sprite, pos)
-        #     rendered = Array(channelview(M.draw!(M.canvas(H, W), objs)))
-        #     score = exp(sum(abs.(rendered - observed_image)) - base_score)
-        #     push!(scores, score)
-        # end
 
-        # scores ./= sum(scores)
-        # @show scores
+        #manually update, partial draw
+        scores_v2 = Float64[]
+        #for each position, score the new image section around the object 
+        for pos in positions
+            #making the objects with just that object moved 
+            objects_one_moved = prev_objs[:]
+            objects_one_moved[obj_id] = Object(objects_one_moved[obj_id].sprite_index, pos)
 
-        # @show obj_id
-        traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
+            (sprite_height, sprite_width) = size(sprites[objs[obj_id].sprite_index].mask)
+            
+            (_, H, W) = size(observed_image)
+
+            #making the little box to render 
+            relevant_box_min_y = min(pos.y, prev_pos.y)
+            relevant_box_max_y = min(max(pos.y + sprite_height, prev_pos.y + sprite_height), H)
+            relevant_box_min_x = min(pos.x, prev_pos.x)
+            relevant_box_max_x = min(max(pos.x + sprite_width, prev_pos.x + sprite_width), W)
+
+            #@show (relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x)
+
+
+            drawn_moved_obj = draw_region(objects_one_moved, sprites, relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x) 
+            #is it likely
+            score = Gen.logpdf(image_likelihood, observed_image[:, relevant_box_min_y:relevant_box_max_y, relevant_box_min_x:relevant_box_max_x], drawn_moved_obj, 0.1)#can I hardcode that
+
+            #@show score 
+            push!(scores_v2, score)
+        end 
+        #@show scores_v2
+
+
         #update sprite index? todo?
+        
+        #making the scores into probabilities 
+        scores_logsumexp = logsumexp(scores_v2)
+        scores_v2_normalized =  scores_v2 .- scores_logsumexp
+        scores_v2_normalized = exp.(scores_v2_normalized)
 
-        scores = Gen.normalize_weights(get_score.(traces))[2]
-        scores = exp.(scores)
+        #oldver
+        #scores = Gen.normalize_weights(get_score.(traces))[2]
+        #scores = exp.(scores)
+
+        
+        # @show scores 
+        # @show scores_v2_normalized
+        # println("TESTTTYYY")
+
+        scores = scores_v2_normalized
 
         # sample the actual position
         pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)

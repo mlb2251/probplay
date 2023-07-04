@@ -80,6 +80,8 @@ function process_first_frame(frame, threshold=.05)
         end
     end
 
+
+
     # (start_y, start_x, end_y, end_x)
     smallest_y = [typemax(Int) for _ in 1:curr_cluster]
     smallest_x = [typemax(Int) for _ in 1:curr_cluster]
@@ -137,29 +139,28 @@ function process_first_frame(frame, threshold=.05)
         #v2 same sprite type if similar masks 
         newsprite = true
         mask_diff = 0
-        for sprite_i_sofar in 2:length(sprites)#not including background
+        for (i,sprite) in enumerate(sprites)
 
             #difference in sprite masks
-            mask_diff = get_mask_diff(sprites[sprite_i_sofar].mask, mask, sprites[sprite_i_sofar].color, color[c])
+            mask_diff = get_mask_diff(sprite.mask, mask, sprite.color, color[c])
             # @show mask_diff
 
             #same sprite
             if mask_diff < 0.1
-                # @show sprite_i_sofar
                 newsprite = false
-                object = Object(sprite_i_sofar, Position(smallest_y[c], smallest_x[c]))
+                object = Object(i, Position(smallest_y[c], smallest_x[c]))
                 push!(objs, object)
                 break
             end
 
-            iH,iW = size(sprites[sprite_i_sofar].mask)
+            iH,iW = size(sprite.mask)
             cH,cW = size(mask)
 
             #checking for subsprites in either direction for occlusion # not fully working, feel free to delete since takes long 
             check_for_subsprites = true 
             if check_for_subsprites
                 if iH < cH || iW < cW
-                    smallmask = sprites[sprite_i_sofar].mask
+                    smallmask = sprite.mask
                     bigmask = mask
                     smallH = iH
                     bigH = cH
@@ -168,7 +169,7 @@ function process_first_frame(frame, threshold=.05)
                     newbigger = true
                 else 
                     smallmask = mask
-                    bigmask = sprites[sprite_i_sofar].mask
+                    bigmask = sprite.mask
                     smallH = cH
                     bigH = iH
                     smallW = cW
@@ -176,15 +177,10 @@ function process_first_frame(frame, threshold=.05)
                     newbigger = false
                 end
 
-                # @show newbigger
-                # @show sprite_i_sofar
-                # @show c
-
-
                 for Hindex in 1:bigH-smallH+1
                     for Windex in 1:bigW-smallW+1
                         submask = bigmask[Hindex:Hindex+smallH-1, Windex:Windex+smallW-1] #check indicies here 
-                        mask_diff = get_mask_diff(submask, smallmask, sprites[sprite_i_sofar].color, color[c])
+                        mask_diff = get_mask_diff(submask, smallmask, sprite.color, color[c])
                         # @show mask_diff	
 
                         if mask_diff < 0.2
@@ -193,12 +189,12 @@ function process_first_frame(frame, threshold=.05)
 
                             if newbigger
                                 #fixing old sprite type #todo should also fix its pos 
-                                sprites[sprite_i_sofar] = SpriteType(bigmask,sprites[sprite_i_sofar].color)
-                                object = Object(sprite_i_sofar, Position(smallest_y[c], smallest_x[c]))
+                                sprites[i] = SpriteType(bigmask,sprite.color)
+                                object = Object(i, Position(smallest_y[c], smallest_x[c]))
                                 push!(objs, object)
                             else 
                                 #new sprite is old just starting at diff index
-                                object = Object(sprite_i_sofar, Position(max(smallest_y[c]-Hindex, 1), max(smallest_x[c]-Windex, 1))) #looks weird when <0
+                                object = Object(i, Position(max(smallest_y[c]-Hindex, 1), max(smallest_x[c]-Windex, 1))) #looks weird when <0
                                 
                                 push!(objs, object)
                             end 
@@ -244,9 +240,6 @@ Runs a particle filter on a sequence of frames
 function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int)
     C,H,W,T = size(observed_images)
 
-    html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
-
-
     
     # construct initial observations
     (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
@@ -279,11 +272,6 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         init_obs[:init => :init_sprites => obj.sprite_index => :color] = sprites[obj.sprite_index].color
     end
 
-
-    first_frame = html_img(observed_images[:,:,:,1])
-    html_body("<h2>Observations</h2>", html_gif(observed_images))
-    
-
     # printstyled("initializing particle filter\n",color=:green, bold=true)
     # @show typeof(model)
     state = initialize_particle_filter(model, (H,W,1), init_obs, num_particles)
@@ -305,6 +293,14 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
     weights = exp.(log_normalized_weights)
 
+
+    html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
+    html_body("<h2>Observations</h2>", html_gif(observed_images))
+    types = map(i -> objs[i].sprite_index, cluster);
+    html_body("<h2>First Frame Processing</h2>",
+    html_table(["Observation"                       "Objects"                       "Types";
+             html_img(observed_images[:,:,:,1])  html_img(color_labels(cluster))  html_img(color_labels(types))
+    ]))
     html_body("<h2>Reconstructed Images</h2>")
 
     table = fill("", 2, length(state.traces))

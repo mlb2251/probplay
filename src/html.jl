@@ -77,6 +77,9 @@ function html_img(img::Matrix{RGB{Float64}}, attrs...; width="200px")
     path = "imgs/img_$(curr_html.num_imgs).png"
     save("out/html/$(curr_html.dir)/$path", img)
     attrs = join(string.(attrs), " ")
+    if !isnothing(width)
+        attrs *= " width=$width"
+    end
     res = if !isempty(attrs) "<img src=$(path) $attrs>" else "<img src=$(path)>" end
     res
 end

@@ -30,6 +30,16 @@ sam = sam_model_registry[model](checkpoint=f"../shared/sam/{path}")
 sam.to(device=0)
 mask_generator = SamAutomaticMaskGenerator(sam)
 
+# SamAutomaticMaskGenerator(
+#     model=sam,
+#     points_per_side=32,
+#     pred_iou_thresh=0.86,
+#     stability_score_thresh=0.92,
+#     crop_n_layers=1,
+#     crop_n_points_downscale_factor=2,
+#     min_mask_region_area=100,  # Requires open-cv to run post-processing
+# )
+
 
 img_path = "atari-benchmarks/frostbite_1/674.png"
 

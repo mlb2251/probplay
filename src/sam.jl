@@ -34,18 +34,13 @@ function sam_clusters(masks)
     masks = sort(masks, by = m -> -m["area"])
     clusters = zeros(size(masks[1]["segmentation"])...)
     for (i,mask) in enumerate(masks)
-        # @assert Int.(clusters[mask["segmentation"]]) == 0
         clusters[mask["segmentation"]] .= i
     end
 
-    # separated = cat(map((i,m) -> m["segmentation"]*i, enumerate(masks))...,dims=2)
     separated = Matrix{Int}[]
     for (i,mask) in enumerate(masks)
-        # @assert Int.(clusters[mask["segmentation"]]) == 0
         push!(separated, mask["segmentation"] * i)
-        push!(separated, fill(1,size(mask["segmentation"],1),5))
     end
 
-
-    clusters, cat(separated...,dims=2)
+    clusters, separated
 end

@@ -62,13 +62,16 @@ takes an HW frame of integers and returns a version with a unique
 RGB color for each integer. If the original CHW frame orig is provided, it will
 be concatenated onto to the result.
 """
-function color_labels(frame, orig=nothing)
-    max = maximum(frame)
-    colored = [RGB(HSV(px/max*360, .8, .7)) for px in frame]
-    colored[frame .== 0] .= RGB(0,0,0)
-    
-    orig !== nothing && (colored = vcat(colorview(RGB,orig), colored))
-    colored
+function color_labels(frames...; orig=nothing)
+    max = maximum([maximum(frame) for frame in frames])
+    res = []
+    for frame in frames
+        colored = [RGB(HSV(px/max*360, .8, .7)) for px in frame]
+        colored[frame .== 0] .= RGB(0,0,0)
+        orig !== nothing && (colored = vcat(colorview(RGB,orig), colored))
+        push!(res,colored)
+    end
+    res
 end
 
 function games()
@@ -94,6 +97,6 @@ end
 """
 crops the specified amounts off of the top, bottom, left, and right of a (C, H, W, T) array of images
 """
-function crop(img; top=0, bottom=0, left=0, right=0, tstart=0, tend=0, tskip=1)
+function crop(img; top=1, bottom=0, left=1, right=0, tstart=0, tend=0, tskip=1)
     img[:, top:end-bottom, left:end-right, 1+tstart:tskip:end-tend]
 end

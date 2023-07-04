@@ -285,7 +285,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     types = map(i -> objs[i].sprite_index, cluster);
     html_body("<h2>First Frame Processing</h2>",
     html_table(["Observation"                       "Objects"                       "Types";
-             html_img(observed_images[:,:,:,1])  html_img(color_labels(cluster))  html_img(color_labels(types))
+             html_img(observed_images[:,:,:,1])  html_img(color_labels(cluster)[1])  html_img(color_labels(types)[1])
     ]))
     html_body("<h2>Reconstructed Images</h2>")
 

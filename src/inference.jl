@@ -1,20 +1,6 @@
 using Revise
 using Gen
 
-# this silliness is necessary for revise(I) to work
-# try
-#     includet("model.jl")
-# catch e
-#     if isa(e, ErrorException) && occursin("is not a file", e.msg)
-#         includet("src/model.jl")
-#     else
-#         rethrow(e)
-#     end
-# end
-
-# using Gen
-# import ..Model: model
-
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
     # isapprox(color1, color2) && return 1
@@ -311,20 +297,10 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     html_body(html_table(table))
 
     html_body(time_str)
-
-    # html_render()
-    
-    # return rand(state.traces, num_samples)
     
     return sample_unweighted_traces(state, num_samples)
 end
 
-# observed_images = crop(load_frames("out/benchmarks/frostbite_1"), top=120, bottom=25, left=20)[:,:,:,1:20]
-# traces = particle_filter(100, observed_images, 10)
-
-# module Inference
-# using Gen
-# import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position, ..objs_from_trace, ..sprites_from_trace, ..labeled_cat
 import FunctionalCollections
 
 """

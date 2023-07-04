@@ -5,6 +5,7 @@ using Gen
 
 
 function full1()
+    html_body("<h2>Samples from the prior</h2>")
     for _ in 1:8 gen_large() end
     particle_large()
 end
@@ -69,7 +70,7 @@ end
 
 
 function particle_large()
-    @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:20], 8);
+    @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:30], 8);
 end
 
 function particle_mid()

@@ -329,12 +329,12 @@ of the current position
     observed_image = obs[(:steps => t => :observed_image)]
 
     # first get a proposal from the prior by just extending the trace by one timestep and also adding the new observation in
-    (trace, _, _, _) = Gen.update(prev_trace, (H,W,prev_T + 1), (NoChange(), NoChange(), UnknownChange()), obs)
+    # (trace, _, _, _) = Gen.update(prev_trace, (H,W,prev_T + 1), (NoChange(), NoChange(), UnknownChange()), obs)
 
     #display(grid([trace]))
 
     # now for each object, propose and sample changes 
-    for obj_id in 1:trace[:init => :N]
+    for obj_id in 1:prev_trace[:init => :N]
 
         # we use the prev_trace position here actually!
         if t == 1
@@ -424,9 +424,9 @@ of the current position
         pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)
 
         # set the curr `trace` to this trace for future iterations of this loop
-        idx = findfirst(x -> x == pos, positions)
+        # idx = findfirst(x -> x == pos, positions)
         # objs[obj_id] = Object(objs[obj_id].sprite, positions[idx]) 
-        trace = traces[idx]
+        # trace = traces[idx]
     end
     nothing 
 

@@ -18,11 +18,10 @@ using Gen
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
     # isapprox(color1, color2) && return 1
-    !isapprox(color1, color2) && return 1
-    size(mask1) != size(mask2) && return 1
-    # sum(abs.(mask1 .- mask2))/sum(mask1) # pixel by pixel difference
-    abs(sum((mask1 .- mask2)))/sum(mask1) # pixel by pixel difference
-    #abs(sum(mask1) - sum(mask2))/sum(mask1) #super janky test of mask_diff just being size
+    !isapprox(color1, color2) && return 1.
+    size(mask1) != size(mask2) && return 1.
+    # average difference in mask
+    sum(i -> abs(mask1[i] - mask2[i]), eachindex(mask1)) / length(mask1)
 end 
     
 
@@ -138,7 +137,7 @@ function process_first_frame(frame, threshold=.05)
 
         #v2 same sprite type if similar masks 
         newsprite = true
-        mask_diff = 0
+        mask_diff = 0.
         for (i,sprite) in enumerate(sprites)
 
             #difference in sprite masks
@@ -157,7 +156,7 @@ function process_first_frame(frame, threshold=.05)
             cH,cW = size(mask)
 
             #checking for subsprites in either direction for occlusion # not fully working, feel free to delete since takes long 
-            check_for_subsprites = true 
+            check_for_subsprites = false 
             if check_for_subsprites
                 if iH < cH || iW < cW
                     smallmask = sprite.mask

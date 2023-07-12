@@ -6,69 +6,90 @@ using Distributions
 using AutoHashEquals
 using Dates
 
-@auto_hash_equals struct Position
+@auto_hash_equals struct Vec
     y::Float32
     x::Float32
 end
 
-# Position(y::Float32, x::Float32) = Position(y,x)
-Position(y::Int, x::Int) = Position(Float32(y), Float32(x))
+Vec(y::Int, x::Int) = Vec(Float32(y), Float32(x))
 
-struct SpriteType
+
+Base.:+(v1::Vec, v2::Vec) = Vec(v1.y + v2.y, v1.x + v2.x)
+Base.:-(v1::Vec, v2::Vec) = Vec(v1.y - v2.y, v1.x - v2.x)
+Base.:*(a::Real, v::Vec) = Vec(a*v.y, a*v.x)
+Base.:*(v::Vec, a::Real) = Vec(a*v.y, a*v.x)
+
+pixel_vec(v::Vec) = (floor(Int, v.y), floor(Int, v.x))
+
+"""
+given a vector of vectors, return a (min_vec, max_vec) pair
+where min_vec is the vector of the minimum values of each component
+"""
+function min_max_vecs(vecs::Vector{Vec})
+    ( 
+        Vec(minimum(v -> v.y, vecs), minimum(v -> v.x, vecs)),
+        Vec(maximum(v -> v.y, vecs), maximum(v -> v.x, vecs))
+    )
+end
+
+"""
+Rounds a Vec to be within (1,H+1-EPSILON) x (1,W+1-EPSILON)
+"""
+function inbounds_vec(v,H,W)
+    Vec(min(max(1, v.y), H+1-EPSILON), min(max(1, v.x), W+1-EPSILON))
+end
+
+
+struct Sprite
     mask::Matrix{Bool}
     color::Vector{Float64}
 end
 
+set_mask(sprite::Sprite, mask) = Sprite(mask, sprite.color)
+set_color(sprite::Sprite, color) = Sprite(sprite.mask, color)
+
 struct Object
     sprite_index :: Int  
-    pos :: Position
+    pos :: Vec
 end
+
+set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos)
+set_pos(obj::Object, pos) = Object(obj.sprite_index, pos)
 
 include("images.jl")
 
 @dist labeled_cat(labels, probs) = labels[categorical(probs)]
 
-struct UniformPosition <: Gen.Distribution{Position} end
+struct UniformPosition <: Gen.Distribution{Vec} end
 
 const EPSILON = .01
 
 function Gen.random(::UniformPosition, height, width)
-    # Position(1. + rand()*(height-1), 1. + rand()*(width-1))
-
-    # since we floor() things to get the pixel values, `width+1-EPSILON` rounds to `width`
-    Position(uniform(1., height+1-EPSILON), uniform(1., width+1-EPSILON))
-    # Position(rand(1:height), rand(1:width))
+    Vec(uniform(1., height+1-EPSILON), uniform(1., width+1-EPSILON))
 end
 
 function Gen.logpdf(::UniformPosition, pos, height, width)
     Gen.logpdf(uniform, pos.y, 1., height+1-EPSILON) + Gen.logpdf(uniform, pos.x, 1., width+1-EPSILON)
-    # if !(0 < pos.y <= height && 0 < pos.x <= width)
-    #     return -Inf
-    # else
-    #     # uniform distribution over height*width positions
-    #     return -log(height*width)
-    # end
 end
 
 const uniform_position = UniformPosition()
 
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
 
-struct UniformDriftPosition <: Gen.Distribution{Position} end
+struct UniformDriftVec <: Gen.Distribution{Vec} end
 
-function Gen.random(::UniformDriftPosition, pos, max_drift)
-    Position(pos.y + rand(-max_drift:max_drift),
-             pos.x + rand(-max_drift:max_drift))
+function Gen.random(::UniformDriftVec, pos, max_drift)
+    pos + Vec(rand(-max_drift:max_drift), rand(-max_drift:max_drift))
 end
 
-function Gen.logpdf(::UniformDriftPosition, pos_new, pos, max_drift)
+function Gen.logpdf(::UniformDriftVec, pos_new, pos, max_drift)
     # discrete uniform over square with side length 2*max_drift + 1
     return -2*log(2*max_drift + 1)
 end
 
-const uniform_drift_position = UniformDriftPosition()
+const uniform_drift_position = UniformDriftVec()
 
-(::UniformDriftPosition)(pos, max_drift) = random(UniformDriftPosition(), pos, max_drift)
+(::UniformDriftVec)(pos, max_drift) = random(UniformDriftVec(), pos, max_drift)
 
 
 
@@ -201,7 +222,7 @@ all_obj_dynamics = Map(obj_dynamics)
 
 struct State
     objs::Vector{Object}
-    sprites::Vector{SpriteType}
+    sprites::Vector{Sprite}
 end
 
 @gen (static) function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
@@ -216,7 +237,7 @@ unfold_step = Unfold(dynamics_and_render)
  
 @gen (static) function make_object(i, H, W, num_sprite_types)    
     sprite_index ~ uniform_discrete(1, num_sprite_types) 
-    #pos ~ uniform_drift_position(Position(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
+    #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
 
     return Object(sprite_index, pos)
@@ -227,7 +248,7 @@ end
     height ~ uniform_discrete(1,H)
     shape ~ bernoulli_2d(0.5, height, width)
     color ~ rgb_dist()
-    return SpriteType(shape, color)
+    return Sprite(shape, color)
 end
 
 make_objects = Map(make_object)

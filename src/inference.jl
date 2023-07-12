@@ -86,7 +86,7 @@ function process_first_frame(frame, threshold=.05)
     end
 
     objs = Object[]
-    sprites = SpriteType[]
+    sprites = Sprite[]
 
     background = 0
     background_size = 0
@@ -112,13 +112,13 @@ function process_first_frame(frame, threshold=.05)
         
         # #v0 old version 
         # sprite = Sprite(mask, color[c])
-        # object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
+        # object = Object(sprite, Vec(smallest_y[c], smallest_x[c]))
         # push!(objs, object)
 
 
         # #v1 each sprite makes new sprite type version 
-        # sprite_type = SpriteType(mask, color[c])
-        # object = Object(c, Position(smallest_y[c], smallest_x[c]))
+        # sprite_type = Sprite(mask, color[c])
+        # object = Object(c, Vec(smallest_y[c], smallest_x[c]))
         # push!(sprites, sprite_type)
         # push!(objs, object)
 
@@ -135,7 +135,7 @@ function process_first_frame(frame, threshold=.05)
             #same sprite
             if mask_diff < 0.1
                 newsprite = false
-                object = Object(i, Position(smallest_y[c], smallest_x[c]))
+                object = Object(i, Vec(smallest_y[c], smallest_x[c]))
                 push!(objs, object)
                 break
             end
@@ -176,12 +176,12 @@ function process_first_frame(frame, threshold=.05)
 
                             if newbigger
                                 #fixing old sprite type #todo should also fix its pos 
-                                sprites[i] = SpriteType(bigmask,sprite.color)
-                                object = Object(i, Position(smallest_y[c], smallest_x[c]))
+                                sprites[i] = Sprite(bigmask,sprite.color)
+                                object = Object(i, Vec(smallest_y[c], smallest_x[c]))
                                 push!(objs, object)
                             else 
                                 #new sprite is old just starting at diff index
-                                object = Object(i, Position(max(smallest_y[c]-Hindex, 1), max(smallest_x[c]-Windex, 1))) #looks weird when <0
+                                object = Object(i, Vec(max(smallest_y[c]-Hindex, 1), max(smallest_x[c]-Windex, 1))) #looks weird when <0
                                 
                                 push!(objs, object)
                             end 
@@ -199,9 +199,9 @@ function process_first_frame(frame, threshold=.05)
         #new sprite 
         if newsprite
             println("newsprite $(length(sprites)) from cluster $c")
-            sprite_type = SpriteType(mask, color[c])
+            sprite_type = Sprite(mask, color[c])
             push!(sprites, sprite_type)
-            object = Object(length(sprites), Position(smallest_y[c], smallest_x[c]))
+            object = Object(length(sprites), Vec(smallest_y[c], smallest_x[c]))
             push!(objs, object)
         end
 
@@ -211,8 +211,8 @@ function process_first_frame(frame, threshold=.05)
 
     #i think works even with spriteindex 
     color = sprites[background].color
-    sprites[background] = SpriteType(ones(Bool, H, W),color)
-    objs[background] = Object(background, Position(1,1))
+    sprites[background] = Sprite(ones(Bool, H, W),color)
+    objs[background] = Object(background, Vec(1,1))
 
     (cluster,objs,sprites)	
 
@@ -323,14 +323,14 @@ of the current position
         end
 
         #way to get positions that avoids negatives, todo fix 
-        positions = Position[]
+        positions = Vec[]
         for dx in -grid_size:grid_size,
             dy in -grid_size:grid_size
             #hacky since it cant handle negatives rn
             if prev_pos.x + dx < 1 || prev_pos.x + dx > W || prev_pos.y + dy < 1 || prev_pos.y + dy > H
-                push!(positions, Position(prev_pos.y, prev_pos.x))
+                push!(positions, Vec(prev_pos.y, prev_pos.x))
             else
-                push!(positions, Position(prev_pos.y+dy, prev_pos.x+dx))
+                push!(positions, Vec(prev_pos.y+dy, prev_pos.x+dx))
             end
         end
         
@@ -343,25 +343,23 @@ of the current position
         #manually update, partial draw
         scores = Float64[]
         #for each position, score the new image section around the object 
+        (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
+
+        # get a shared bounding box around all the positions
+        ((relevant_box_min_y, relevant_box_min_x),
+        (relevant_box_max_y, relevant_box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
+        relevant_box_max_y = min(relevant_box_max_y + sprite_height, H)
+        relevant_box_max_x = min(relevant_box_max_x + sprite_width, W)
+
+        objects_one_moved = prev_objs[:]
+        cropped_obs = observed_image[:, relevant_box_min_y:relevant_box_max_y, relevant_box_min_x:relevant_box_max_x]
+
         for pos in positions
-            #making the objects with just that object moved 
-            objects_one_moved = prev_objs[:]
-            objects_one_moved[obj_id] = Object(objects_one_moved[obj_id].sprite_index, pos)
-
-            (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
-            
-            (_, H, W) = size(observed_image)
-
-            #making the little box to render 
-            relevant_box_min_y = floor(Int, min(pos.y, prev_pos.y))
-            relevant_box_max_y = floor(Int, min(max(pos.y + sprite_height, prev_pos.y + sprite_height), H))
-            relevant_box_min_x = floor(Int, min(pos.x, prev_pos.x))
-            relevant_box_max_x = floor(Int, min(max(pos.x + sprite_width, prev_pos.x + sprite_width), W))
-
+            # move the object
+            objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
             drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x) 
-            #is it likely
-            score = Gen.logpdf(image_likelihood, observed_image[:, relevant_box_min_y:relevant_box_max_y, relevant_box_min_x:relevant_box_max_x], drawn_moved_obj, 0.1)#can I hardcode that
-
+            # todo var=0.1 is hardcoded for now
+            score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
             push!(scores, score)
         end 
 

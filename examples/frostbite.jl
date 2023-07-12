@@ -4,7 +4,7 @@ using Gen
 
 square!(sprites, color, side) = rect!(sprites, color, side, side)
 function rect!(sprites, color, h, w)
-    push!(sprites, SpriteType(ones(Bool, h, w), color))
+    push!(sprites, Sprite(ones(Bool, h, w), color))
     length(sprites)
 end
 function circle!(sprites, color, radius)
@@ -17,42 +17,42 @@ function circle!(sprites, color, radius)
             end
         end
     end
-    push!(sprites,SpriteType(mask, color))
+    push!(sprites,Sprite(mask, color))
     length(sprites)
 end
 
 function shape_test()
     objs = Object[]
-    sprites = SpriteType[]
+    sprites = Sprite[]
     c = circle!(sprites,[.7,0.,0.], 3)
     r1 = rect!(sprites,[0.,0.,.7], 3, 4)
     s = square!(sprites, [0.,.7,0.], 5)
-    objs = [Object(c, Position(5,15)), Object(r1, Position(4,5)), Object(s, Position(10,5))]
+    objs = [Object(c, Vec(5,15)), Object(r1, Vec(4,5)), Object(s, Vec(10,5))]
     obs = draw(20, 40, objs, sprites)
     html_body(html_img(obs, width="400px"))
 end
 
-# mutable struct FloatPosition
-#     y::Float64
-#     x::Float64
-# end
-
 function bouncing_ball()
-    H,W = 20,40
+    H,W = 40,40
     T = 20
-    sprites = SpriteType[]
+    sprites = Sprite[]
     c = circle!(sprites,[.7,0.,0.], 3)
-    objs = [Object(c, Position(5,15))]
+    objs = [Object(c, Vec(5,15))]
     first_frame = draw(H, W, objs, sprites)
 
-    speed = .1 # px/sec
-    # dir = 
+    vel = Vec(1,2)
 
-    for t in 1:T
+    frames = zeros(Float64, 3, H, W, T)
+    frames[:,:,:,1] = first_frame
 
+    for t in 2:T
+        objs[1] = set_pos(objs[1], objs[1].pos + vel)
+        frames[:,:,:,t] = draw(H, W, objs, sprites)
+
+        # vel += Vec(rand()-.7, rand()-.7)
     end
 
-    html_body(html_img(first_frame, width="400px"))
+    html_body(html_gif(frames, width="400px"))
 end
 
 

@@ -2,6 +2,59 @@ using Atari
 using Gen
 
 
+square!(sprites, color, side) = rect!(sprites, color, side, side)
+function rect!(sprites, color, h, w)
+    push!(sprites, SpriteType(ones(Bool, h, w), color))
+    length(sprites)
+end
+function circle!(sprites, color, radius)
+    side = 2*radius + 1
+    mask = zeros(Bool, side, side)
+    for y in 1:side
+        for x in 1:side
+            if (y - radius - 1)^2 + (x - radius - 1)^2 < radius^2 + 1.5 # 1.5 just makes it look a little smoother
+                mask[y,x] = true
+            end
+        end
+    end
+    push!(sprites,SpriteType(mask, color))
+    length(sprites)
+end
+
+function shape_test()
+    objs = Object[]
+    sprites = SpriteType[]
+    c = circle!(sprites,[.7,0.,0.], 3)
+    r1 = rect!(sprites,[0.,0.,.7], 3, 4)
+    s = square!(sprites, [0.,.7,0.], 5)
+    objs = [Object(c, Position(5,15)), Object(r1, Position(4,5)), Object(s, Position(10,5))]
+    obs = draw(20, 40, objs, sprites)
+    html_body(html_img(obs, width="400px"))
+end
+
+# mutable struct FloatPosition
+#     y::Float64
+#     x::Float64
+# end
+
+function bouncing_ball()
+    H,W = 20,40
+    T = 20
+    sprites = SpriteType[]
+    c = circle!(sprites,[.7,0.,0.], 3)
+    objs = [Object(c, Position(5,15))]
+    first_frame = draw(H, W, objs, sprites)
+
+    speed = .1 # px/sec
+    # dir = 
+
+    for t in 1:T
+
+    end
+
+    html_body(html_img(first_frame, width="400px"))
+end
+
 
 
 function full1()
@@ -34,10 +87,10 @@ function segment_table(masks, mask_imgs)
 end
 
 function sam(path="atari-benchmarks/frostbite_1")
-    sam_init(device=0)
+    @time sam_init(device="cpu", points_per_side=1, points_per_batch=1)
     # frames = crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20, tstart=200, tskip=4)[:,:,:,1:20]
     frames = load_frames(path)
-    masks = sam_masks(frames)
+    @time masks = sam_masks(frames)
     clusters, separated = Atari.sam_clusters(masks)
     mask_imgs = color_labels(separated...)
 
@@ -99,7 +152,16 @@ function gen_mid()
 end
 
 function gen_large()
-    html_body(html_gif(render_trace(generate(model, (210, 160, 100))[1])))
+    tr,wt = generate(model, (210, 160, 100))
+    @assert !isnan(wt)
+    html_body(html_gif(render_trace(tr)))
+end
+
+function get_choices_clean(tr)
+    choices = Gen.get_choices(tr)
+    @show typeof(tr)
+    @show typeof(choices)
+    choices
 end
 
 function get_choices_tiny()

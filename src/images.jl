@@ -19,23 +19,23 @@ end
 
 function sprites_from_trace(trace, t)
     (H,W,T) = get_args(trace)
-    @assert t <= T
+    @assert t == 0 # we havent implemented sprites changing over time yet
     sprites = Sprite[]
-    for i in 1:trace[:init => :num_sprite_types]
+    for i in 1:trace[:init => :num_sprites]
 
         color = trace[:init => :init_sprites => i => :color] #?
         
         shape = trace[:init => :init_sprites => i => :shape]
 
-        sprite_type = Sprite(shape, color)
-        push!(sprites, sprite_type)
+        sprite = Sprite(shape, color)
+        push!(sprites, sprite)
     end
     sprites
 end
 
 function render_trace_frame(trace, t)
     (H,W,T) = get_args(trace)
-    draw(H, W, objs_from_trace(trace,t), sprites_from_trace(trace,t))
+    draw(H, W, objs_from_trace(trace,t), sprites_from_trace(trace,0)) # todo t=0 for now bc no changing sprites over time
 end
 
 function render_trace(trace)

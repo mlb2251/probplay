@@ -1,10 +1,9 @@
 using Gen
 using LinearAlgebra
 using Images
-using Distributions
-# using Plots
 using AutoHashEquals
 using Dates
+import Distributions
 
 @auto_hash_equals struct Vec
     y::Float32
@@ -62,7 +61,7 @@ include("images.jl")
 
 struct UniformPosition <: Gen.Distribution{Vec} end
 
-const EPSILON = .01
+const EPSILON = .001
 
 function Gen.random(::UniformPosition, height, width)
     Vec(uniform(1., height+1-EPSILON), uniform(1., width+1-EPSILON))
@@ -91,6 +90,20 @@ const uniform_drift_position = UniformDriftVec()
 
 (::UniformDriftVec)(pos, max_drift) = random(UniformDriftVec(), pos, max_drift)
 
+"""
+normal distribution around a mu_vec with variance var
+"""
+struct NormalVec <: Gen.Distribution{Vec} end
+
+function Gen.random(::NormalVec, mu_vec::Vec, var)
+    Vec(normal(mu_vec.y,var), normal(mu_vec.x,var))
+end
+
+function Gen.logpdf(::NormalVec, v::Vec, mu_vec::Vec, var)
+    Gen.logpdf(normal, v.y, mu_vec.y, var) + Gen.logpdf(normal, v.x, mu_vec.x, var)
+end
+
+const normal_vec = NormalVec()
 
 
 struct Bernoulli2D <: Gen.Distribution{Array} end
@@ -121,7 +134,7 @@ end
 
 
 function Gen.random(::ImageLikelihood, rendered_image, var)
-    noise = rand(Normal(0, var), size(rendered_image))
+    noise = rand(Distributions.Normal(0, var), size(rendered_image))
     # noise = mvnormal(zeros(size(rendered_image)), var * Maxxtrix(I, size(rendered_image)))
     rendered_image .+ noise
 end
@@ -153,9 +166,9 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
     for obj::Object in objs
         sprite_index = obj.sprite_index
-        sprite_type = sprites[sprite_index]
+        sprite = sprites[sprite_index]
 
-        sprite_height, sprite_width = size(sprite_type.mask)
+        sprite_height, sprite_width = size(sprite.mask)
 
         x = floor(Int, obj.pos.x)
         y = floor(Int, obj.pos.y)
@@ -172,10 +185,10 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
         stopj = min(sprite_width, xmax-x+1)
 
         for i in starti:stopi, j in startj:stopj #there could be a faster way 
-            if sprite_type.mask[i,j]
+            if sprite.mask[i,j]
                 offy = y+i-1
                 offx = x+j-1
-                @inbounds canvas[:, offy-ymin+1,offx-xmin+1] = sprite_type.color
+                @inbounds canvas[:, offy-ymin+1,offx-xmin+1] = sprite.color
             end
         end
     end
@@ -193,17 +206,17 @@ function draw(H, W, objs, sprites)
 
     # for obj::Object in objs 
     #     sprite_index = obj.sprite_index
-    #     sprite_type = sprites[sprite_index]
+    #     sprite = sprites[sprite_index]
 
-    #     sprite_height, sprite_width = size(sprite_type.mask)
+    #     sprite_height, sprite_width = size(sprite.mask)
 
         
     #     for i in 1:sprite_height, j in 1:sprite_width 
-    #         if sprite_type.mask[i,j]
+    #         if sprite.mask[i,j]
     #             offy = obj.pos.y+i-1
     #             offx = obj.pos.x+j-1
     #             if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
-    #                 @inbounds canvas[:, offy,offx] = sprite_type.color
+    #                 @inbounds canvas[:, offy,offx] = sprite.color
     #             end
     #         end
     #     end
@@ -214,7 +227,8 @@ end
 
 
 @gen (static) function obj_dynamics(obj::Object)
-    pos ~ uniform_drift_position(obj.pos,2);
+    # pos ~ uniform_drift_position(obj.pos,2);
+    pos ~ normal_vec(obj.pos,2.);
     return Object(obj.sprite_index, pos)
 end
 
@@ -235,8 +249,8 @@ end
 
 unfold_step = Unfold(dynamics_and_render)
  
-@gen (static) function make_object(i, H, W, num_sprite_types)    
-    sprite_index ~ uniform_discrete(1, num_sprite_types) 
+@gen (static) function make_object(i, H, W, num_sprites)    
+    sprite_index ~ uniform_discrete(1, num_sprites) 
     #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
 
@@ -263,10 +277,10 @@ make_sprites = Map(make_type)
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
 @gen function init_model(H,W,var)
-    num_sprite_types ~ poisson_plus_1(4)
+    num_sprites ~ poisson_plus_1(4)
     N ~ poisson(7)
-    sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprite_types), [H for _ in 1:num_sprite_types], [W for _ in 1:num_sprite_types]) 
-    objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprite_types for _ in 1:N])
+    sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
+    objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprites for _ in 1:N])
 
     #rendered = draw(H, W, objs, sprites)
     rendered = draw_region(objs, sprites, 1, H, 1, W)

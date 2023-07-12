@@ -117,9 +117,9 @@ function process_first_frame(frame, threshold=.05)
 
 
         # #v1 each sprite makes new sprite type version 
-        # sprite_type = Sprite(mask, color[c])
+        # sprite = Sprite(mask, color[c])
         # object = Object(c, Vec(smallest_y[c], smallest_x[c]))
-        # push!(sprites, sprite_type)
+        # push!(sprites, sprite)
         # push!(objs, object)
 
 
@@ -199,8 +199,8 @@ function process_first_frame(frame, threshold=.05)
         #new sprite 
         if newsprite
             println("newsprite $(length(sprites)) from cluster $c")
-            sprite_type = Sprite(mask, color[c])
-            push!(sprites, sprite_type)
+            sprite = Sprite(mask, color[c])
+            push!(sprites, sprite)
             object = Object(length(sprites), Vec(smallest_y[c], smallest_x[c]))
             push!(objs, object)
         end
@@ -222,7 +222,7 @@ function build_init_obs(H,W, sprites, objs, observed_images)
     init_obs = choicemap(
         (:init => :observed_image, observed_images[:,:,:,1]),
         (:init => :N, length(objs)),
-        (:init => :num_sprite_types, length(sprites)),
+        (:init => :num_sprites, length(sprites)),
     )
 
     for (i,obj) in enumerate(objs)
@@ -310,7 +310,7 @@ of the current position
     observed_image = obs[(:steps => t => :observed_image)]
 
     prev_objs = objs_from_trace(prev_trace, t - 1)
-    prev_sprites = sprites_from_trace(prev_trace, 0)
+    prev_sprites = sprites_from_trace(prev_trace, 0) # todo t=0 for now bc no changing sprites over time
 
     # now for each object, propose and sample changes 
     for obj_id in 1:prev_trace[:init => :N]
@@ -326,12 +326,7 @@ of the current position
         positions = Vec[]
         for dx in -grid_size:grid_size,
             dy in -grid_size:grid_size
-            #hacky since it cant handle negatives rn
-            if prev_pos.x + dx < 1 || prev_pos.x + dx > W || prev_pos.y + dy < 1 || prev_pos.y + dy > H
-                push!(positions, Vec(prev_pos.y, prev_pos.x))
-            else
                 push!(positions, Vec(prev_pos.y+dy, prev_pos.x+dx))
-            end
         end
         
         # flatten

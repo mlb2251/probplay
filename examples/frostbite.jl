@@ -2,7 +2,12 @@ using Atari
 using Gen
 
 
-
+function tff()
+    fresh(); 
+    first_frame(); 
+    first_frame();
+    render();
+end
 
 function full1()
     html_body("<h2>Samples from the prior</h2>")
@@ -84,6 +89,7 @@ end
 
 function particle_small()
     @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=170, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8);
+    print("TESTjfkaldsjakljfkla;dsjfkl;sjfkl;s")
 end
 
 function particle_tiny()
@@ -104,4 +110,10 @@ end
 
 function get_choices_tiny()
     Gen.get_choices(generate(model, (2, 2, 3))[1])
+end
+
+function first_frame()
+
+    first_frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1]	
+    @time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=170, bottom=25, left=20, tskip=4)[:,:,:,1:4], 4)
 end

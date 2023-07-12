@@ -17,6 +17,94 @@ end
 groups adjacent same-color pixels of a frame into objects
 as a simple first pass of object detection
 """
+
+
+
+
+
+# @gen function small_shape_change(tr, sprite_index)
+#     shape = tr[:init => :init_sprites => sprite_index => :shape]
+#     height, width = size(shape)
+#     hi ~ uniform_discrete(1, height)	#don;t actually want hi in the trace, look at split nerge example. one func for randomness
+#     wi ~ uniform_discrete(1, width)
+    	
+
+#     #change shape at hi, wi
+#     shape[hi, wi] = 1 - shape[hi, wi]
+
+#     {(:init => :init_sprites => sprite_index => :shape)} = shape #need to find a way for this to be a 
+# end 
+
+function update_detect(tr, frame)
+    #update num objects 
+    tr, = mh(tr, select(:N))
+
+    #update num sprites 
+    tr, = mh(tr, select(:num_sprite_types))
+
+    #update object positions
+    for i=1:tr[:init => :N]#init defined in model
+        tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
+    end
+
+    #recolor sprites TODO
+    for i=1:tr[:init => :num_sprite_types]
+        tr, = mh(tr, select((:init => :init_sprites => i => :color))) 
+    end
+    
+    #resprite objects
+    for i=1:tr[:init => :N]
+        tr, = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
+    end
+
+    #reshape objects TODO
+    for i=1:tr[:init => :num_sprite_types]
+
+
+
+       # tr = mh(tr, small_shape_change, (tr, i,))
+
+
+
+        tr, = mh(tr, select((:init => :init_sprites => i => :shape))) 
+    end
+
+    #add/delete TODO
+
+    #split/merge TODO
+
+    tr
+end
+
+function process_first_frame_v2(frame, threshold=.05)
+    #run update detect a bunch TODO 
+
+    (C, H, W) = size(frame)
+
+    #something like this but edit
+    init_obs = choicemap(
+        (:init => :observed_image, frame),
+        
+        #have perfect build init obs here for everything else and one by one delete 
+        #(:init => :N, length(objs)),
+        #(:init => :num_sprite_types, length(sprites)),
+    )
+
+    tr = generate(model, (H, W, 1), init_obs)[1]
+
+    for num_updates in 1:100 #no clue 
+        tr = update_detect(tr, frame)
+    end
+
+    #init_obs = choicemap 
+
+    #@show tr 
+    
+
+    Gen.get_choices(tr)	
+
+end 
+
 function process_first_frame(frame, threshold=.05)
     (C, H, W) = size(frame)
 
@@ -86,7 +174,7 @@ function process_first_frame(frame, threshold=.05)
     end
 
     objs = Object[]
-    sprites = SpriteType[]
+    sprites = Sprite[]
 
     background = 0
     background_size = 0
@@ -108,21 +196,6 @@ function process_first_frame(frame, threshold=.05)
             background_size = sum(mask)
         end
 
-
-        
-        # #v0 old version 
-        # sprite = Sprite(mask, color[c])
-        # object = Object(sprite, Position(smallest_y[c], smallest_x[c]))
-        # push!(objs, object)
-
-
-        # #v1 each sprite makes new sprite type version 
-        # sprite_type = SpriteType(mask, color[c])
-        # object = Object(c, Position(smallest_y[c], smallest_x[c]))
-        # push!(sprites, sprite_type)
-        # push!(objs, object)
-
-
         #v2 same sprite type if similar masks 
         newsprite = true
         mask_diff = 0.
@@ -143,55 +216,6 @@ function process_first_frame(frame, threshold=.05)
             iH,iW = size(sprite.mask)
             cH,cW = size(mask)
 
-            #checking for subsprites in either direction for occlusion # not fully working, feel free to delete since takes long 
-            check_for_subsprites = false 
-            if check_for_subsprites
-                if iH < cH || iW < cW
-                    smallmask = sprite.mask
-                    bigmask = mask
-                    smallH = iH
-                    bigH = cH
-                    smallW = iW
-                    bigW = cW
-                    newbigger = true
-                else 
-                    smallmask = mask
-                    bigmask = sprite.mask
-                    smallH = cH
-                    bigH = iH
-                    smallW = cW
-                    bigW = iW
-                    newbigger = false
-                end
-
-                for Hindex in 1:bigH-smallH+1
-                    for Windex in 1:bigW-smallW+1
-                        submask = bigmask[Hindex:Hindex+smallH-1, Windex:Windex+smallW-1] #check indicies here 
-                        mask_diff = get_mask_diff(submask, smallmask, sprite.color, color[c])
-                        # @show mask_diff	
-
-                        if mask_diff < 0.2
-                            println("holy shit this actually worked")
-                            newsprite = false
-
-                            if newbigger
-                                #fixing old sprite type #todo should also fix its pos 
-                                sprites[i] = SpriteType(bigmask,sprite.color)
-                                object = Object(i, Position(smallest_y[c], smallest_x[c]))
-                                push!(objs, object)
-                            else 
-                                #new sprite is old just starting at diff index
-                                object = Object(i, Position(max(smallest_y[c]-Hindex, 1), max(smallest_x[c]-Windex, 1))) #looks weird when <0
-                                
-                                push!(objs, object)
-                            end 
-                            break 
-                            
-                        end
-                    end 
-                end
-            end
-
 
         end	
 
@@ -199,7 +223,7 @@ function process_first_frame(frame, threshold=.05)
         #new sprite 
         if newsprite
             println("newsprite $(length(sprites)) from cluster $c")
-            sprite_type = SpriteType(mask, color[c])
+            sprite_type = Sprite(mask, color[c])
             push!(sprites, sprite_type)
             object = Object(length(sprites), Position(smallest_y[c], smallest_x[c]))
             push!(objs, object)
@@ -211,7 +235,7 @@ function process_first_frame(frame, threshold=.05)
 
     #i think works even with spriteindex 
     color = sprites[background].color
-    sprites[background] = SpriteType(ones(Bool, H, W),color)
+    sprites[background] = Sprite(ones(Bool, H, W),color)
     objs[background] = Object(background, Position(1,1))
 
     (cluster,objs,sprites)	
@@ -247,7 +271,11 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     # construct initial observations
     (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
 
-    init_obs = build_init_obs(H,W, sprites, objs, observed_images)
+    #init_obs = build_init_obs(H,W, sprites, objs, observed_images)
+
+    #new version 
+    init_obs = process_first_frame_v2(observed_images[:,:,:,1])
+
 
     state = pf_initialize(model, (H,W,1), init_obs, num_particles)
 

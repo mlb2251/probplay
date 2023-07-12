@@ -251,6 +251,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
 
     state = pf_initialize(model, (H,W,1), init_obs, num_particles)
 
+    # @show get_choices(state.traces[1])
+
     # steps
     elapsed=@elapsed for t in 1:T-1
         @show t
@@ -351,10 +353,10 @@ of the current position
             (_, H, W) = size(observed_image)
 
             #making the little box to render 
-            relevant_box_min_y = min(pos.y, prev_pos.y)
-            relevant_box_max_y = min(max(pos.y + sprite_height, prev_pos.y + sprite_height), H)
-            relevant_box_min_x = min(pos.x, prev_pos.x)
-            relevant_box_max_x = min(max(pos.x + sprite_width, prev_pos.x + sprite_width), W)
+            relevant_box_min_y = floor(Int, min(pos.y, prev_pos.y))
+            relevant_box_max_y = floor(Int, min(max(pos.y + sprite_height, prev_pos.y + sprite_height), H))
+            relevant_box_min_x = floor(Int, min(pos.x, prev_pos.x))
+            relevant_box_max_x = floor(Int, min(max(pos.x + sprite_width, prev_pos.x + sprite_width), W))
 
             drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x) 
             #is it likely

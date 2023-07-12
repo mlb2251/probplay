@@ -7,9 +7,12 @@ using AutoHashEquals
 using Dates
 
 @auto_hash_equals struct Position
-    y::Int
-    x::Int
+    y::Float32
+    x::Float32
 end
+
+# Position(y::Float32, x::Float32) = Position(y,x)
+Position(y::Int, x::Int) = Position(Float32(y), Float32(x))
 
 struct SpriteType
     mask::Matrix{Bool}
@@ -27,23 +30,29 @@ include("images.jl")
 
 struct UniformPosition <: Gen.Distribution{Position} end
 
+const EPSILON = .01
+
 function Gen.random(::UniformPosition, height, width)
-    Position(rand(1:height), rand(1:width))
+    # Position(1. + rand()*(height-1), 1. + rand()*(width-1))
+
+    # since we floor() things to get the pixel values, `width+1-EPSILON` rounds to `width`
+    Position(uniform(1., height+1-EPSILON), uniform(1., width+1-EPSILON))
+    # Position(rand(1:height), rand(1:width))
 end
 
 function Gen.logpdf(::UniformPosition, pos, height, width)
-    if !(0 < pos.y <= height && 0 < pos.x <= width)
-        return -Inf
-    else
-        # uniform distribution over height*width positions
-        return -log(height*width)
-    end
+    Gen.logpdf(uniform, pos.y, 1., height+1-EPSILON) + Gen.logpdf(uniform, pos.x, 1., width+1-EPSILON)
+    # if !(0 < pos.y <= height && 0 < pos.x <= width)
+    #     return -Inf
+    # else
+    #     # uniform distribution over height*width positions
+    #     return -log(height*width)
+    # end
 end
 
 const uniform_position = UniformPosition()
 
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
-
 
 struct UniformDriftPosition <: Gen.Distribution{Position} end
 
@@ -127,21 +136,24 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
 
         sprite_height, sprite_width = size(sprite_type.mask)
 
+        x = floor(Int, obj.pos.x)
+        y = floor(Int, obj.pos.y)
+
         # not at all in bounds
-        if obj.pos.y > ymax || obj.pos.x > xmax || obj.pos.y+sprite_height-1 < ymin || obj.pos.x+sprite_width-1 < xmin
+        if y > ymax || x > xmax || y+sprite_height-1 < ymin || x+sprite_width-1 < xmin
             continue
         end
         
         # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
-        starti = max(1, ymin-obj.pos.y+1)
-        startj = max(1, xmin-obj.pos.x+1)	
-        stopi = min(sprite_height, ymax-obj.pos.y+1) 
-        stopj = min(sprite_width, xmax-obj.pos.x+1)
+        starti = max(1, ymin-y+1)
+        startj = max(1, xmin-x+1)	
+        stopi = min(sprite_height, ymax-y+1) 
+        stopj = min(sprite_width, xmax-x+1)
 
         for i in starti:stopi, j in startj:stopj #there could be a faster way 
             if sprite_type.mask[i,j]
-                offy = obj.pos.y+i-1
-                offx = obj.pos.x+j-1
+                offy = y+i-1
+                offx = x+j-1
                 @inbounds canvas[:, offy-ymin+1,offx-xmin+1] = sprite_type.color
             end
         end
@@ -179,15 +191,6 @@ function draw(H, W, objs, sprites)
 end
 
 
-function sim(T)
-    (trace, _) = generate(model, (100, 100, T))
-    return trace
-end
-
-
-# module Model
-# using Gen
-# import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
 
 @gen (static) function obj_dynamics(obj::Object)
     pos ~ uniform_drift_position(obj.pos,2);
@@ -209,13 +212,7 @@ end
     return State(objs, sprites)
 end
 
-
-# @gen (static) function d
-
-
 unfold_step = Unfold(dynamics_and_render)
-
-
  
 @gen (static) function make_object(i, H, W, num_sprite_types)    
     sprite_index ~ uniform_discrete(1, num_sprite_types) 

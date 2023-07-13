@@ -230,6 +230,7 @@ end
     height ~ uniform_discrete(1,H)
     shape ~ bernoulli_2d(0.5, height, width)
     color ~ rgb_dist()
+    
     return Sprite(shape, color)
 end
 

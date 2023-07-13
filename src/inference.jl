@@ -56,12 +56,19 @@ as a simple first pass of object detection
 #     return (hi, wi)
 # end 
 
-@gen function rand_i_hi_wi(tr)
-    i ~ uniform_discrete(1, tr[:init => :num_sprite_types])	
-    shape = tr[:init => :init_sprites => i => :shape]
+@gen function get_random(tr)
+    #shape things 
+    shapei ~ uniform_discrete(1, tr[:init => :num_sprite_types])	
+    shape = tr[:init => :init_sprites => shapei => :shape]
     height, width = size(shape)
     hi ~ uniform_discrete(1, height) 
     wi ~ uniform_discrete(1, width)	
+
+    #color things 
+    colori ~ uniform_discrete(1, tr[:init => :num_sprite_types])
+    rcolorshift ~ normal(0.0, 0.1)
+    gcolorshift ~ normal(0.0, 0.1)	
+    bcolorshift ~ normal(0.0, 0.1)
 
 end 
 
@@ -121,11 +128,24 @@ function update_detect(tr, random_choices, retval, for_args)
         tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
     end
 
-    #recolor sprites TODO
-    for i=1:tr[:init => :num_sprite_types]
-        tr, = mh(tr, select((:init => :init_sprites => i => :color))) 
-    end
+    #recolor sprites 
+    # for i=1:tr[:init => :num_sprite_types]
+    #     #@show tr[:init => :init_sprites => i => :color]
+    #     tr, = mh(tr, select((:init => :init_sprites => i => :color))) 
+    # end
     
+    colori = random_choices[:colori]
+    rcolornew = random_choices[:rcolorshift] + tr[:init => :init_sprites => colori => :color][1]
+    gcolornew = random_choices[:gcolorshift] + tr[:init => :init_sprites => colori => :color][2]
+    bcolornew = random_choices[:bcolorshift] + tr[:init => :init_sprites => colori => :color][3]
+
+    new_trace_choices[(:init => :init_sprites => colori => :color)] = [rcolornew, gcolornew, bcolornew]	
+    #backward_choices[(:init => :init_sprites => colori => :color)] = tr[:init => :init_sprites => colori => :color]
+    backward_choices[:colori] = colori	
+    backward_choices[:rcolorshift] = - random_choices[:rcolorshift]
+    backward_choices[:gcolorshift] = - random_choices[:gcolorshift]
+    backward_choices[:bcolorshift] = - random_choices[:bcolorshift]
+
     #resprite objects
     for i=1:tr[:init => :N]
         tr, = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
@@ -158,17 +178,17 @@ function update_detect(tr, random_choices, retval, for_args)
 
 
     #reshape objects new way 
-    backward_choices[:i] = random_choices[:i]
+    backward_choices[:shapei] = random_choices[:shapei]
     backward_choices[:hi] = random_choices[:hi]
     backward_choices[:wi] = random_choices[:wi]
 
-    i = random_choices[:i]
+    shapei = random_choices[:shapei]
     hi = random_choices[:hi]
     wi = random_choices[:wi]
 
-    shape = tr[:init => :init_sprites => i => :shape]
+    shape = tr[:init => :init_sprites => shapei => :shape]
     shape[hi, wi] = 1 - shape[hi, wi]
-    new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
+    new_trace_choices[(:init => :init_sprites => shapei => :shape)] = shape
 
 
 
@@ -199,7 +219,7 @@ function process_first_frame_v2(frame, threshold=.05)
 
     for num_updates in 1:100 #no clue 
         #tr = update_detect(tr, rand_hilist_wilist ,frame)
-        tr, accepted = mh(tr, rand_i_hi_wi, (), update_detect)#tr is an arg but it is assumed
+        tr, accepted = mh(tr, get_random, (), update_detect)#tr is an arg but it is assumed
     end
 
     #init_obs = choicemap 

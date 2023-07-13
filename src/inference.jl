@@ -19,6 +19,75 @@ as a simple first pass of object detection
 """
 
 
+# @gen function randomness(height, width)
+#     hi ~ uniform_discrete(1, height)	#don;t actually want hi in the trace, look at split nerge example. one func for randomness
+#     wi ~ uniform_discrete(1, width)
+# end
+
+
+# @gen function randomness(tr)
+#     #hilist is empty list of integers 
+#     hilist = []
+#     #wilist is empty list of integers
+#     wilist = []
+
+
+
+#     #aaa idk if this datastructure works mappp aa 
+#     for i=1:tr[:init => :num_sprite_types]
+#         shape = tr[:init => :init_sprites => i => :shape]
+#         height, width = size(shape)
+#         hi ~ uniform_discrete(1, height)	#don;t actually want hi in the trace, look at split nerge example. one func for randomness
+#         wi ~ uniform_discrete(1, width)
+#         push!(hilist, hi)
+#         push!(wilist, wi)
+#     end
+#     #return hilist, wilist
+#     {hilist} = hilist
+#     {wilist} = wilist
+# end 
+
+# @gen function rand_hi_wi(i, tr)
+#     shape = tr[:init => :init_sprites => i => :shape]
+#     height, width = size(shape)
+#     hi ~ uniform_discrete(1, height)	#don;t actually want hi in the trace, look at split nerge example. one func for randomness
+#     wi ~ uniform_discrete(1, width)
+
+#     return (hi, wi)
+# end 
+
+@gen function rand_i_hi_wi(tr)
+    i ~ uniform_discrete(1, tr[:init => :num_sprite_types])	
+    shape = tr[:init => :init_sprites => i => :shape]
+    height, width = size(shape)
+    hi ~ uniform_discrete(1, height) 
+    wi ~ uniform_discrete(1, width)	
+
+end 
+
+
+
+# #should do mh for each sprite separately
+# all_rand_hi_wi = Map(rand_hi_wi)
+
+
+# @gen function rand_hilist_wilist(tr) #collect broke it?? what? is going on/ 
+#     hilist ~ all_rand_hi_wi(1:tr[:init => :num_sprite_types], [tr for _ in 1:tr[:init => :num_sprite_types]])
+#     @show hilist
+#     wilist ~ all_rand_hi_wi(1:tr[:init => :num_sprite_types], [tr for _ in 1:tr[:init => :num_sprite_types]])
+#     @show wilist
+# end 
+    
+
+
+
+# @gen function rand_hi_wi(tr)
+#     for i in range (1, tr[:init => :num_sprite_types])
+#         shape = tr[:init => :init_sprites => i => :shape]
+#         height, width = size(shape)
+#         hi ~ uniform_discrete(1, height)	#don;t actually want hi in the trace, look at split nerge example. one func for randomness
+#         wi ~ uniform_discrete(1, width)
+#     end
 
 
 
@@ -35,7 +104,12 @@ as a simple first pass of object detection
 #     {(:init => :init_sprites => sprite_index => :shape)} = shape #need to find a way for this to be a 
 # end 
 
-function update_detect(tr, frame)
+#involution 
+function update_detect(tr, random_choices, retval, for_args)
+    #@show random_choices
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+
     #update num objects 
     tr, = mh(tr, select(:N))
 
@@ -58,22 +132,53 @@ function update_detect(tr, frame)
     end
 
     #reshape objects TODO
-    for i=1:tr[:init => :num_sprite_types]
+    #@show get_args(random_choices)
+    
+
+    # # hilist = random_choices[:hilist] 	
+    # # @show hilist
+    # # wilist = random_choices[:wilist]	
+    # for i=1:tr[:init => :num_sprite_types]
+    #     @show random_choices[:hilist -> i -> :hi]
+
+
+    #     hi = hilist[i]	
+    #     wi = wilist[i]	
+    #     shape = tr[:init => :init_sprites => i => :shape]
+    #     #backward_choices[(:init => :init_sprites => i => :shape)] = shape
+    #     backward_choices[:hilist] = hilist
+    #     backward_choices[:wilist] = wilist
+    #     shape[hi, wi] = 1 - shape[hi, wi] 
+    #     #{(:init => :init_sprites => i => :shape)} = shape 
+    #     new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
+
+    #     #tr = mh(tr, small_shape_change, (tr, i,))
+    #     #tr, = mh(tr, select((:init => :init_sprites => i => :shape))) 
+    # end
+
+
+    #reshape objects new way 
+    backward_choices[:i] = random_choices[:i]
+    backward_choices[:hi] = random_choices[:hi]
+    backward_choices[:wi] = random_choices[:wi]
+
+    i = random_choices[:i]
+    hi = random_choices[:hi]
+    wi = random_choices[:wi]
+
+    shape = tr[:init => :init_sprites => i => :shape]
+    shape[hi, wi] = 1 - shape[hi, wi]
+    new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
 
 
 
-       # tr = mh(tr, small_shape_change, (tr, i,))
-
-
-
-        tr, = mh(tr, select((:init => :init_sprites => i => :shape))) 
-    end
 
     #add/delete TODO
 
     #split/merge TODO
-
-    tr
+    
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
 end
 
 function process_first_frame_v2(frame, threshold=.05)
@@ -93,7 +198,8 @@ function process_first_frame_v2(frame, threshold=.05)
     tr = generate(model, (H, W, 1), init_obs)[1]
 
     for num_updates in 1:100 #no clue 
-        tr = update_detect(tr, frame)
+        #tr = update_detect(tr, rand_hilist_wilist ,frame)
+        tr, accepted = mh(tr, rand_i_hi_wi, (), update_detect)#tr is an arg but it is assumed
     end
 
     #init_obs = choicemap 

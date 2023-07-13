@@ -2,7 +2,7 @@
 
 julia_version = "1.9.1"
 manifest_format = "2.0"
-project_hash = "b09641a69be4d08ad48cfd750c3c5dd009d28d43"
+project_hash = "0514b9f651b863f7898523860612b7e11918a1d9"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -354,6 +354,12 @@ repo-rev = "master"
 repo-url = "https://github.com/probcomp/Gen"
 uuid = "ea4f424c-a589-11e8-07c0-fd5c91b9da4a"
 version = "0.4.5"
+
+[[deps.GenParticleFilters]]
+deps = ["Distributions", "Gen", "Parameters", "Statistics"]
+git-tree-sha1 = "1009fe501115947ba57a9e9e90a3acd3e8d476bb"
+uuid = "56b76ac4-72ef-411e-b419-6d312ed86a6f"
+version = "0.1.8"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]

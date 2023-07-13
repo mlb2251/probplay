@@ -1,6 +1,7 @@
 using Revise
 using Gen
 using GenParticleFilters
+import GenSMCP3: @kernel
 
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
@@ -294,8 +295,6 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     
     return sample_unweighted_traces(state, num_samples)
 end
-
-import FunctionalCollections
 
 """
 Does gridding to propose new positions for an object in the vicinity

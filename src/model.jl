@@ -6,11 +6,11 @@ using Dates
 import Distributions
 
 @auto_hash_equals struct Vec
-    y::Float32
-    x::Float32
+    y::Float64
+    x::Float64
 end
 
-Vec(y::Int, x::Int) = Vec(Float32(y), Float32(x))
+Vec(y::Int, x::Int) = Vec(Float64(y), Float64(x))
 
 
 Base.:+(v1::Vec, v2::Vec) = Vec(v1.y + v2.y, v1.x + v2.x)
@@ -50,6 +50,8 @@ set_color(sprite::Sprite, color) = Sprite(sprite.mask, color)
 struct Object
     sprite_index :: Int  
     pos :: Vec
+    # vel :: Vec
+    # pos_noise :: Float64
 end
 
 set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos)
@@ -129,8 +131,6 @@ function Gen.logpdf(::ImageLikelihood, observed_image::Array{Float64,3}, rendere
     log_var = log(var)
     sum(i -> - (@inbounds abs2((observed_image[i] - rendered_image[i]) / var) + log(2π)) / 2 - log_var, eachindex(observed_image))
 end
-
-# @assert isapprox(Gen.logpdf(M.image_likelihood, vals, vals2, .1), Gen.logpdf(broadcasted_normal, vals - vals2, zeros(Float64,size(vals)), .1))
 
 
 function Gen.random(::ImageLikelihood, rendered_image, var)

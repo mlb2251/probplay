@@ -65,7 +65,7 @@ function color_labels(frames...; orig=nothing)
     max = maximum([maximum(frame) for frame in frames])
     res = []
     for frame in frames
-        colored = [RGB(HSV(px/max*360, .8, .7)) for px in frame]
+        colored = [RGB{Float64}(HSV(px/max*360, .8, .7)) for px in frame]
         colored[frame .== 0] .= RGB(0,0,0)
         orig !== nothing && (colored = vcat(colorview(RGB,orig), colored))
         push!(res,colored)

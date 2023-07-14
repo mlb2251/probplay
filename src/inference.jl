@@ -204,9 +204,66 @@ function update_detect(tr, random_choices, retval, for_args)
     (new_trace, backward_choices, weight)
 end
 
+#SIZE STUFF
+@gen function get_random_size(tr, i)
+    shape = tr[:init => :init_sprites => i => :shape]
+    h, w = size(shape)
+    #@show shape
+    
+    #random grow or shrink unless the sprite is one long (grow)
+    if({:hgrow_or_shrink} ~ bernoulli(h == 1 ? 1 : 0.3))
+        #grow
+        hchange ~ uniform_discrete(1, max(size(tr[:init => :observed_image])[2] - h, 1)) #change this? 
+    else 
+        #shrink 
+        hchange ~ uniform_discrete(1, h -1) 
+    end 
+
+
+    if({:wgrow_or_shrink} ~ bernoulli(w == 1 ? 1 : 0.3))
+        #grow
+        wchange ~ uniform_discrete(1, max(size(tr[:init => :observed_image])[3] - w, 1)) #change this? 
+    else 
+        #shrink 
+        wchange ~ uniform_discrete(1, w -1) 
+    end 
+end
+
+function size_involution(tr, shape_stuff, forward_retval, proposal_args)
+    i = proposal_args[1]
+    shape = tr[:init => :init_sprites => i => :shape]
+    h, w = size(shape)
+
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()	
+
+    function changedim(old, change, grow_or_shrink)
+        if grow_or_shrink == 1
+            return old + change
+        else
+            return old - change
+        end
+    end
+
+    newh = changedim(h, shape_stuff[:hchange], shape_stuff[:hgrow_or_shrink])	
+    neww = changedim(w, shape_stuff[:wchange], shape_stuff[:wgrow_or_shrink])
+
+    backward_choices[:hchange], backward_choices[:wchange] = shape_stuff[:hchange], shape_stuff[:wchange]
+    backward_choices[:hgrow_or_shrink], backward_choices[:wgrow_or_shrink] = 1 - shape_stuff[:hgrow_or_shrink], 1 - shape_stuff[:wgrow_or_shrink]
+
+
+    #need to not fill with all ones lmao TODO 
+    newshape = fill(1, (newh, neww))
+    new_trace_choices[(:init => :init_sprites => i => :shape)] = newshape
+
+
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+end
+
+    
 
 #SHAPE STUFF
-
 
 @gen function get_random_hi_wi(tr, i)
     shape = tr[:init => :init_sprites => i => :shape]
@@ -214,6 +271,7 @@ end
     hi ~ uniform_discrete(1, height)	
     wi ~ uniform_discrete(1, width)
 end 
+
 
 function shape_involution(tr, hi_wi, forward_retval, proposal_args)#what are last two for, prop[1] is i??
     i = proposal_args[1]
@@ -230,6 +288,7 @@ function shape_involution(tr, hi_wi, forward_retval, proposal_args)#what are las
     shape = tr[:init => :init_sprites => i => :shape]#will this work? 
 
     #swap pixel at that index 
+    #@show size(shape)
     shape[hi, wi] = 1 - shape[hi, wi]
 
     new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
@@ -296,6 +355,11 @@ function color_involution(tr, colors, forward_retval, proposal_args)
     (new_trace, backward_choices, weight)
 end 
 
+
+#COLOR VERSION 2
+#function color_set(tr)
+
+
 #SHIFTING STUFF 
 @gen function get_drift(tr, i)
     drifty ~ uniform_discrete(-10, 10)
@@ -324,47 +388,191 @@ function shift_involution(tr, drift, forward_retval, proposal_args)
     (new_trace, backward_choices, weight)
 end 
 
+#ADD REMOVE OBKECT 
+@gen function get_add_remove(tr)
+    n = tr[:init => :N]
+    num_sprite_types = tr[:init => :num_sprite_types]
+    H, W = size(tr[:init => :observed_image])
+    if({:add_or_remove} ~ bernoulli(n == 1 ? 1 : 0.3))
+        #adding an object 
+        ypos ~ uniform_discrete(1, H)
+        xpos ~ uniform_discrete(1, W)
+        
+        sprite_index ~ uniform_discrete(1, num_sprite_types)
+        
+    else 
+        remove_index ~ uniform_discrete(1, n)
+    end 
+
+end
+
+function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_args)
+    #TODO fix not perfect undoing because the ordering will be wrong 
+        
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+    N = tr[:init => :N]
+    backward_choices[:add_or_remove] = !add_remove_stuff[:add_or_remove]
+
+
+    if add_remove_stuff[:add_or_remove]
+        #add
+        new_trace_choices[(:init => :init_objs => N + 1 => :pos)] = Position(add_remove_stuff[:ypos], add_remove_stuff[:xpos])
+        
+        new_trace_choices[(:init => :init_objs => N + 1 => :sprite_index)] = add_remove_stuff[:sprite_index]
+
+        backward_choices[:remove_index] = N + 1
+        new_trace_choices[(:init => :N)] = N + 1
+        
+
+    else 
+        #remove 
+        remove_index = add_remove_stuff[:remove_index]
+        #shift all objects above index down by one 
+        pos = tr[:init => :init_objs => remove_index => :pos]
+        backward_choices[:ypos], backward_choices[:xpos] = pos.y, pos.x
+        backward_choices[:sprite_index] = tr[:init => :init_objs => remove_index => :sprite_index]
+        if remove_index < N
+            for n in remove_index+1:N
+                toshiftpos = tr[:init => :init_objs => n => :pos]
+                toshiftspriteindex = tr[:init => :init_objs => n => :sprite_index]
+
+                new_trace_choices[(:init => :init_objs => n - 1 => :pos)] = toshiftpos
+                new_trace_choices[(:init => :init_objs => n - 1 => :sprite_index)] = toshiftspriteindex
+            end 
+        end 
+
+        #remove Nth HOW 
+        new_trace_choices[(:init => :init_objs => N)] = nothing 
+        new_trace_choices[(:init => :N)] = N - 1
+    end
+
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+
+end 
+
+    
+    
+    
+
+#LAYERING STUFF
+@gen function get_layer_swap(tr)
+    n = tr[:init => :N]
+    
+    layer1 ~ uniform_discrete(1, n)
+    layer2 ~ uniform_discrete(1, n)#could force not equal 
+end
+
+function layer_involution(tr, layer_swap, forward_retval, proposal_args)
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+
+    l1 = layer_swap[:layer1]
+    l2 = layer_swap[:layer2]
+    #@show l1, l2
+
+
+    backward_choices[:layer1] = l1
+    backward_choices[:layer2] = l2
+
+    sprite1ind = tr[:init => :init_objs => l1 => :sprite_index]
+    sprite2ind = tr[:init => :init_objs => l2 => :sprite_index]
+    pos1 = tr[:init => :init_objs => l1 => :pos]
+    pos2 = tr[:init => :init_objs => l2 => :pos]	
+
+    new_trace_choices[(:init => :init_objs => l1 => :sprite_index)] = sprite2ind
+    new_trace_choices[(:init => :init_objs => l2 => :sprite_index)] = sprite1ind
+    new_trace_choices[(:init => :init_objs => l1 => :pos)] = pos2
+    new_trace_choices[(:init => :init_objs => l2 => :pos)] = pos1
+
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+
+end
+    
 
 function total_update(tr)
     #sprite proposals 
 
     #add/remove sprite TODO
-    tr, = mh(tr, select(:num_sprite_types))
+    tr, accepted = mh(tr, select(:num_sprite_types))
+    if accepted
+        print("sprite added/removed")
+    end 
 
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
     
 
 
     #recolor involution 
-        tr, accepted = mh(tr, get_random_new_color, (i,), color_involution)
+        # for _ in 1:10
+        #     tr, accepted = mh(tr, get_random_new_color, (i,), color_involution)
+        # end 
+        tr, accepted = mh(tr, select((:init => :init_sprites => i => :color))) 
+        if accepted
+            print("sprite color changed")
+        end 
+
+
+    #resize involution 
+        tr, accepted = mh(tr, get_random_size, (i,), size_involution)
+        if accepted
+            print("size changed")
+        end 
 
     #reshape involution 
         ##one random index
-        #tr, accepted = mh(tr, get_random_hi_wi, (i,), shape_involution)
-
-        #all indicies
-        height, width = size(tr[:init => :init_sprites => i => :shape])
-        for hi=1:height
-            for wi=1:width
-                tr, accepted = mh(tr, get_always_true, (i, hi, wi,), shape_involution_v2)
+        for _ in 1:10
+            tr, accepted = mh(tr, get_random_hi_wi, (i,), shape_involution)
+            if accepted
+                print("shape changed")
             end 
-        end
+        end 
+
+
+        # #all indicies
+        # height, width = size(tr[:init => :init_sprites => i => :shape])
+        # for hi=1:height
+        #     for wi=1:width
+        #         tr, accepted = mh(tr, get_always_true, (i, hi, wi,), shape_involution_v2)
+        #     end 
+        # end
+
+
     end 
 
     #object proposals 
 
     #add/remove object involution TODO
-    tr, = mh(tr, select(:N))
+    tr, accepted = mh(tr, get_add_remove, (), add_remove_involution)
+    if accepted
+        print("added/removed object")
+    end 
+
+
+
+    #relayer order objects
+    tr, accepted = mh(tr, get_layer_swap, (), layer_involution)
+    if accepted
+        print("relayered objects")
+    end 
 
     for i=1:tr[:init => :N]
         #shift objects involution 
         #tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
         #ideally use the uniform drift position we already have 
         tr, accepted = mh(tr, get_drift, (i,), shift_involution) #drift?
+        if accepted
+            print("drifted")
+        end 
 
         
         #resprite object involution ok. 
         tr, = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
+        if accepted
+            print("resprited")
+        end 
     
     end 
 
@@ -389,11 +597,15 @@ function process_first_frame_v2(frame, threshold=.05)
 
     tr = generate(model, (H, W, 1), init_obs)[1]
 
-    for num_updates in 1:100
+    for num_chunk_updates in 1:10
         #tr = update_detect(tr, rand_hilist_wilist ,frame)
         #tr, accepted = mh(tr, get_random, (), update_detect)#tr is an arg but it is assumed
+        C, H, W = size(tr[:init => :observed_image])
+        html_body(html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])))
+        for num_updates in 1:10
+            tr = total_update(tr)
 
-        tr = total_update(tr)
+        end
 
     end
 

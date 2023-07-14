@@ -21,6 +21,7 @@ struct Object
     pos :: Position
 end
 
+
 include("images.jl")
 
 @dist labeled_cat(labels, probs) = labels[categorical(probs)]

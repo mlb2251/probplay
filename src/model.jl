@@ -38,6 +38,66 @@ function inbounds_vec(v,H,W)
     Vec(min(max(1, v.y), H+1-EPSILON), min(max(1, v.x), W+1-EPSILON))
 end
 
+"""
+
+Types: Float, Int, Bool
+
+Stmt ::=
+    Pass
+    Assign(Var(t), Expr(t))
+    IfThenElse BExpr Stmt Stmt
+    While BExpr Stmt
+    Semi Stmt Stmt
+
+Var(t) ::= LocalVar(t) || Attr(t) Symbol || GlobalVar(t)
+
+Expr ::= FExpr || IExpr || BExpr
+
+FExpr ::= FConst(arbitrary float) || FAdd FExpr FExpr || FMul FExpr FExpr || FDist || Var(Float)
+IExpr ::= IConst(arbitrary int) || IAdd IExpr IExpr || IMul IExpr IExpr || IDist || Var(Int)
+BExpr ::= True || False || Var(Bool)
+
+FDist ::= Normal(FExpr,FExpr)
+
+BExpr ::=
+    Not BExpr
+    Lt Expr Expr
+    Eq Expr Expr
+
+
+
+CodeFunc(
+    Assign(Attr(:pos), Normal(Attr(:pos), FConst(0.1)))
+)
+
+"""
+
+
+abstract type CodeStmt end
+abstract type CodeExpr end
+
+struct CodeArg
+
+end
+
+struct CodeLibrary
+    fns::Vector{Expr}
+end
+
+struct CodeFunc
+    body::CodeStmt
+end
+
+struct CNormal
+    mu::Float64,
+    var::Float64
+end
+
+struct CNormal
+    mu::Float64,
+    var::Float64
+end
+
 
 struct Sprite
     mask::Matrix{Bool}

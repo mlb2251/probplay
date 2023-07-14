@@ -115,6 +115,7 @@ end
 function first_frame()
 
     #first_frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1]	
+    #@time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=100, bottom=20, left=20, tskip=4)[:,:,:,1:4], 4)
     @time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1:4], 4)
 
 

@@ -74,6 +74,9 @@ end
 
 
 
+
+
+
 # #should do mh for each sprite separately
 # all_rand_hi_wi = Map(rand_hi_wi)
 
@@ -201,6 +204,175 @@ function update_detect(tr, random_choices, retval, for_args)
     (new_trace, backward_choices, weight)
 end
 
+
+#SHAPE STUFF
+
+
+@gen function get_random_hi_wi(tr, i)
+    shape = tr[:init => :init_sprites => i => :shape]
+    height, width = size(shape)
+    hi ~ uniform_discrete(1, height)	
+    wi ~ uniform_discrete(1, width)
+end 
+
+function shape_involution(tr, hi_wi, forward_retval, proposal_args)#what are last two for, prop[1] is i??
+    i = proposal_args[1]
+    
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+
+    #random pixel index is same to reverse 
+    hi = hi_wi[:hi]
+    wi = hi_wi[:wi]
+    backward_choices[:hi] = hi
+    backward_choices[:wi] = wi
+
+    shape = tr[:init => :init_sprites => i => :shape]#will this work? 
+
+    #swap pixel at that index 
+    shape[hi, wi] = 1 - shape[hi, wi]
+
+    new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+end 
+
+
+#SHAPE VERSION 2
+
+#doubt i need this 
+@gen function get_always_true(tr, i, hi, wi)
+    useless ~ uniform_discrete(1, 1)
+end 
+
+function shape_involution_v2(tr, always_true, forward_retval, proposal_args)
+    i, hi, wi = proposal_args
+    shape = tr[:init => :init_sprites => i => :shape]
+    height, width = size(shape)
+
+    backward_choices = choicemap()
+    backward_choices[:useless] = always_true[:useless]
+
+    new_trace_choices = choicemap()
+    #swap pixel at that index
+    shape[hi, wi] = 1 - shape[hi, wi]
+    new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
+
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+end 
+
+            
+
+#COLOR STUFF
+
+@gen function get_random_new_color(tr, i)
+    #can't do gaus because it goes past 1 so the log pdf will get messed up 
+    r, g, b = tr[:init => :init_sprites => i => :color]
+
+    radius = 0.1
+
+    #mins are maximum of values minus radius and zero 
+    mins = [max(0, r - radius), max(0, g - radius), max(0, b - radius)]
+    maxs = [min(1, r + radius), min(1, g + radius), min(1, b + radius)]
+
+    rnew ~ uniform(mins[1], maxs[1])	
+    gnew ~ uniform(mins[2], maxs[2])
+    bnew ~ uniform(mins[3], maxs[3])
+    
+end
+
+function color_involution(tr, colors, forward_retval, proposal_args)
+    i = proposal_args[1]
+
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+
+    backward_choices[:rnew], backward_choices[:bnew], backward_choices[:gnew] = tr[:init => :init_sprites => i => :color]
+
+    new_trace_choices[(:init => :init_sprites => i => :color)] = [colors[:rnew], colors[:gnew], colors[:bnew]]
+
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+end 
+
+#SHIFTING STUFF 
+@gen function get_drift(tr, i)
+    drifty ~ uniform_discrete(-10, 10)
+    driftx ~ uniform_discrete(-10, 10)
+end 
+
+
+function shift_involution(tr, drift, forward_retval, proposal_args) 
+    i = proposal_args[1]
+
+    #@show drift 
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+
+    backward_choices[:drifty] = -drift[:drifty]
+    backward_choices[:driftx] = -drift[:driftx]
+
+    pos = tr[:init => :init_objs => i => :pos]
+    newy = pos.y + drift[:drifty]
+    newx = pos.x + drift[:driftx]
+
+    newpos = Position(newy, newx)
+    new_trace_choices[(:init => :init_objs => i => :pos)] = newpos
+
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+end 
+
+
+function total_update(tr)
+    #sprite proposals 
+
+    #add/remove sprite TODO
+    tr, = mh(tr, select(:num_sprite_types))
+
+    for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
+    
+
+
+    #recolor involution 
+        tr, accepted = mh(tr, get_random_new_color, (i,), color_involution)
+
+    #reshape involution 
+        ##one random index
+        #tr, accepted = mh(tr, get_random_hi_wi, (i,), shape_involution)
+
+        #all indicies
+        height, width = size(tr[:init => :init_sprites => i => :shape])
+        for hi=1:height
+            for wi=1:width
+                tr, accepted = mh(tr, get_always_true, (i, hi, wi,), shape_involution_v2)
+            end 
+        end
+    end 
+
+    #object proposals 
+
+    #add/remove object involution TODO
+    tr, = mh(tr, select(:N))
+
+    for i=1:tr[:init => :N]
+        #shift objects involution 
+        #tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
+        #ideally use the uniform drift position we already have 
+        tr, accepted = mh(tr, get_drift, (i,), shift_involution) #drift?
+
+        
+        #resprite object involution ok. 
+        tr, = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
+    
+    end 
+
+    #tr, accepted = mh(tr, get_random, (), update_detect)#tr is an arg but it is assumed
+    tr
+end 
+
+
 function process_first_frame_v2(frame, threshold=.05)
     #run update detect a bunch TODO 
 
@@ -217,9 +389,12 @@ function process_first_frame_v2(frame, threshold=.05)
 
     tr = generate(model, (H, W, 1), init_obs)[1]
 
-    for num_updates in 1:100 #no clue 
+    for num_updates in 1:100
         #tr = update_detect(tr, rand_hilist_wilist ,frame)
-        tr, accepted = mh(tr, get_random, (), update_detect)#tr is an arg but it is assumed
+        #tr, accepted = mh(tr, get_random, (), update_detect)#tr is an arg but it is assumed
+
+        tr = total_update(tr)
+
     end
 
     #init_obs = choicemap 
@@ -256,7 +431,7 @@ function process_first_frame(frame, threshold=.05)
         while !isempty(pixel_stack)
             (y,x) = pop!(pixel_stack)
 
-            for (dy,dx) in ((0,-1), (-1,0), (0,1), (1,0), (1,1), (1,-1), (-1,1), (-1,-1))
+            for (dy,dx) in ((0,-1), (-1,0), (0,1), (1,0), (1,1), (1,-1), (-1,1), (-1,-1), (0,0))
                 (x+dx > 0 && y+dy > 0 && x+dx <= W && y+dy <= H) || continue
 
                 # skip if already assigned to a cluster

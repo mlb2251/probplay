@@ -114,7 +114,7 @@ end
 
 function html_render(;open=true, publish::Union{Bool,Nothing}=nothing)
     if isnothing(publish)
-        publish = occursin("csail.mit.edu", gethostname())
+        publish = occursin("csail.mit.edu", gethostname()) && occursin("sketch", gethostname())
     end
     full_path = joinpath(Base.Filesystem.pwd(), "out/html", curr_html.dir)
     res = """
@@ -156,7 +156,7 @@ function html_publish(path)
         path = path[:end-1] # we need to trim trailing "/" to make basename() work
     end
     publish_site = get_secret("publish_site") * "/" * basename(path)
-    if occursin("csail.mit.edu", gethostname())
+    if occursin("csail.mit.edu", gethostname()) && occursin("sketch", gethostname())
         publish_dir = get_secret("publish_dir") * "/" * basename(path)
         println("On CSAIL network: copying files to public site")
         cp(path, publish_dir)

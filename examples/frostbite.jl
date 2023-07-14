@@ -125,6 +125,10 @@ function particle_large_birds()
     @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:30], 8);
 end
 
+function particle_full_frostbite()
+    @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), tskip=4)[:,:,:,1:30], 8);
+end
+
 function particle_large()
     @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=1, tskip=4)[:,:,:,1:30], 8);
 end

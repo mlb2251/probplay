@@ -1,3 +1,5 @@
+import DynamicForwardDiff: Dual
+
 function objs_from_trace(trace, t)
     (H,W,T) = get_args(trace)
     @assert t <= T
@@ -27,7 +29,12 @@ function sprites_from_trace(trace, t)
         
         shape = trace[:init => :init_sprites => i => :shape]
 
-        sprite = Sprite(shape, color)
+        if color isa Vector{Dual{Nothing, Float64}}
+            sprite = Sprite(shape, [color[1].value, color[2].value, color[3].value])
+        else
+            sprite = Sprite(shape, color)
+        end
+
         push!(sprites, sprite)
     end
     sprites

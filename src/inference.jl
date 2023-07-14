@@ -1,7 +1,7 @@
 using Revise
 using Gen
 using GenParticleFilters
-import GenSMCP3: @kernel
+using GenSMCP3
 
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
@@ -43,7 +43,7 @@ function process_first_frame(frame, threshold=.05)
         while !isempty(pixel_stack)
             (y,x) = pop!(pixel_stack)
 
-            for (dy,dx) in ((0,-1), (-1,0), (0,1), (1,0), (1,1), (1,-1), (-1,1), (-1,-1))
+            for (dy,dx) in ((0,-1), (-1,0), (0,1), (1,0), (1,1), (1,-1), (-1,1), (-1,-1), (0,0))
                 (x+dx > 0 && y+dy > 0 && x+dx <= W && y+dy <= H) || continue
 
                 # skip if already assigned to a cluster
@@ -260,9 +260,22 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         # @show state.log_weights, weights
         # maybe_resample!(state, ess_threshold=num_particles/2, verbose=true)
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
-        # particle_filter_step!(state, (H,W,t), (NoChange(),NoChange(),UnknownChange()), obs)
+        # @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
+        #     obs, fwd_proposal, (obs,))
+
+        # Rejuvenation
+        # todo currently not getting "credit" for these rejuv steps
+        for i in 1:num_particles
+            rejuv(state.traces[i])
+        end
+
         @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
-            obs, grid_proposal, (obs,))
+            obs, SMCP3Update(
+                fwd_proposal_naive,
+                bwd_proposal_naive,
+                (obs,),
+                (obs,)
+            ))
     end
 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
@@ -295,6 +308,158 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     
     return sample_unweighted_traces(state, num_samples)
 end
+
+function rejuv(trace)
+    return trace, 0.
+end
+
+@inline function get_pos(trace, obj_id, t)
+    if t == 0
+        trace[:init => :init_objs => obj_id => :pos]
+    else
+        trace[:steps => t => :objs => obj_id => :pos]
+    end
+end
+
+@kernel function fwd_proposal_naive(prev_trace, obs)
+    # return (
+    #     choicemap((:init => :N, prev_trace[:init => :N]+1)),
+    #     choicemap()
+    # )
+
+    (H,W,prev_T) = get_args(prev_trace)
+    t = prev_T
+    samples_per_obj = 20
+    observed_image = obs[(:steps => t => :observed_image)]
+
+    prev_objs = objs_from_trace(prev_trace, t - 1)
+    prev_sprites = sprites_from_trace(prev_trace, 0) # todo t=0 for now bc no changing sprites over time
+
+    # bwd_choices = choicemap()
+    trace_updates = choicemap()
+
+    for obj_id in 1:prev_trace[:init => :N]
+
+        # get previous position
+        prev_pos = get_pos(prev_trace, obj_id, t-1)
+
+        positions = Vec[]
+
+        for j in 1:samples_per_obj
+            pos = {j => :pos} ~  normal_vec(prev_pos, .5)
+            push!(positions, pos)
+        end
+
+        # manually update, partial draw
+        scores = Float64[]
+        #for each position, score the new image section around the object 
+        (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
+
+        # get a shared bounding box around all the positions
+        ((box_min_y, box_min_x),(box_max_y, box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
+        box_max_y = min(box_max_y + sprite_height, H)
+        box_max_x = min(box_max_x + sprite_width, W)
+
+        objects_one_moved = prev_objs[:]
+        cropped_obs = observed_image[:, box_min_y:box_max_y, box_min_x:box_max_x]
+
+        for pos in positions
+            # move the object
+            objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
+            drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, box_min_y, box_max_y, box_min_x, box_max_x) 
+            # todo var=0.1 is hardcoded for now
+            score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
+            push!(scores, score)
+        end 
+        
+        #making the scores into probabilities 
+        scores_logsumexp = logsumexp(scores)
+        scores =  exp.(scores .- scores_logsumexp)
+
+        # sample the actual position
+        new_pos ~ labeled_cat(positions, scores)
+
+        trace_updates[:steps => t => :objs => obj_id => :pos] = new_pos
+        
+    end
+    
+
+    return (
+        trace_updates, # (:init => :N, prev_trace[:init => :N]+1)
+        choicemap()
+    )
+end
+
+@kernel function bwd_proposal_naive(next_trace, obs)
+    return (
+        choicemap(),
+        choicemap()
+    )
+end
+
+# @kernel function fwd_proposal(prev_trace, obs)
+
+#     (H,W,prev_T) = get_args(prev_trace)
+#     t = prev_T
+#     grid_size = 2
+#     observed_image = obs[(:steps => t => :observed_image)]
+
+#     prev_objs = objs_from_trace(prev_trace, t - 1)
+#     prev_sprites = sprites_from_trace(prev_trace, 0) # todo t=0 for now bc no changing sprites over time
+
+#     # now for each object, propose and sample changes 
+#     for obj_id in 1:prev_trace[:init => :N]
+
+#         # get previous position
+#         if t == 1
+#             prev_pos = prev_trace[:init => :init_objs => obj_id => :pos]
+#         else
+#             prev_pos = prev_trace[:steps => t - 1 => :objs => obj_id => :pos]
+#         end
+
+#         #way to get positions that avoids negatives, todo fix 
+#         positions = [Vec(prev_pos.y+dy, prev_pos.x+dx) for dx in -grid_size:grid_size, dy in -grid_size:grid_size]
+        
+#         # flatten
+#         positions = reshape(positions, :)
+
+#         #manually update, partial draw
+#         scores = Float64[]
+#         #for each position, score the new image section around the object 
+#         (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
+
+#         # get a shared bounding box around all the positions
+#         ((box_min_y, box_min_x),
+#         (box_max_y, box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
+#         box_max_y = min(box_max_y + sprite_height, H)
+#         box_max_x = min(box_max_x + sprite_width, W)
+
+#         objects_one_moved = prev_objs[:]
+#         cropped_obs = observed_image[:, box_min_y:box_max_y, box_min_x:box_max_x]
+
+#         for pos in positions
+#             # move the object
+#             objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
+#             drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, box_min_y, box_max_y, box_min_x, box_max_x) 
+#             # todo var=0.1 is hardcoded for now
+#             score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
+#             push!(scores, score)
+#         end 
+        
+#         #making the scores into probabilities 
+#         scores_logsumexp = logsumexp(scores)
+#         scores =  exp.(scores .- scores_logsumexp)
+
+#         # sample the actual position
+#         pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)
+#     end
+#     nothing
+#     # return (
+#     #     choicemap(),
+#     #     choicemap()
+#     # )
+# end
+
 
 """
 Does gridding to propose new positions for an object in the vicinity
@@ -340,18 +505,18 @@ of the current position
         (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
 
         # get a shared bounding box around all the positions
-        ((relevant_box_min_y, relevant_box_min_x),
-        (relevant_box_max_y, relevant_box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
-        relevant_box_max_y = min(relevant_box_max_y + sprite_height, H)
-        relevant_box_max_x = min(relevant_box_max_x + sprite_width, W)
+        ((box_min_y, box_min_x),
+        (box_max_y, box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
+        box_max_y = min(box_max_y + sprite_height, H)
+        box_max_x = min(box_max_x + sprite_width, W)
 
         objects_one_moved = prev_objs[:]
-        cropped_obs = observed_image[:, relevant_box_min_y:relevant_box_max_y, relevant_box_min_x:relevant_box_max_x]
+        cropped_obs = observed_image[:, box_min_y:box_max_y, box_min_x:box_max_x]
 
         for pos in positions
             # move the object
             objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
-            drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x) 
+            drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, box_min_y, box_max_y, box_min_x, box_max_x) 
             # todo var=0.1 is hardcoded for now
             score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
             push!(scores, score)

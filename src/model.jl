@@ -124,7 +124,7 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
     for obj::Object in objs
         sprite_index = obj.sprite_index
-        sprite_type = sprites[sprite_index]
+        sprite_type = sprites[sprite_index]::Sprite
 
         sprite_height, sprite_width = size(sprite_type.mask)
 
@@ -139,13 +139,11 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
         stopi = min(sprite_height, ymax-obj.pos.y+1) 
         stopj = min(sprite_width, xmax-obj.pos.x+1)
 
-        for i in starti:stopi, j in startj:stopj #there could be a faster way 
-            if sprite_type.mask[i,j]
-                offy = obj.pos.y+i-1
-                offx = obj.pos.x+j-1
-                @inbounds canvas[:, offy-ymin+1,offx-xmin+1] = sprite_type.color
-            end
-        end
+        mask = @views sprite_type.mask[starti:stopi, startj:stopj]
+        mask = reshape(mask, 1, size(mask)...)
+
+        target = @views canvas[:, obj.pos.y+starti-ymin : obj.pos.y+stopi-ymin , obj.pos.x+startj-xmin : obj.pos.x+stopj-xmin]
+        target .= ifelse.(mask, sprite_type.color, target)
     end
     canvas 
 end 
@@ -246,7 +244,7 @@ make_sprites = Map(make_type)
 
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
-@gen function init_model(H,W,var)
+@gen (static) function init_model(H,W,var)
     num_sprite_types ~ poisson_plus_1(4)
     N ~ poisson(7)
     sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprite_types), [H for _ in 1:num_sprite_types], [W for _ in 1:num_sprite_types]) 
@@ -256,7 +254,7 @@ make_sprites = Map(make_type)
     rendered = draw_region(objs, sprites, 1, H, 1, W)
     {:observed_image} ~ image_likelihood(rendered, var)
 
-    State(objs, sprites) 
+    return State(objs, sprites) 
 end
 
 # #testing

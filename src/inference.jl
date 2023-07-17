@@ -115,94 +115,94 @@ end
 # end 
 
 #involution 
-function update_detect(tr, random_choices, retval, for_args)
-    #@show random_choices
-    new_trace_choices = choicemap()
-    backward_choices = choicemap()
+# function update_detect(tr, random_choices, retval, for_args)
+#     #@show random_choices
+#     new_trace_choices = choicemap()
+#     backward_choices = choicemap()
 
-    #update num objects 
-    tr, = mh(tr, select(:N))
+#     #update num objects 
+#     tr, = mh(tr, select(:N))
 
-    #update num sprites 
-    tr, = mh(tr, select(:num_sprite_types))
+#     #update num sprites 
+#     tr, = mh(tr, select(:num_sprite_types))
 
-    #update object positions
-    for i=1:tr[:init => :N]#init defined in model
-        tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
-    end
+#     #update object positions
+#     for i=1:tr[:init => :N]#init defined in model
+#         tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
+#     end
 
-    #recolor sprites 
-    # for i=1:tr[:init => :num_sprite_types]
-    #     #@show tr[:init => :init_sprites => i => :color]
-    #     tr, = mh(tr, select((:init => :init_sprites => i => :color))) 
-    # end
+#     #recolor sprites 
+#     # for i=1:tr[:init => :num_sprite_types]
+#     #     #@show tr[:init => :init_sprites => i => :color]
+#     #     tr, = mh(tr, select((:init => :init_sprites => i => :color))) 
+#     # end
     
-    colori = random_choices[:colori]
-    rcolornew = random_choices[:rcolorshift] + tr[:init => :init_sprites => colori => :color][1]
-    gcolornew = random_choices[:gcolorshift] + tr[:init => :init_sprites => colori => :color][2]
-    bcolornew = random_choices[:bcolorshift] + tr[:init => :init_sprites => colori => :color][3]
+#     colori = random_choices[:colori]
+#     rcolornew = random_choices[:rcolorshift] + tr[:init => :init_sprites => colori => :color][1]
+#     gcolornew = random_choices[:gcolorshift] + tr[:init => :init_sprites => colori => :color][2]
+#     bcolornew = random_choices[:bcolorshift] + tr[:init => :init_sprites => colori => :color][3]
 
-    new_trace_choices[(:init => :init_sprites => colori => :color)] = [rcolornew, gcolornew, bcolornew]	
-    #backward_choices[(:init => :init_sprites => colori => :color)] = tr[:init => :init_sprites => colori => :color]
-    backward_choices[:colori] = colori	
-    backward_choices[:rcolorshift] = - random_choices[:rcolorshift]
-    backward_choices[:gcolorshift] = - random_choices[:gcolorshift]
-    backward_choices[:bcolorshift] = - random_choices[:bcolorshift]
+#     new_trace_choices[(:init => :init_sprites => colori => :color)] = [rcolornew, gcolornew, bcolornew]	
+#     #backward_choices[(:init => :init_sprites => colori => :color)] = tr[:init => :init_sprites => colori => :color]
+#     backward_choices[:colori] = colori	
+#     backward_choices[:rcolorshift] = - random_choices[:rcolorshift]
+#     backward_choices[:gcolorshift] = - random_choices[:gcolorshift]
+#     backward_choices[:bcolorshift] = - random_choices[:bcolorshift]
 
-    #resprite objects
-    for i=1:tr[:init => :N]
-        tr, = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
-    end
+#     #resprite objects
+#     for i=1:tr[:init => :N]
+#         tr, = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
+#     end
 
-    #reshape objects TODO
-    #@show get_args(random_choices)
+#     #reshape objects TODO
+#     #@show get_args(random_choices)
     
 
-    # # hilist = random_choices[:hilist] 	
-    # # @show hilist
-    # # wilist = random_choices[:wilist]	
-    # for i=1:tr[:init => :num_sprite_types]
-    #     @show random_choices[:hilist -> i -> :hi]
+#     # # hilist = random_choices[:hilist] 	
+#     # # @show hilist
+#     # # wilist = random_choices[:wilist]	
+#     # for i=1:tr[:init => :num_sprite_types]
+#     #     @show random_choices[:hilist -> i -> :hi]
 
 
-    #     hi = hilist[i]	
-    #     wi = wilist[i]	
-    #     shape = tr[:init => :init_sprites => i => :shape]
-    #     #backward_choices[(:init => :init_sprites => i => :shape)] = shape
-    #     backward_choices[:hilist] = hilist
-    #     backward_choices[:wilist] = wilist
-    #     shape[hi, wi] = 1 - shape[hi, wi] 
-    #     #{(:init => :init_sprites => i => :shape)} = shape 
-    #     new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
+#     #     hi = hilist[i]	
+#     #     wi = wilist[i]	
+#     #     shape = tr[:init => :init_sprites => i => :shape]
+#     #     #backward_choices[(:init => :init_sprites => i => :shape)] = shape
+#     #     backward_choices[:hilist] = hilist
+#     #     backward_choices[:wilist] = wilist
+#     #     shape[hi, wi] = 1 - shape[hi, wi] 
+#     #     #{(:init => :init_sprites => i => :shape)} = shape 
+#     #     new_trace_choices[(:init => :init_sprites => i => :shape)] = shape
 
-    #     #tr = mh(tr, small_shape_change, (tr, i,))
-    #     #tr, = mh(tr, select((:init => :init_sprites => i => :shape))) 
-    # end
-
-
-    #reshape objects new way 
-    backward_choices[:shapei] = random_choices[:shapei]
-    backward_choices[:hi] = random_choices[:hi]
-    backward_choices[:wi] = random_choices[:wi]
-
-    shapei = random_choices[:shapei]
-    hi = random_choices[:hi]
-    wi = random_choices[:wi]
-
-    shape = tr[:init => :init_sprites => shapei => :shape]
-    shape[hi, wi] = 1 - shape[hi, wi]
-    new_trace_choices[(:init => :init_sprites => shapei => :shape)] = shape
+#     #     #tr = mh(tr, small_shape_change, (tr, i,))
+#     #     #tr, = mh(tr, select((:init => :init_sprites => i => :shape))) 
+#     # end
 
 
+#     #reshape objects new way 
+#     backward_choices[:shapei] = random_choices[:shapei]
+#     backward_choices[:hi] = random_choices[:hi]
+#     backward_choices[:wi] = random_choices[:wi]
+
+#     shapei = random_choices[:shapei]
+#     hi = random_choices[:hi]
+#     wi = random_choices[:wi]
+
+#     shape = tr[:init => :init_sprites => shapei => :shape]
+#     shape[hi, wi] = 1 - shape[hi, wi]
+#     new_trace_choices[(:init => :init_sprites => shapei => :shape)] = shape
 
 
-    #add/delete TODO
 
-    #split/merge TODO
+
+#     #add/delete TODO
+
+#     #split/merge TODO
     
-    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
-    (new_trace, backward_choices, weight)
-end
+#     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+#     (new_trace, backward_choices, weight)
+# end
 
 #SIZE STUFF
 @gen function get_random_size(tr, i)
@@ -255,6 +255,8 @@ function size_involution(tr, shape_stuff, forward_retval, proposal_args)
     #need to not fill with all ones lmao TODO 
     newshape = fill(1, (newh, neww))
     new_trace_choices[(:init => :init_sprites => i => :shape)] = newshape
+    new_trace_choices[(:init => :init_sprites => i => :width)] = neww
+    new_trace_choices[(:init => :init_sprites => i => :height)] = newh
 
 
     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
@@ -285,7 +287,7 @@ function shape_involution(tr, hi_wi, forward_retval, proposal_args)#what are las
     backward_choices[:hi] = hi
     backward_choices[:wi] = wi
 
-    shape = tr[:init => :init_sprites => i => :shape]#will this work? 
+    shape = copy(tr[:init => :init_sprites => i => :shape]) #will this work? 
 
     #swap pixel at that index 
     #@show size(shape)
@@ -300,9 +302,9 @@ end
 #SHAPE VERSION 2
 
 #doubt i need this 
-@gen function get_always_true(tr, i, hi, wi)
-    useless ~ uniform_discrete(1, 1)
-end 
+# @gen function get_always_true(tr, i, hi, wi)
+#     useless ~ uniform_discrete(1, 1)
+# end 
 
 function shape_involution_v2(tr, always_true, forward_retval, proposal_args)
     i, hi, wi = proposal_args
@@ -498,7 +500,7 @@ function total_update(tr)
     #add/remove sprite TODO
     tr, accepted = mh(tr, select(:num_sprite_types))
     if accepted
-        print("sprite added/removed")
+        # print("sprite added/removed")
     end 
 
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
@@ -511,14 +513,14 @@ function total_update(tr)
         # end 
         tr, accepted = mh(tr, select((:init => :init_sprites => i => :color))) 
         if accepted
-            print("sprite color changed")
+            # print("sprite color changed")
         end 
 
 
     #resize involution 
         tr, accepted = mh(tr, get_random_size, (i,), size_involution)
         if accepted
-            print("size changed")
+            # print("size changed")
         end 
 
     #reshape involution 
@@ -526,7 +528,7 @@ function total_update(tr)
         for _ in 1:10
             tr, accepted = mh(tr, get_random_hi_wi, (i,), shape_involution)
             if accepted
-                print("shape changed")
+                # print("shape changed")
             end 
         end 
 
@@ -547,7 +549,7 @@ function total_update(tr)
     #add/remove object involution TODO
     tr, accepted = mh(tr, get_add_remove, (), add_remove_involution)
     if accepted
-        print("added/removed object")
+        # print("added/removed object")
     end 
 
 
@@ -555,7 +557,7 @@ function total_update(tr)
     #relayer order objects
     tr, accepted = mh(tr, get_layer_swap, (), layer_involution)
     if accepted
-        print("relayered objects")
+        # print("relayered objects")
     end 
 
     for i=1:tr[:init => :N]
@@ -564,14 +566,14 @@ function total_update(tr)
         #ideally use the uniform drift position we already have 
         tr, accepted = mh(tr, get_drift, (i,), shift_involution) #drift?
         if accepted
-            print("drifted")
+            # print("drifted")
         end 
 
         
         #resprite object involution ok. 
         tr, = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
         if accepted
-            print("resprited")
+            # print("resprited")
         end 
     
     end 
@@ -581,7 +583,7 @@ function total_update(tr)
 end 
 
 
-function process_first_frame_v2(frame, threshold=.05)
+function process_first_frame_v2(frame, threshold=.05, num_particles=8)
     #run update detect a bunch TODO 
 
     (C, H, W) = size(frame)
@@ -595,26 +597,46 @@ function process_first_frame_v2(frame, threshold=.05)
         #(:init => :num_sprite_types, length(sprites)),
     )
 
-    tr = generate(model, (H, W, 1), init_obs)[1]
+    # (cluster, objs, sprites) = process_first_frame(frame)
+    # init_obs = build_init_obs(H,W, sprites, objs, frame)
 
-    for num_chunk_updates in 1:10
-        #tr = update_detect(tr, rand_hilist_wilist ,frame)
-        #tr, accepted = mh(tr, get_random, (), update_detect)#tr is an arg but it is assumed
-        C, H, W = size(tr[:init => :observed_image])
-        html_body(html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])))
-        for num_updates in 1:10
-            tr = total_update(tr)
 
+    traces = [generate(model, (H, W, 1), init_obs)[1] for _ in 1:num_particles]
+
+    table = ["Particle $i" for i in 1:num_particles]
+
+    for i in 1:1000
+        if i % 50 == 1
+            println("update: $i")
+            table = hcat(table, [html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])) for tr in traces])
         end
+        for j in 1:num_particles
+            traces[j] = total_update(traces[j])
+            # N = traces[j][:init => :N]
+            # M = traces[j][:init => :num_sprite_types]
+            # sprite_area = sum([traces[j][:init => :init_sprites => k => :width] * traces[j][:init => :init_sprites => k => :height] for k in 1:M],init=0)
+            # @show N
+            # @show M
+            # @show sprite_area
 
+            # @show length(traces[j][:init => :init_objs])
+            # @show length(traces[j][:init => :init_sprites])
+        end
     end
+
+    html_body(html_table(table))
+
+    # return traces
+
+    # @show traces[1][:init => :init_sprites]
+
 
     #init_obs = choicemap 
 
     #@show tr 
     
 
-    Gen.get_choices(tr)	
+    # Gen.get_choices(tr)	
 
 end 
 
@@ -755,9 +777,9 @@ function process_first_frame(frame, threshold=.05)
 
 end
 
-function build_init_obs(H,W, sprites, objs, observed_images)
+function build_init_obs(H,W, sprites, objs, first_frame)
     init_obs = choicemap(
-        (:init => :observed_image, observed_images[:,:,:,1]),
+        (:init => :observed_image, first_frame),
         (:init => :N, length(objs)),
         (:init => :num_sprite_types, length(sprites)),
     )
@@ -784,10 +806,10 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     # construct initial observations
     (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
 
-    #init_obs = build_init_obs(H,W, sprites, objs, observed_images)
+    init_obs = build_init_obs(H,W, sprites, objs, observed_images[:,:,:,1])
 
     #new version 
-    init_obs = process_first_frame_v2(observed_images[:,:,:,1])
+    # init_obs = process_first_frame_v2(observed_images[:,:,:,1])
 
 
     state = pf_initialize(model, (H,W,1), init_obs, num_particles)

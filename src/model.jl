@@ -244,13 +244,11 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
         stopi = min(sprite_height, ymax-y+1) 
         stopj = min(sprite_width, xmax-x+1)
 
-        for i in starti:stopi, j in startj:stopj #there could be a faster way 
-            if sprite.mask[i,j]
-                offy = y+i-1
-                offx = x+j-1
-                @inbounds canvas[:, offy-ymin+1,offx-xmin+1] = sprite.color
-            end
-        end
+        mask = @views sprite_type.mask[starti:stopi, startj:stopj]
+        mask = reshape(mask, 1, size(mask)...)
+
+        target = @views canvas[:, obj.pos.y+starti-ymin : obj.pos.y+stopi-ymin , obj.pos.x+startj-xmin : obj.pos.x+stopj-xmin]
+        target .= ifelse.(mask, sprite_type.color, target)
     end
     canvas 
 end 

@@ -2,9 +2,9 @@ using Atari
 using Gen
 
 
-function tff()
+function tff(;particles=8, steps=1000)
     fresh(); 
-    first_frame()
+    first_frame(particles=particles, steps=steps)
     render();
 end
 
@@ -111,7 +111,7 @@ function get_choices_tiny()
     Gen.get_choices(generate(model, (2, 2, 3))[1])
 end
 
-function first_frame()
+function first_frame(;particles=8, steps=1000)
 
     #first_frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1]	
     #@time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=100, bottom=20, left=20, tskip=4)[:,:,:,1:4], 4)
@@ -122,6 +122,6 @@ function first_frame()
 
     html_body("<h1>Observations</h1>", html_img(frame))
     
-    Atari.process_first_frame_v2(frame)
+    Atari.process_first_frame_v2(frame; num_particles=particles, steps=steps)
 end
 

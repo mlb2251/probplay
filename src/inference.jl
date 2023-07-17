@@ -583,7 +583,7 @@ function total_update(tr)
 end 
 
 
-function process_first_frame_v2(frame, threshold=.05, num_particles=8)
+function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=1000)
     #run update detect a bunch TODO 
 
     (C, H, W) = size(frame)
@@ -603,12 +603,20 @@ function process_first_frame_v2(frame, threshold=.05, num_particles=8)
 
     traces = [generate(model, (H, W, 1), init_obs)[1] for _ in 1:num_particles]
 
-    table = ["Particle $i" for i in 1:num_particles]
+    table = fill("", num_particles*2, 1)
+    for i in 1:num_particles
+        table[i*2,1] = "Particle $i"
+    end
 
-    for i in 1:1000
+    for i in 1:steps
         if i % 50 == 1
             println("update: $i")
-            table = hcat(table, [html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])) for tr in traces])
+            col = String[]
+            for tr in traces
+                push!(col, html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])))
+                push!(col, "N=$(tr[:init => :N])<br>sprites=$(tr[:init => :num_sprite_types])")
+            end
+            table = hcat(table, col)
         end
         for j in 1:num_particles
             traces[j] = total_update(traces[j])

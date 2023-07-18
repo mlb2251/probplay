@@ -61,6 +61,10 @@ new_env() = Env([], [], Object[], Sprite[], CLibrary(CFunc[]))
 # ctypeof(expr::CExprInner) = error("ctype_of not implemented for $(typeof(expr)))")
 eval(expr::CExpr, env::Env) = error("eval not implemented for $(typeof(expr))")
 
+# @gen function eval_traced(expr::CExpr, env::Env)
+
+# end
+
 function eval(func::CFunc, args::Vector{Any}, env::Env)
     @assert length(args) == length(func.args)
     env.locals = args

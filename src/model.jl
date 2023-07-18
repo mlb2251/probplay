@@ -51,7 +51,7 @@ mutable struct Object
     sprite_index :: Int  
     pos :: Vec
     attrs :: Vector{Any}
-    init :: Int
+    init :: Int # CFunc not Int
     step :: Int
     # vel :: Vec
     # pos_noise :: Float64

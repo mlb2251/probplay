@@ -38,66 +38,6 @@ function inbounds_vec(v,H,W)
     Vec(min(max(1, v.y), H+1-EPSILON), min(max(1, v.x), W+1-EPSILON))
 end
 
-"""
-
-Types: Float, Int, Bool
-
-Stmt ::=
-    Pass
-    Assign(Var(t), Expr(t))
-    IfThenElse BExpr Stmt Stmt
-    While BExpr Stmt
-    Semi Stmt Stmt
-
-Var(t) ::= LocalVar(t) || Attr(t) Symbol || GlobalVar(t)
-
-Expr ::= FExpr || IExpr || BExpr
-
-FExpr ::= FConst(arbitrary float) || FAdd FExpr FExpr || FMul FExpr FExpr || FDist || Var(Float)
-IExpr ::= IConst(arbitrary int) || IAdd IExpr IExpr || IMul IExpr IExpr || IDist || Var(Int)
-BExpr ::= True || False || Var(Bool)
-
-FDist ::= Normal(FExpr,FExpr)
-
-BExpr ::=
-    Not BExpr
-    Lt Expr Expr
-    Eq Expr Expr
-
-
-
-CodeFunc(
-    Assign(Attr(:pos), Normal(Attr(:pos), FConst(0.1)))
-)
-
-"""
-
-
-abstract type CodeStmt end
-abstract type CodeExpr end
-
-struct CodeArg
-
-end
-
-struct CodeLibrary
-    fns::Vector{Expr}
-end
-
-struct CodeFunc
-    body::CodeStmt
-end
-
-struct CNormal
-    mu::Float64,
-    var::Float64
-end
-
-struct CNormal
-    mu::Float64,
-    var::Float64
-end
-
 
 struct Sprite
     mask::Matrix{Bool}
@@ -107,15 +47,18 @@ end
 set_mask(sprite::Sprite, mask) = Sprite(mask, sprite.color)
 set_color(sprite::Sprite, color) = Sprite(sprite.mask, color)
 
-struct Object
+mutable struct Object
     sprite_index :: Int  
     pos :: Vec
+    attrs :: Vector{Any}
+    init :: Int
+    step :: Int
     # vel :: Vec
     # pos_noise :: Float64
 end
 
-set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos)
-set_pos(obj::Object, pos) = Object(obj.sprite_index, pos)
+set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos, obj.attrs, obj.init, obj.step)
+set_pos(obj::Object, pos) = Object(obj.sprite_index, pos, obj.attrs, obj.init, obj.step)
 
 include("images.jl")
 
@@ -166,6 +109,7 @@ function Gen.logpdf(::NormalVec, v::Vec, mu_vec::Vec, var)
 end
 
 const normal_vec = NormalVec()
+(::NormalVec)(mu_vec, var) = random(NormalVec(), mu_vec, var)
 
 
 struct Bernoulli2D <: Gen.Distribution{Array} end
@@ -244,11 +188,11 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
         stopi = min(sprite_height, ymax-y+1) 
         stopj = min(sprite_width, xmax-x+1)
 
-        mask = @views sprite_type.mask[starti:stopi, startj:stopj]
+        mask = @views sprite.mask[starti:stopi, startj:stopj]
         mask = reshape(mask, 1, size(mask)...)
 
-        target = @views canvas[:, obj.pos.y+starti-ymin : obj.pos.y+stopi-ymin , obj.pos.x+startj-xmin : obj.pos.x+stopj-xmin]
-        target .= ifelse.(mask, sprite_type.color, target)
+        target = @views canvas[:, y+starti-ymin : y+stopi-ymin , x+startj-xmin : x+stopj-xmin]
+        target .= ifelse.(mask, sprite.color, target)
     end
     canvas 
 end 
@@ -281,6 +225,8 @@ function draw(H, W, objs, sprites)
     # end
     # canvas
 end
+
+include("code_library.jl")
 
 
 

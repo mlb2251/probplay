@@ -32,6 +32,41 @@ function shape_test()
     html_body(html_img(obs, width="400px"))
 end
 
+function code_test()
+    H,W = 40,40
+    T = 200
+    objs = Object[]
+    sprites = Sprite[]
+    c = circle!(sprites,[.7,0.,0.], 3)
+
+    env = Env(
+        [],
+        [],
+        CLibrary([
+            CFunc([CArg()],CPass()),
+            CFunc([CArg()],
+                CSetAttr(CGetLocal(1), 0, CNormalVec(CGetAttr(CGetLocal(1), 0), CFloat(1.0)))
+    )]));
+
+    objs = [Object(c, Vec(10,10), [], 1, 2)]
+    first_frame = draw(H, W, objs, sprites)
+
+    # vel = Vec(1,2)
+
+    frames = zeros(Float64, 3, H, W, T)
+    frames[:,:,:,1] = first_frame
+
+    @time for t in 2:T
+        # objs[1] = set_pos(objs[1], objs[1].pos + vel)
+        obj_step(objs[1], env)
+        frames[:,:,:,t] = draw(H, W, objs, sprites)
+        # @show objs[1]
+        # vel += Vec(rand()-.7, rand()-.7)
+    end
+    html_body(html_gif(frames, width="400px"))
+end
+
+
 function bouncing_ball()
     H,W = 40,40
     T = 20

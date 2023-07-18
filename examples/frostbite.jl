@@ -39,14 +39,10 @@ function code_test()
     sprites = Sprite[]
     c = circle!(sprites,[.7,0.,0.], 3)
 
-    env = Env(
-        [],
-        [],
-        CLibrary([
-            CFunc([CArg()],CPass()),
-            CFunc([CArg()],
-                CSetAttr(CGetLocal(1), 0, CNormalVec(CGetAttr(CGetLocal(1), 0), CFloat(1.0)))
-    )]));
+    env = new_env();
+    push!(env.code_library.fns, CFunc([CArg()],CPass()))
+    push!(env.code_library.fns, CFunc([CArg()],
+        CSetAttr(CGetLocal(1), 0, CNormalVec(CGetAttr(CGetLocal(1), 0), CFloat(1.0)))))
 
     objs = [Object(c, Vec(10,10), [], 1, 2)]
     first_frame = draw(H, W, objs, sprites)

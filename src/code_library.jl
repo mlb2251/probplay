@@ -48,20 +48,23 @@ struct CLibrary
     fns::Vector{CFunc}
 end
 
-struct Env
+mutable struct Env
     locals::Vector{Any}
     globals::Vector{Any}
+    objects::Vector{Object}
+    sprites::Vector{Sprite}
     code_library::CLibrary
 end
 
-@inline set_locals(env::Env, locals::Vector{Any}) = Env(locals, env.globals, env.code_library)
+new_env() = Env([], [], Object[], Sprite[], CLibrary(CFunc[]))
 
 # ctypeof(expr::CExprInner) = error("ctype_of not implemented for $(typeof(expr)))")
 eval(expr::CExpr, env::Env) = error("eval not implemented for $(typeof(expr))")
 
 function eval(func::CFunc, args::Vector{Any}, env::Env)
     @assert length(args) == length(func.args)
-    eval(func.body, set_locals(env,args))
+    env.locals = args
+    eval(func.body, env)
 end
 
 function obj_init(obj::Object, env::Env)
@@ -172,4 +175,4 @@ struct CPass <: CStmt end
 eval(expr::CPass, env::Env) = nothing
 
 export CFunc, CArg, CLibrary, Env, CNormalVec, CFloat, CGetLocal, CSetLocal, CGetGlobal, CSetGlobal, CGetAttr, CSetAttr, CPass
-export obj_init, obj_step
+export obj_init, obj_step, new_env

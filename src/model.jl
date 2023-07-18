@@ -57,6 +57,8 @@ mutable struct Object
     # pos_noise :: Float64
 end
 
+Object(sprite_index, pos) = Object(sprite_index, pos, [], 0, 0)
+
 set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos, obj.attrs, obj.init, obj.step)
 set_pos(obj::Object, pos) = Object(obj.sprite_index, pos, obj.attrs, obj.init, obj.step)
 

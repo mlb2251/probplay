@@ -17,6 +17,8 @@ function objs_from_trace(trace, t)
     objs
 end
 
+
+
 function sprites_from_trace(trace, t)
     (H,W,T) = get_args(trace)
     @assert t <= T
@@ -25,9 +27,9 @@ function sprites_from_trace(trace, t)
 
         color = trace[:init => :init_sprites => i => :color] #?
         
-        shape = trace[:init => :init_sprites => i => :shape]
+        mask = trace[:init => :init_sprites => i => :mask]
 
-        sprite_type = Sprite(shape, color)
+        sprite_type = Sprite(mask, color)
         push!(sprites, sprite_type)
     end
     sprites
@@ -62,6 +64,7 @@ RGB color for each integer. If the original CHW frame orig is provided, it will
 be concatenated onto to the result.
 """
 function color_labels(frames...; orig=nothing)
+    #@show frames
     max = maximum([maximum(frame) for frame in frames])
     res = []
     for frame in frames
@@ -72,6 +75,60 @@ function color_labels(frames...; orig=nothing)
     end
     res
 end
+
+function obj_frame(objs, sprites, H, W)
+    """
+    fills a frame of each pixel which object it belongs to
+    """
+    frame = zeros(Int, H, W)
+    objnum = 0 
+    for obj in objs
+        objnum += 1 
+        sprite = sprites[obj.sprite_index]
+        # @show size(sprite.mask)
+        # print("did w emake it here")
+        for i in 1:size(sprite.mask)[1]
+            for j in 1:size(sprite.mask)[2]
+                #@show i,j
+                if sprite.mask[i,j] == 1
+                    itofill = i+obj.pos.y-1
+                    jtofill = j+obj.pos.x-1
+                    if 0 < itofill <= H && 0 < jtofill <= W
+                        frame[i+obj.pos.y-1, j+obj.pos.x-1] = objnum#be careful for off by one
+                    end
+                    
+                end 
+            end
+        end
+    end	
+    frame 
+end 
+
+function sprite_frame(objs, sprites, H, W)
+    """
+    fills a frame of each pixel which sprite ind it belongs to
+    """
+    frame = zeros(Int, H, W)
+    objnum = 0 
+    for obj in objs
+        objnum += 1 
+        sprite = sprites[obj.sprite_index]
+        for i in 1:size(sprite.mask)[1]
+            for j in 1:size(sprite.mask)[2]
+                #@show i,j
+                if sprite.mask[i,j] == 1
+                    itofill = i+obj.pos.y-1
+                    jtofill = j+obj.pos.x-1
+                    if 0 < itofill <= H && 0 < jtofill <= W
+                        frame[i+obj.pos.y-1, j+obj.pos.x-1] = obj.sprite_index#be careful for off by one
+                    end
+                    
+                end 
+            end
+        end
+    end	
+    frame 
+end 
 
 function games()
     [x for x in readdir("out/gameplay") if occursin("v5",x)]

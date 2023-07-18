@@ -227,10 +227,10 @@ end
 @gen (static) function make_type(i, H, W) 
     width ~ uniform_discrete(1,W)
     height ~ uniform_discrete(1,H)
-    shape ~ bernoulli_2d(0.5, height, width)
+    mask ~ bernoulli_2d(0.5, height, width)
     color ~ rgb_dist()
     
-    return Sprite(shape, color)
+    return Sprite(mask, color)
 end
 
 make_objects = Map(make_object)
@@ -246,7 +246,7 @@ make_sprites = Map(make_type)
 
 @gen (static) function init_model(H,W,var)
     num_sprite_types ~ poisson_plus_1(4)
-    N ~ poisson(7)
+    N ~ poisson_plus_1(0.5)
     sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprite_types), [H for _ in 1:num_sprite_types], [W for _ in 1:num_sprite_types]) 
     objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprite_types for _ in 1:N])
 

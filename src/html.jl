@@ -209,6 +209,7 @@ function open_in_default_browser(url::AbstractString)::Bool
         end
     catch ex
         return false
+        
     end
 end
 

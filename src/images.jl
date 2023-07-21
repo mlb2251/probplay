@@ -45,7 +45,36 @@ function render_trace(trace)
     stack([render_trace_frame(trace, t) for t in 0:T-1])
 end
 
+function render_heatmap(heatmap)
+    (H, W) = size(heatmap)
 
+    heat_map_visual = zeros(3, H, W)
+
+    max = maximum(heatmap)
+    min = minimum(heatmap)
+    #@show min, max
+    #@show heatmap
+
+    #@show heatmap[10, :]
+    normalized_heatmap = (heatmap .- min) ./ (max - min)
+    @show normalized_heatmap[10, :]
+
+    #spread_heatmap = log.(normalized_heatmap .+ 1)
+    #heatmap to power of 10
+    spread_heatmap = normalized_heatmap .^ 50
+    final_heatmap = spread_heatmap
+
+    
+    for i in 1:H
+        for j in 1:W
+            #heat_map_visual[:, i,j] = [normalized_heatmap[i,j], 0, 0]
+            heat_map_visual[1, i, j] = 1-final_heatmap[i,j]
+        end
+    end
+
+    html_img(heat_map_visual)
+
+end 
 
 
 

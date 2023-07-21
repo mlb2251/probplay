@@ -41,6 +41,8 @@ function Gen.logpdf(::UniformPosition, pos, height, width)
     end
 end
 
+
+
 const uniform_position = UniformPosition()
 
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
@@ -88,6 +90,31 @@ function Gen.logpdf(::ImageLikelihood, observed_image::Array{Float64,3}, rendere
     sum(i -> - (@inbounds abs2((observed_image[i] - rendered_image[i]) / var) + log(2π)) / 2 - log_var, eachindex(observed_image))
 end
 
+function logpdfmap(::ImageLikelihood, observed_image::Array{Float64,3}, rendered_image::Array{Float64,3}, var)
+    # map of logpdf (heatmap) over each pixel, how correct it is
+    log_var = log(var)
+
+    C, H, W = size(observed_image)
+
+    heatmap = zeros(Float64, H, W)
+    #@show size(heatmap)
+    #@show observed_image[:, 10, :]
+    #@show rendered_image[:, 10, :]
+    @show size(observed_image), size(rendered_image)
+
+    for hi in 1:H
+        for wi in 1:W
+            for ci in 1:3
+                heatmap[hi, wi] += -(@inbounds abs2((observed_image[ci, hi, wi] - rendered_image[ci, hi, wi]) / var) + log(2π)) / 2 - log_var
+                #@show heatmap[hi, wi]
+            end
+        end
+    end
+    #@show heatmap[10, :]
+    #@show heatmap
+    heatmap
+end 
+
 # @assert isapprox(Gen.logpdf(M.image_likelihood, vals, vals2, .1), Gen.logpdf(broadcasted_normal, vals - vals2, zeros(Float64,size(vals)), .1))
 
 
@@ -119,6 +146,15 @@ function canvas(height=210, width=160)
     zeros(Float64, 3, height, width)
 end
 
+function get_bounds(obj, sprite, ymin, ymax, xmin, xmax)
+    sprite_height, sprite_width = size(sprite.mask)
+    starti = max(1, ymin-obj.pos.y+1)
+    startj = max(1, xmin-obj.pos.x+1)	
+    stopi = min(sprite_height, ymax-obj.pos.y+1) 
+    stopj = min(sprite_width, xmax-obj.pos.x+1)
+    return starti, startj, stopi, stopj
+
+end 
 
 function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
@@ -128,16 +164,18 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
 
         sprite_height, sprite_width = size(sprite_type.mask)
 
+        
+
+
         # not at all in bounds
         if obj.pos.y > ymax || obj.pos.x > xmax || obj.pos.y+sprite_height-1 < ymin || obj.pos.x+sprite_width-1 < xmin
             continue
         end
         
+        #extract this to use in involutions
+        starti, startj, stopi, stopj = get_bounds(obj, sprite_type, ymin, ymax, xmin, xmax)
         # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
-        starti = max(1, ymin-obj.pos.y+1)
-        startj = max(1, xmin-obj.pos.x+1)	
-        stopi = min(sprite_height, ymax-obj.pos.y+1) 
-        stopj = min(sprite_width, xmax-obj.pos.x+1)
+        
 
         mask = @views sprite_type.mask[starti:stopi, startj:stopj]
         mask = reshape(mask, 1, size(mask)...)
@@ -227,7 +265,7 @@ end
 @gen (static) function make_type(i, H, W) 
     width ~ uniform_discrete(1,W)
     height ~ uniform_discrete(1,H)
-    mask ~ bernoulli_2d(0.5, height, width)
+    mask ~ bernoulli_2d(0.8, height, width)
     color ~ rgb_dist()
     
     return Sprite(mask, color)

@@ -1,7 +1,7 @@
 using Revise
 using Gen
 using GenParticleFilters
-include("involutions.jl")
+
 
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
@@ -20,7 +20,12 @@ as a simple first pass of object detection
 """
 
 
+
+
 function total_update(tr)
+    #do one pass of making a heatmap
+
+
     #sprite proposals 
 
     #add/remove sprite TODO
@@ -35,12 +40,10 @@ function total_update(tr)
         
 
     #recolor involution 
-        # for _ in 1:10
-        #     tr, accepted = mh(tr, get_random_new_color, (i,), color_involution)
-        # end 
-        tr, accepted = mh(tr, select((:init => :init_sprites => i => :color))) 
+        #tr, accepted = mh(tr, select((:init => :init_sprites => i => :color))) #works but need to change to the involution 
+        tr, accepted = mh(tr, dd_get_random_new_color, (i,), color_involution)
         if accepted
-            # print("sprite color changed")
+            #print("sprite color changed")
         end 
 
 
@@ -74,7 +77,7 @@ function total_update(tr)
     #object proposals 
 
     #add/remove object involution TODO
-    tr, accepted = mh(tr, get_add_remove, (), add_remove_involution)
+    tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution)
     if accepted
         # print("added/removed object")
     end 
@@ -161,7 +164,7 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
 
     #TODO MAKE 2 other tables so this isn't uglyy 
 
-    othertable = fill("", num_particles + 1, 3)
+    othertable = fill("", num_particles + 1, 4)
     
 
     tracenum = 0
@@ -175,39 +178,24 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         
         objcoloring = html_img(color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
         spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
+        heatmap = render_heatmap(logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1))
 
         othertable[tracenum + 1, 1] = "Particle $tracenum"
         othertable[tracenum + 1, 2] = objcoloring
         othertable[tracenum + 1, 3] = spritecoloring
+        othertable[tracenum + 1, 4] = heatmap
 
         othertable[1, 2] = "Coloring by particle"
         othertable[1, 3] = "Coloring by sprite"
+        othertable[1, 4] = "logpdf heatmap"
 
-        #othertable = vcat(othertable, row)
-        # html_body(html_img(color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1]))
-        # html_body(html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1]))
+        #heatmap 
+
     end 
     
     html_body(html_table(othertable))
     html_body(html_table(table))
 
-    # types = map(i -> objs[i].sprite_index, cluster);
-    # html_body("<h2>First Frame Processing</h2>",
-    # html_table(["Observation"                       "Objects"                       "Types";
-    #          html_img(observed_images[:,:,:,1])  html_img(color_labels(cluster)[1])  html_img(color_labels(types)[1])
-    # ]))
-
-    #return traces
-
-    # @show traces[1][:init => :init_sprites]
-
-
-    #init_obs = choicemap 
-
-    #@show tr 
-    
-
-    # Gen.get_choices(tr)	
 
 end 
 

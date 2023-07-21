@@ -2,7 +2,7 @@ using Atari
 using Gen
 
 
-function tff(;particles=2, steps=400, step_chunk=100)
+function tff(;particles=2, steps=200, step_chunk=60)
     #@show particles, steps, step_chunk
     fresh(); 
     first_frame(particles=particles, steps=steps, step_chunk=step_chunk)
@@ -119,7 +119,32 @@ function first_frame(;particles=8, steps=1000, step_chunk=50)
     #first_frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1]	
     #@time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=100, bottom=20, left=20, tskip=4)[:,:,:,1:4], 4)
     # @time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1:4], 4)
+
+    #small
+    #frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
+
+    #tiny
     frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
+
+
+    (C,H,W) = size(frame)
+
+    html_body("<h1>Observations</h1>", html_img(frame))
+    
+    Atari.process_first_frame_v2(frame; num_particles=particles, steps=steps, step_chunk=step_chunk)
+end
+
+function runjoke(;particles=2, steps=400, step_chunk=100)
+    #@show particles, steps, step_chunk
+    fresh(); 
+    joke(particles=particles, steps=steps, step_chunk=step_chunk)
+
+    
+    render();
+end
+
+function joke(;particles=8, steps=100, step_chunk=30)
+    frame = crop(load_frames("joke"),  tskip=4)[:,:,:,1]
 
     (C,H,W) = size(frame)
 

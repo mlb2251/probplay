@@ -1,5 +1,6 @@
 
-
+using Gen
+export exec, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
 """
 
 Types: Float, Int, Bool
@@ -28,20 +29,162 @@ BExpr ::=
 
 """
 
-
-abstract type CStmt end
-abstract type CExpr end
-
-abstract type CDist <: CExpr end
-abstract type CLiteral <: CExpr end
-
-struct CArg
-    # type and such
+mutable struct SExpr
+    is_leaf::Bool
+    leaf::Any
+    children::Vector{SExpr}
+    parent::Union{Tuple{SExpr,Int}, Nothing} # parent and which index of the child it is
 end
 
-struct CFunc
-    args::Vector{CArg}
-    body::CStmt
+
+function sexpr_node(children::Vector{SExpr}; parent=nothing)
+    expr = SExpr(false, nothing, children, parent)
+    for (i,child) in enumerate(children)
+        isnothing(child.parent) || error("arg already has parent")
+        child.parent = (expr,i)
+    end
+    expr 
+end
+
+function sexpr_leaf(leaf; parent=nothing)
+    SExpr(true, leaf, Vector{SExpr}(), parent)
+end
+
+function Base.copy(e::SExpr)
+    SExpr(
+        e.is_leaf,
+        e.leaf,
+        [copy(child) for child in e.children],
+        nothing,
+    )
+end
+
+"child-first traversal"
+function subexpressions(e::SExpr; subexprs = SExpr[])
+    for child in e.children
+        subexpressions(child, subexprs=subexprs)
+    end
+    push!(subexprs, e)
+end
+
+Base.size(e::SExpr) = if e.is_leaf 1. else sum(size, e.children, init=0.) end
+
+num_nodes(e::SExpr) = 1 + sum(num_nodes, e.children, init=0)
+
+Base.show(io::IO, e::SExpr) = begin    
+    if e.is_leaf
+        print(io, e.leaf)
+        @assert isempty(e.children)
+    else
+        print(io, "(")
+        for child in e.children
+            Base.show(io, child)
+            print(io, " ")
+        end
+        print(io, ")")
+        # print(io, "(", join(e.children, " "), ")")
+    end
+end
+
+
+function make_leaf(item)
+    val = tryparse(Int, item)
+    isnothing(val) || return sexpr_leaf(val)
+    val = tryparse(Float64, item)
+    isnothing(val) || return sexpr_leaf(val)
+    return sexpr_leaf(Symbol(item))     
+end
+
+"""
+Parse a string into an SExpr. Uses lisp-like syntax.
+
+"foo" -> SAtom(:foo)
+"(foo)" -> SList([SAtom(:foo)])
+"((foo))" -> SList([SList([SAtom(:foo)])]) 
+"(foo bar baz)" -> SList([SAtom(:foo), SAtom(:bar), SAtom(:baz)])
+"()" -> SList([])
+
+"""
+function Base.parse(::Type{SExpr}, original_s::String)
+    # add guaranteed parens around whole thing and guaranteed spacing around parens so they parse into their own items
+    s = replace(original_s, "(" => " ( ", ")" => " ) ")
+
+    # `split` will skip all quantities of all forms of whitespace
+    items = split(s)
+    length(items) > 2 || error("SExpr parse called on empty (or all whitespace) string")
+    items[1] != ")" || error("SExpr starts with a closeparen. Found in $original_s")
+
+    # this is a single symbol like "foo" or "bar"
+    length(items) == 1 && return make_leaf(items[1])
+
+    i=0
+    expr_stack = SExpr[]
+    # num_open_parens = Int[]
+
+    while true
+        i += 1
+
+        i <= length(items) || error("unbalanced parens: unclosed parens in $original_s")
+
+        if items[i] == "("
+            push!(expr_stack, sexpr_node(SExpr[]))
+        elseif items[i] == ")"
+            # end an expression: pop the last SExpr off of expr_stack and add it to the SExpr at one level before that
+
+            if length(expr_stack) == 1
+                i == length(items) || error("trailing characters after final closeparen in $original_s")
+                break
+            end
+
+            last = pop!(expr_stack)
+            push!(expr_stack[end].children, last)
+        else
+            # any other item like "foo" or "+" is a symbol
+            push!(expr_stack[end].children, make_leaf(items[i]))
+        end
+    end
+
+    length(expr_stack) != 0 || error("unreachable - should have been caught by the first check for string emptiness")
+    length(expr_stack) == 1 || error("unbalanced parens: not enough close parens in $original_s")
+
+    return pop!(expr_stack)
+end
+
+
+
+
+
+
+
+
+# @auto_hash_equals struct HashNode
+#     leaf::Union{Symbol,Nothing}
+#     children::Vector{Int}
+# end
+
+# const global_struct_hash = Dict{HashNode, Int}()
+
+# """
+# sets structural hash value, possibly with side effects of updating the structural hash, and
+# sets e.match.struct_hash. Requires .match to be set so we know this will be used immutably
+# """
+# function struct_hash(e::SExpr) :: Int
+#     isnothing(e.match) || isnothing(e.match.struct_hash) || return e.match.struct_hash
+
+#     node = HashNode(e.leaf, map(struct_hash,e.children))
+#     if !haskey(global_struct_hash, node)
+#         global_struct_hash[node] = length(global_struct_hash) + 1
+#     end
+#     isnothing(e.match) || (e.match.struct_hash = global_struct_hash[node])
+#     return global_struct_hash[node]
+# end
+
+@inline function unwrap(e::SExpr)
+    e.leaf
+end
+
+mutable struct CFunc
+    body::SExpr
 end
 
 struct CLibrary
@@ -58,125 +201,58 @@ end
 
 new_env() = Env([], [], Object[], Sprite[], CLibrary(CFunc[]))
 
-# ctypeof(expr::CExprInner) = error("ctype_of not implemented for $(typeof(expr)))")
-eval(expr::CExpr, env::Env) = error("eval not implemented for $(typeof(expr))")
 
-# @gen function eval_traced(expr::CExpr, env::Env)
-
-# end
-
-function eval(func::CFunc, args::Vector{Any}, env::Env)
-    @assert length(args) == length(func.args)
+@gen function call_func(func::CFunc, args::Vector{Any}, env::Env)
+    save_locals = env.locals
     env.locals = args
-    eval(func.body, env)
+    res ~ exec(func.body, env);
+    env.locals = save_locals
+    return res
 end
 
-function obj_init(obj::Object, env::Env)
-    eval(env.code_library.fns[obj.init], Any[obj], env)
-end
+@gen function exec(e::SExpr, env::Env) 
+    if e.is_leaf
+        return e.leaf
+    end
+    @assert length(e.children) > 0
+    head = unwrap(e.children[1])
 
-function obj_step(obj::Object, env::Env)
-    eval(env.code_library.fns[obj.step], Any[obj], env)
-end
-
-
-# struct CType
-#     base :: Symbol # :float :int :bool :obj :list :error :vec
-#     obj_fields :: Union{Nothing, Set{Pair{Symbol, CType}}}
-#     list_eltype :: Union{Nothing, CType}
-# end
-
-# struct CStmt
-#     stmt::CStmtInner
-# end
-
-# struct CExpr
-#     expr::CExprInner
-    # type::CType
-
-    # CExpr(expr::CExprInner) = new(expr, ctypeof(expr))
-# end
-
-
-# struct CLocalVar <: CVar
-#     idx::Int
-    # type::CType
-# end
-
-# struct CGlobalVar <: CVar
-#     idx::Int
-# end
-# ctypeof(expr::CVar) = expr.type
-
-struct CNormalVec <: CDist
-    mu::CExpr
-    var::CExpr
-end
-eval(expr::CNormalVec, env::Env) = normal_vec(eval(expr.mu, env), eval(expr.var, env))
-# ctypeof(::CNormal) = :float
-
-struct CFloat <: CLiteral
-    data::Float64
-end
-eval(expr::CFloat, env::Env) = expr.data
-# ctypeof(::CFloat) = :float
-
-
-struct CGetLocal <: CExpr
-    idx::Int
-end
-eval(expr::CGetLocal, env::Env) = env.locals[expr.idx]
-
-struct CSetLocal <: CStmt
-    idx::Int
-    value::CExpr
-end
-eval(expr::CSetLocal, env::Env) = (env.locals[expr.idx] = eval(expr.value, env); nothing)
-
-struct CGetGlobal <: CExpr
-    idx::Int
-end
-eval(expr::CGetGlobal, env::Env) = env.globals[expr.idx]
-
-struct CSetGlobal <: CStmt
-    idx::Int
-    value::CExpr
-end
-eval(expr::CSetGlobal, env::Env) = (env.globals[expr.idx] = eval(expr.value, env); nothing)
-
-struct CGetAttr <: CExpr
-    obj::CExpr
-    attr::Int
-    # type::CType
-end
-function eval(expr::CGetAttr, env::Env)
-    obj = eval(expr.obj, env)
-    if expr.attr == 0
-        obj.pos
+    if head === :pass
+        return nothing
+    elseif head === :normal_vec
+        mu ~ exec(e.children[2], env)
+        var ~ exec(e.children[3], env)
+        res ~ normal_vec(mu, var)
+        return res
+    elseif head === :get_local
+        idx = unwrap(e.children[2])::Int
+        return env.locals[idx]
+    elseif head === :set_local
+        idx = unwrap(e.children[2])::Int
+        value ~ exec(e.children[3], env)
+        env.locals[idx] = value
+        return nothing
+    elseif head === :get_attr
+        obj ~ exec(e.children[2], env)
+        attr = unwrap(e.children[3])
+        if attr isa Symbol
+            return getproperty(obj, attr)
+        else
+            return obj.attrs[attr]
+        end
+    elseif head === :set_attr
+        obj ~ exec(e.children[2], env)
+        attr = unwrap(e.children[3])
+        value ~ exec(e.children[4], env)
+        if attr isa Symbol
+            setproperty!(obj, attr, value)
+        else
+            obj.attrs[attr] = value
+        end
+        return nothing
     else
-        obj.attrs[expr.attr]
-    end 
-end
-# ctypeof(expr::GetAttr) = expr.type
-
-
-struct CSetAttr <: CStmt
-    obj::CExpr
-    attr::Int
-    value::CExpr
-end
-function eval(expr::CSetAttr, env::Env)
-    obj = eval(expr.obj, env)
-    val = eval(expr.value, env);
-    if expr.attr == 0
-        obj.pos = val
-    else
-        obj.attrs[expr.attr] = val
+        @assert head isa Symbol "$(typeof(head))"
+        @assert !startswith(string(head), ":") "the symbol $head has an extra leading colon (:) note that parsing sexprs inserts colons so you may have unnecessarily included one"
+        error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
     end
 end
-
-struct CPass <: CStmt end
-eval(expr::CPass, env::Env) = nothing
-
-export CFunc, CArg, CLibrary, Env, CNormalVec, CFloat, CGetLocal, CSetLocal, CGetGlobal, CSetGlobal, CGetAttr, CSetAttr, CPass
-export obj_init, obj_step, new_env

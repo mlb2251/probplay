@@ -40,11 +40,13 @@ function code_test()
     c = circle!(sprites,[.7,0.,0.], 3)
 
     env = new_env();
-    push!(env.code_library.fns, CFunc([CArg()],CPass()))
-    push!(env.code_library.fns, CFunc([CArg()],
-        CSetAttr(CGetLocal(1), 0, CNormalVec(CGetAttr(CGetLocal(1), 0), CFloat(1.0)))))
+    push!(env.code_library.fns, CFunc(parse(SExpr,"(pass)")))
+    push!(env.code_library.fns, CFunc(parse(SExpr,
+        "(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))"
+    )))
+        # CSetAttr(CGetLocal(1), 0, CNormalVec(CGetAttr(CGetLocal(1), 0), CFloat(1.0)))))
 
-    objs = [Object(c, Vec(10,10), [], 1, 2)]
+    objs = [Object(c, Vec(10,10), [], 2)]
     first_frame = draw(H, W, objs, sprites)
 
     # vel = Vec(1,2)
@@ -54,7 +56,7 @@ function code_test()
 
     @time for t in 2:T
         # objs[1] = set_pos(objs[1], objs[1].pos + vel)
-        obj_step(objs[1], env)
+        call_func(env.code_library.fns[2], Any[objs[1]], env)
         frames[:,:,:,t] = draw(H, W, objs, sprites)
         # @show objs[1]
         # vel += Vec(rand()-.7, rand()-.7)

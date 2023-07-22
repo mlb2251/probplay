@@ -18,6 +18,8 @@ Base.:-(v1::Vec, v2::Vec) = Vec(v1.y - v2.y, v1.x - v2.x)
 Base.:*(a::Real, v::Vec) = Vec(a*v.y, a*v.x)
 Base.:*(v::Vec, a::Real) = Vec(a*v.y, a*v.x)
 
+Base.isapprox(v1::Vec, v2::Vec; kwargs...) = isapprox(v1.y, v2.y; kwargs...) && isapprox(v1.x, v2.x; kwargs...)
+
 pixel_vec(v::Vec) = (floor(Int, v.y), floor(Int, v.x))
 
 """
@@ -51,16 +53,18 @@ mutable struct Object
     sprite_index :: Int  
     pos :: Vec
     attrs :: Vector{Any}
-    init :: Int # CFunc not Int
     step :: Int
     # vel :: Vec
     # pos_noise :: Float64
+
+    Object(sprite_index, pos) = new(sprite_index, pos, [], 0)
+    Object(sprite_index, pos, attrs, step) = new(sprite_index, pos, attrs, step)
 end
 
-Object(sprite_index, pos) = Object(sprite_index, pos, [], 0, 0)
+# Object(sprite_index, pos) = Object(sprite_index, pos, [], 0)
 
-set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos, obj.attrs, obj.init, obj.step)
-set_pos(obj::Object, pos) = Object(obj.sprite_index, pos, obj.attrs, obj.init, obj.step)
+set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos, obj.attrs, obj.step)
+set_pos(obj::Object, pos) = Object(obj.sprite_index, pos, obj.attrs, obj.step)
 
 include("images.jl")
 

@@ -274,7 +274,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 fwd_proposal_naive,
                 bwd_proposal_naive,
                 (obs,),
-                (obs,)
+                (obs,),
+                false, # check are inverses
             ))
     end
 
@@ -321,6 +322,8 @@ end
     end
 end
 
+const SAMPLES_PER_OBJ = 20
+
 @kernel function fwd_proposal_naive(prev_trace, obs)
     # return (
     #     choicemap((:init => :N, prev_trace[:init => :N]+1)),
@@ -329,13 +332,12 @@ end
 
     (H,W,prev_T) = get_args(prev_trace)
     t = prev_T
-    samples_per_obj = 20
     observed_image = obs[(:steps => t => :observed_image)]
 
     prev_objs = objs_from_trace(prev_trace, t - 1)
     prev_sprites = sprites_from_trace(prev_trace, 0) # todo t=0 for now bc no changing sprites over time
 
-    # bwd_choices = choicemap()
+    bwd_choices = choicemap()
     trace_updates = choicemap()
 
     for obj_id in 1:prev_trace[:init => :N]
@@ -345,8 +347,9 @@ end
 
         positions = Vec[]
 
-        for j in 1:samples_per_obj
-            pos = {j => :pos} ~  normal_vec(prev_pos, .5)
+        for j in 1:SAMPLES_PER_OBJ
+            pos = {obj_id => j} ~  normal_vec(prev_pos, .5)
+            bwd_choices[obj_id => j] = pos
             push!(positions, pos)
         end
 
@@ -377,23 +380,60 @@ end
         scores =  exp.(scores .- scores_logsumexp)
 
         # sample the actual position
-        new_pos ~ labeled_cat(positions, scores)
+        idx = {obj_id => :idx} ~ categorical(scores)
+        bwd_choices[obj_id => :idx] = idx
 
-        trace_updates[:steps => t => :objs => obj_id => :pos] = new_pos
+        trace_updates[:steps => t => :objs => obj_id => :pos] = positions[idx]
         
     end
     
 
     return (
         trace_updates, # (:init => :N, prev_trace[:init => :N]+1)
-        choicemap()
+        # bwd proposal doesnt need to be passed any extra information to invert the update! No matter
+        # what choices it makes itll be able to invert the update, since itll just be shortening the
+        # trace by one step as opposed to doing something like probabilistically adjusting :N etc.
+        bwd_choices
     )
 end
 
 @kernel function bwd_proposal_naive(next_trace, obs)
+
+    (H,W,next_T) = get_args(next_trace)
+    t = next_T - 1 
+
+    fwd_choices = choicemap()
+
+    for obj_id in 1:next_trace[:init => :N]
+
+        prev_pos = get_pos(next_trace, obj_id, t-1)
+
+        # sample a random index - uniform bc true posterior is uniform
+        # add to choicemap: the index; and putting the fwd trace value at that index
+        idx = {obj_id => :idx} ~ uniform_discrete(1, SAMPLES_PER_OBJ)
+        fwd_choices[obj_id => :idx] = idx
+
+        for j in 1:SAMPLES_PER_OBJ
+            if j == idx
+                fwd_choices[obj_id => j] = next_trace[:steps => t => :objs => obj_id => :pos]
+            else
+                # potential problem: if one of those 19 were way better than the chosen one, itll seem like 
+                # the fwd proposal did something super unlikely
+                fwd_choices[obj_id => j] = {obj_id => j} ~  normal_vec(prev_pos, .5)
+            end
+        end
+
+    end
+
+
     return (
+        # no need to pass any extra info to invert the update! The update would be inverted simply
+        # by the change in arguments (when it gets prev_t instead of t). Since things like :N or
+        # other variables aren't changed, and this is simply extending the existing trace, we don't
+        # need anything here!
         choicemap(),
-        choicemap()
+        # 
+        fwd_choices
     )
 end
 

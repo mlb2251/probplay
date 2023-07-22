@@ -82,3 +82,47 @@ function copy_data()
         end
     end
 end
+
+include("html.jl")
+
+function make_quilt()
+    all_frames = Array{RGB{Float64}}[]
+    for gamepath in filter(x -> occursin("-v5",x), readdir("out/gameplay",join=true))
+        println("processing $gamepath")
+        files = filter(x -> endswith(x,".png"), readdir(gamepath))
+        sort!(files, by = f -> parse(Int, split(f, ".")[1]))
+        files = files[200:600-1]
+        frames = stack([load(joinpath(gamepath,f)) for f in files], dims=3)
+        if size(frames) != (210,160,400) println("skipping because size=$(size(frames))"); continue end
+        push!(all_frames, frames)
+    end
+
+    WIDTH = 10
+
+    println("adding padding")
+    for _ in 1:(WIDTH - length(all_frames) % WIDTH)
+        push!(all_frames, fill(RGB(0.,0.,0.),210,160,400))
+    end
+
+    # gif = zeros(210,160,1000)
+
+    # for row in 1:div(length(all_frames), WIDTH)
+    #     for col in 1:WIDTH
+    #         i = (row-1)*WIDTH + col
+    #         all_frames[i] = all_frames[i][:,:,1:100]
+    #     end
+    # end
+
+    
+
+    # @show size(all_frames)
+    # @show typeof(all_frames)
+
+    # @show size(reshape(all_frames, WIDTH, :))
+
+    println("hvcat")
+    res = hvcat(WIDTH, all_frames...);
+    println("saving gif")
+    fresh(); html_body(html_gif(res,width="1000px")); render()
+end
+

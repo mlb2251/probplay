@@ -48,7 +48,6 @@ end
 function render_heatmap(heatmap)
     (H, W) = size(heatmap)
 
-    heat_map_visual = zeros(3, H, W)
 
     max = maximum(heatmap)
     min = minimum(heatmap)
@@ -57,23 +56,30 @@ function render_heatmap(heatmap)
 
     #@show heatmap[10, :]
     normalized_heatmap = (heatmap .- min) ./ (max - min)
-    @show normalized_heatmap[10, :]
+    #@show normalized_heatmap[10, :]
 
     #spread_heatmap = log.(normalized_heatmap .+ 1)
     #heatmap to power of 10
     spread_heatmap = normalized_heatmap .^ 50
+    #spread_heatmap = e .^ normalized_heatmap
     final_heatmap = spread_heatmap
 
     
+    render_matrix(final_heatmap)
+
+end 
+
+function render_matrix(m)
+    #getting between 0 and 1
+    m = (m .- minimum(m)) ./ (maximum(m) - minimum(m))
+    H, W = size(m)
+    img = zeros(3, H, W)
     for i in 1:H
         for j in 1:W
-            #heat_map_visual[:, i,j] = [normalized_heatmap[i,j], 0, 0]
-            heat_map_visual[1, i, j] = 1-final_heatmap[i,j]
+            img[1, i, j] = m[i,j]
         end
     end
-
-    html_img(heat_map_visual)
-
+    html_img(img)
 end 
 
 

@@ -2,7 +2,7 @@ using Atari
 using Gen
 
 
-function tff(;particles=2, steps=200, step_chunk=60)
+function tff(;particles=3, steps=181, step_chunk=60)
     #@show particles, steps, step_chunk
     fresh(); 
     first_frame(particles=particles, steps=steps, step_chunk=step_chunk)

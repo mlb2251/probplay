@@ -24,7 +24,23 @@ as a simple first pass of object detection
 
 function total_update(tr)
     #do one pass of making a heatmap
+    
+    heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
+    #@show heatmap
+    eheatmap = 2.71828 .^ heatmap
+    #@show eheatmap
+    #@show minimum(heatmap),  maximum(heatmap), minimum(eheatmap), maximum(eheatmap)
+    
+    #@show heatmap
 
+
+
+    #split merge 
+
+    tr, accepted = mh(tr, get_split_merge, (), split_merge_involution)
+    if accepted
+        print("split/merge")
+    end
 
     #sprite proposals 
 
@@ -36,8 +52,6 @@ function total_update(tr)
 
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
     
-        
-        
 
     #recolor involution 
         #tr, accepted = mh(tr, select((:init => :init_sprites => i => :color))) #works but need to change to the involution 
@@ -94,7 +108,9 @@ function total_update(tr)
         #shift objects involution 
         #tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
         #ideally use the uniform drift position we already have 
-        tr, accepted = mh(tr, get_drift, (i,), shift_involution) #drift?
+        #tr, accepted = mh(tr, get_drift, (i,), shift_involution) #drift?
+
+        tr, accepted = mh(tr, dd_get_drift, (i, heatmap,), dd_shift_involution) 
         if accepted
             # print("drifted")
         end 
@@ -485,12 +501,16 @@ of the current position
 
             push!(scores, score)
         end 
-
+        #@show scores 
         #update sprite index? todo?
         
         #making the scores into probabilities 
         scores_logsumexp = logsumexp(scores)
+        #@show scores_logsumexp
         scores =  exp.(scores .- scores_logsumexp)
+        #these are all zero but one. should it be that way? 
+        #@show scores 
+        #@show positions
 
         #oldver
         #scores = Gen.normalize_weights(get_score.(traces))[2]
@@ -498,6 +518,7 @@ of the current position
 
         # sample the actual position
         pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)
+
 
         # old version: set the curr `trace` to this trace for future iterations of this loop
         # idx = findfirst(x -> x == pos, positions)

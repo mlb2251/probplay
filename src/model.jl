@@ -26,6 +26,7 @@ include("images.jl")
 
 @dist labeled_cat(labels, probs) = labels[categorical(probs)]
 
+
 struct UniformPosition <: Gen.Distribution{Position} end
 
 function Gen.random(::UniformPosition, height, width)
@@ -100,7 +101,7 @@ function logpdfmap(::ImageLikelihood, observed_image::Array{Float64,3}, rendered
     #@show size(heatmap)
     #@show observed_image[:, 10, :]
     #@show rendered_image[:, 10, :]
-    @show size(observed_image), size(rendered_image)
+    #@show size(observed_image), size(rendered_image)
 
     for hi in 1:H
         for wi in 1:W

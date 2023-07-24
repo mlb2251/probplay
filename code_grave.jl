@@ -2,6 +2,118 @@
 
 
 
+# @gen function get_split_merge_sprite(tr)
+
+#     num_sprite_types = tr[:init => :num_sprite_types]
+    
+#     H, W = size(tr[:init => :observed_image])
+
+
+#     if({:split_or_merge} ~ bernoulli(n == 1 ? 1 : 0.5))
+#         #splitting a sprite
+
+#         sprite_index ~ uniform_discrete(1, num_sprite_types)
+
+#         #not perfect 
+#         new_second_sprite_index ~ uniform_discrete(sprite_index+1, num_sprite_types + 1)#is this sound? 
+
+#         mask = tr[:init => :init_sprites => sprite_index => :mask]
+#         height, width = size(mask)
+
+#         #splitting vertically or horizontally
+
+#         if({:vertical_or_horizontal} ~ bernoulli(height == 1 ? 0 : width ==1 ? 1 : 0.5)) #what if has width AND  height one lmao rip 
+#             #splitting vertically, split point is first row of second sprite 
+#             #not sounds since part could be under the other sprite, or splitting with a gap in the middle
+#             split_point ~ uniform_discrete(2, height)
+#         else 
+#             #splitting horizontally
+#             split_point ~ uniform_discrete(2, width) 
+#         end
+
+#     else 
+#         #merging two sprites 
+
+#         sprite_index1 ~ uniform_discrete(1, num_sprite_types)
+#         sprite_index2 ~ uniform_discrete(sprite_index1+1, num_sprite_types) #this isn't correct
+#     end 
+# end
+
+
+# function split_merge_sprite_involution(tr, split_merge, forward_retval, proposal_args)
+
+#     #EVERYTHING ABOUT THIS IS NOT PERFECT IN REVERSE FIX TODO LIKE ALL THE NUMBERING STUFF AND MORE
+
+
+#     #would it be better to take in one sprite as i? 
+#     new_trace_choices = choicemap()
+#     backward_choices = choicemap()
+
+
+#     num_sprite_types = tr[:init => :num_sprite_types]
+#     backward_choices[:split_or_merge] = !split_merge[:split_or_merge]
+
+#     if split_merge[:split_or_merge]
+#         #split 
+
+#         sprite_index = split_merge[:sprite_index]
+#         new_second_sprite_index = split_merge[:new_second_sprite_index]
+
+#         backward_choices[:sprite_index1] = sprite_index
+#         backward_choices[:sprite_index2] = new_second_sprite_index
+
+#         pre_split_mask = tr[:init => :init_sprites => sprite_index => :mask]
+#         vertical_or_horizontal = split_merge[:vertical_or_horizontal]
+
+#         if vertical_or_horizontal
+#             #split vertically 
+#             split_point = split_merge[:split_point]
+#             mask1 = pre_split_mask[1:split_point-1, :]
+#             mask2 = pre_split_mask[split_point:end, :]
+#             yshift, xshift = split_point - 1, 0
+            
+#         else 
+#             #split horizontally 
+#             split_point = split_merge[:split_point]
+#             mask1 = pre_split_mask[:, 1:split_point-1]
+#             mask2 = pre_split_mask[:, split_point:end]
+#             yshift, xshift = 0, split_point - 1
+#         end
+
+#         color = tr[:init => :init_sprites => sprite_index => :color]
+#         #set the first sprite 
+#         new_trace_choices[(:init => :init_sprites => sprite_index => :mask)] = mask1
+#         new_trace_choices[(:init => :init_sprites => sprite_index => :color)] 
+
+#         #set the second sprite
+#         new_trace_choices[(:init => :init_sprites => new_second_sprite_index => :mask)] = mask2
+#         new_trace_choices[(:init => :init_sprites => new_second_sprite_index => :color)] = color
+
+#         #for all objects of that type, split into two objects 
+#         newN = tr[:init => :N]
+
+#         for obin in 1:tr[:init => :N]
+#             #is object sprite index is the sprite index
+#             if tr[:init => :init_objs => obin => sprite_index] == sprite_index
+#                 pos = tr[:init => :init_objs => obin => :pos]
+#                 #make a second object with the second part of the sprite 
+#                 newN += 1
+#                 newy, newx= pos.y + yshift, pos.x + xshift
+#                 tr[:init => :init_objs => newN => new_second_sprite_index => :pos] = Position(newy, newx)
+#                 tr[:init => :init_objs => newN => new_second_sprite_index => :sprite_index] = new_second_sprite_index
+#             end 
+#         end 
+
+#         tr[:init => :N] = newN
+
+#     else
+#         #merge 
+#         sprite_index1, sprite_index2 = split_merge[:sprite_index1], split_merge[:sprite_index2]
+        
+
+
+
+
 #doubt i need this 
 # @gen function get_always_true(tr, i, hi, wi)
 #     useless ~ uniform_discrete(1, 1)

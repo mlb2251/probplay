@@ -46,8 +46,10 @@ end
 
 const uniform_position = UniformPosition()
 
+
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
 
+allpositions = Map(uniform_position)
 
 struct UniformDriftPosition <: Gen.Distribution{Position} end
 
@@ -284,7 +286,7 @@ make_sprites = Map(make_type)
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
 @gen (static) function init_model(H,W,var)
-    num_sprite_types ~ poisson_plus_1(4)
+    num_sprite_types ~ poisson_plus_1(0.5)
     N ~ poisson_plus_1(0.5)
     sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprite_types), [H for _ in 1:num_sprite_types], [W for _ in 1:num_sprite_types]) 
     objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprite_types for _ in 1:N])

@@ -20,7 +20,33 @@ as a simple first pass of object detection
 """
 
 
+function test_one_involution(frame)
+    (C, H, W) = size(frame)
+    (cluster, objs, sprites) = process_first_frame(frame)
 
+    cm = build_init_obs(H,W, sprites, objs, frame)
+
+    tr = generate(model, (H, W, 1), cm)[1]
+
+
+
+    for repeat in 1:100#0
+        #tr, accepted = mh(tr, get_split_merge, (), split_merge_involution)
+        tr = total_update(tr)
+
+
+        # if accepted
+        #     print("split/merge")
+        # end
+        #render trace
+        
+        if repeat % 10 == 0
+
+            html_body(html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])))
+        end 
+    end 
+render();
+end 
 
 function total_update(tr)
     #do one pass of making a heatmap
@@ -34,21 +60,20 @@ function total_update(tr)
     #@show heatmap
 
 
+    # #split merge ksdfjksjfksajfk
 
-    #split merge 
-
-    tr, accepted = mh(tr, get_split_merge, (), split_merge_involution)
-    if accepted
-        print("split/merge")
-    end
+    # tr, accepted = mh(tr, get_split_merge, (), split_merge_involution)
+    # if accepted
+    #     print("split/merge")
+    # end
 
     #sprite proposals 
 
     #add/remove sprite TODO
-    tr, accepted = mh(tr, select(:num_sprite_types))
+    tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
     if accepted
-        # print("sprite added/removed")
-    end 
+        print("added/removed sprite")
+    end
 
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
     
@@ -384,6 +409,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     init_obs = build_init_obs(H,W, sprites, objs, observed_images[:,:,:,1])
 
     #new version 
+
     # init_obs = process_first_frame_v2(observed_images[:,:,:,1])
 
 

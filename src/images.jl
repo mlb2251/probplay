@@ -69,14 +69,14 @@ function render_heatmap(heatmap)
 
 end 
 
-function render_matrix(m)
+function render_matrix(m, color=1)
     #getting between 0 and 1
     m = (m .- minimum(m)) ./ (maximum(m) - minimum(m))
     H, W = size(m)
     img = zeros(3, H, W)
     for i in 1:H
         for j in 1:W
-            img[1, i, j] = m[i,j]
+            img[color, i, j] = m[i,j]
         end
     end
     html_img(img)

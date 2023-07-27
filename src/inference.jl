@@ -334,8 +334,8 @@ const SAMPLES_PER_OBJ = 20
     t = prev_T
     observed_image = obs[(:steps => t => :observed_image)]
 
-    prev_objs = objs_from_trace(prev_trace, t - 1)
-    prev_sprites = sprites_from_trace(prev_trace, 0) # todo t=0 for now bc no changing sprites over time
+    prev_objs = state_of_trace(prev_trace, t - 1)
+    prev_sprites = env_of_trace(prev_trace).sprites
 
     bwd_choices = choicemap()
     trace_updates = choicemap()
@@ -513,8 +513,8 @@ of the current position
     grid_size = 2
     observed_image = obs[(:steps => t => :observed_image)]
 
-    prev_objs = objs_from_trace(prev_trace, t - 1)
-    prev_sprites = sprites_from_trace(prev_trace, 0) # todo t=0 for now bc no changing sprites over time
+    prev_objs = state_of_trace(prev_trace, t - 1)
+    prev_sprites = env_of_trace(prev_trace).sprites
 
     # now for each object, propose and sample changes 
     for obj_id in 1:prev_trace[:init => :N]

@@ -40,13 +40,16 @@ function code_test()
     c = circle!(sprites,[.7,0.,0.], 3)
 
     env = new_env();
-    push!(env.code_library.fns, CFunc(parse(SExpr,"(pass)")))
-    push!(env.code_library.fns, CFunc(parse(SExpr,
-        "(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))"
-    )))
+    env.code_library = [
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1) 0.5))")),
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))"))
+    ]
+    # push!(env.code_library, CFunc(parse(SExpr,
+    #     "(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) 1) 1.0))"
+    # )))
         # CSetAttr(CGetLocal(1), 0, CNormalVec(CGetAttr(CGetLocal(1), 0), CFloat(1.0)))))
 
-    objs = [Object(c, Vec(10,10), [], 2)]
+    objs = [Object(c, Vec(20,20), [Vec(1.0,1.0)])]
     first_frame = draw(H, W, objs, sprites)
 
     # vel = Vec(1,2)
@@ -56,11 +59,12 @@ function code_test()
 
     @time for t in 2:T
         # objs[1] = set_pos(objs[1], objs[1].pos + vel)
-        call_func(env.code_library.fns[2], Any[objs[1]], env)
+        call_func(env.code_library[1], Any[objs[1]], env)
         frames[:,:,:,t] = draw(H, W, objs, sprites)
         # @show objs[1]
         # vel += Vec(rand()-.7, rand()-.7)
     end
+    html_body("<code> (set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0)) </code> <br><br>")
     html_body(html_gif(frames, width="400px"))
 end
 

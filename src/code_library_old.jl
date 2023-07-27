@@ -82,11 +82,11 @@ function exec(func::CFunc, args::Vector{Any}, env::Env)
 end
 
 function obj_init(obj::Object, env::Env)
-    exec(env.code_library.fns[obj.init], Any[obj], env)
+    exec(env.code_library[obj.init], Any[obj], env)
 end
 
 function obj_step(obj::Object, env::Env)
-    exec(env.code_library.fns[obj.step], Any[obj], env)
+    exec(env.code_library[obj.step], Any[obj], env)
 end
 
 

@@ -1,48 +1,62 @@
 import DynamicForwardDiff: Dual
 
-function objs_from_trace(trace, t)
-    (H,W,T) = get_args(trace)
-    @assert t <= T
-    objs = Object[] #why grey text here?
-    for i in 1:trace[:init => :N]
-        if t == 0
-            pos = trace[:init => :init_objs => i => :pos]
-        else
-            pos = trace[:steps => t => :objs => i => :pos]
-        end
-        
-        sprite_index = trace[:init => :init_objs => i => :sprite_index]
-        #@show sprite_index
-        obj = Object(sprite_index, pos)
-        push!(objs, obj)
-    end
-    objs
+
+function env_of_trace(trace)
+    return trace[:init]
 end
 
-function sprites_from_trace(trace, t)
-    (H,W,T) = get_args(trace)
-    @assert t == 0 # we havent implemented sprites changing over time yet
-    sprites = Sprite[]
-    for i in 1:trace[:init => :num_sprites]
-
-        color = trace[:init => :init_sprites => i => :color] #?
-        
-        shape = trace[:init => :init_sprites => i => :shape]
-
-        if color isa Vector{Dual{Nothing, Float64}}
-            sprite = Sprite(shape, [color[1].value, color[2].value, color[3].value])
-        else
-            sprite = Sprite(shape, color)
-        end
-
-        push!(sprites, sprite)
+function state_of_trace(trace, t)
+    if t == 0
+        return trace[:init].state
+    else
+        return trace[:steps => t]
     end
-    sprites
 end
+
+
+# function objs_from_trace(trace, t)
+#     (H,W,T) = get_args(trace)
+#     @assert t <= T
+#     objs = Object[] #why grey text here?
+#     for i in 1:trace[:init => :N]
+#         if t == 0
+#             pos = trace[:init => :init_objs => i => :pos]
+#         else
+#             pos = trace[:steps => t => :objs => i => :pos]
+#         end
+        
+#         sprite_index = trace[:init => :init_objs => i => :sprite_index]
+#         #@show sprite_index
+#         obj = Object(sprite_index, pos)
+#         push!(objs, obj)
+#     end
+#     objs
+# end
+
+# function sprites_from_trace(trace, t)
+#     (H,W,T) = get_args(trace)
+#     @assert t == 0 # we havent implemented sprites changing over time yet
+#     sprites = Sprite[]
+#     for i in 1:trace[:init => :num_sprites]
+
+#         color = trace[:init => :init_sprites => i => :color] #?
+        
+#         shape = trace[:init => :init_sprites => i => :shape]
+
+#         if color isa Vector{Dual{Nothing, Float64}}
+#             sprite = Sprite(shape, [color[1].value, color[2].value, color[3].value])
+#         else
+#             sprite = Sprite(shape, color)
+#         end
+
+#         push!(sprites, sprite)
+#     end
+#     sprites
+# end
 
 function render_trace_frame(trace, t)
     (H,W,T) = get_args(trace)
-    draw(H, W, objs_from_trace(trace,t), sprites_from_trace(trace,0)) # todo t=0 for now bc no changing sprites over time
+    draw(H, W, state_of_trace(trace,t).objs, env_of_trace(trace).sprites)
 end
 
 function render_trace(trace)

@@ -187,6 +187,11 @@ mutable struct CFunc
     body::SExpr
 end
 
+mutable struct Ty
+    step::CFunc
+    attrs::Vector{Type}
+end
+
 # struct CLibrary
 #     fns::Vector{CFunc}
 # end

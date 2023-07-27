@@ -49,30 +49,42 @@ end
 set_mask(sprite::Sprite, mask) = Sprite(mask, sprite.color)
 set_color(sprite::Sprite, color) = Sprite(sprite.mask, color)
 
+
+mutable struct ObjRef
+    id::Int
+end
+
+struct TyRef
+    id::Int
+end
+
 mutable struct Object
-    sprite_index :: Int  
+    # type :: Int
+    sprite_index :: Int
     pos :: Vec
     attrs :: Vector{Any}
-    step :: Int
-    # vel :: Vec
-    # pos_noise :: Float64
 
-    Object(sprite_index, pos) = new(sprite_index, pos, [], 0)
-    Object(sprite_index, pos, attrs, step) = new(sprite_index, pos, attrs, step)
+    Object(sprite_index, pos) = new(sprite_index, pos, [])
+    Object(sprite_index, pos, attrs) = new(sprite_index, pos, attrs)
 end
+
+Base.copy(obj::Object) = Object(obj.sprite_index, obj.pos, copy(obj.float_attrs))
 
 # Object(sprite_index, pos) = Object(sprite_index, pos, [], 0)
 
-set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos, obj.attrs, obj.step)
-set_pos(obj::Object, pos) = Object(obj.sprite_index, pos, obj.attrs, obj.step)
+set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos, obj.attrs)
+set_pos(obj::Object, pos) = Object(obj.sprite_index, pos, obj.attrs)
 
 include("images.jl")
 
 @dist labeled_cat(labels, probs) = labels[categorical(probs)]
 
-struct UniformPosition <: Gen.Distribution{Vec} end
 
 const EPSILON = .001
+
+
+struct UniformPosition <: Gen.Distribution{Vec} end
+const uniform_position = UniformPosition()
 
 function Gen.random(::UniformPosition, height, width)
     Vec(uniform(1., height+1-EPSILON), uniform(1., width+1-EPSILON))
@@ -82,7 +94,8 @@ function Gen.logpdf(::UniformPosition, pos, height, width)
     Gen.logpdf(uniform, pos.y, 1., height+1-EPSILON) + Gen.logpdf(uniform, pos.x, 1., width+1-EPSILON)
 end
 
-const uniform_position = UniformPosition()
+
+
 
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
 
@@ -232,29 +245,34 @@ function draw(H, W, objs, sprites)
     # canvas
 end
 
+
+
 include("code_library.jl")
 
 
 
-@gen (static) function obj_dynamics(obj::Object)
+@gen function obj_dynamics(obj_id::Int, env::Env)
+    step ~ call_func(env.code_library[env.step_of_obj[obj_id]], Any[env.state.objs[obj_id]], env)
     # pos ~ uniform_drift_position(obj.pos,2);
-    pos ~ normal_vec(obj.pos,2.);
-    return Object(obj.sprite_index, pos)
+    # pos ~ normal_vec(env.state.objs[obj_id].pos,2.);
+    # return Object(obj.sprite_index, pos)
+    return nothing
 end
 
-all_obj_dynamics = Map(obj_dynamics)
+# all_obj_dynamics = Map(obj_dynamics)
 
-struct State
-    objs::Vector{Object}
-    sprites::Vector{Sprite}
-end
 
-@gen (static) function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
-    objs ~ all_obj_dynamics(prev_state.objs)
-    sprites = prev_state.sprites 
-    rendered = draw(canvas_height, canvas_width, objs, sprites)
+# Base.copy(state::State) = State([copy], copy(state.globals))
+
+@gen function dynamics_and_render(t::Int, prev_state::State, env::Env, canvas_height, canvas_width, var)
+    env.state = deepcopy(prev_state)
+    for i in eachindex(env.state.objs)
+        {:objs => i} ~ obj_dynamics(i, env)
+    end
+
+    rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
     observed_image ~ image_likelihood(rendered, var)
-    return State(objs, sprites)
+    return env.state
 end
 
 unfold_step = Unfold(dynamics_and_render)
@@ -264,7 +282,7 @@ unfold_step = Unfold(dynamics_and_render)
     #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
 
-    return Object(sprite_index, pos)
+    return Object(sprite_index, pos, [])
 end
 
 @gen (static) function make_type(i, H, W) 
@@ -289,14 +307,22 @@ make_sprites = Map(make_type)
 @gen function init_model(H,W,var)
     num_sprites ~ poisson_plus_1(4)
     N ~ poisson(7)
-    sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
-    objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprites for _ in 1:N])
+    env = new_env();
 
-    #rendered = draw(H, W, objs, sprites)
-    rendered = draw_region(objs, sprites, 1, H, 1, W)
+    env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
+
+    env.code_library = [
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1) 0.5))")),
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+    ]
+
+    env.state.objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprites for _ in 1:N])
+    env.step_of_obj = [2 for _ in 1:N] # not ok lol
+
+    rendered = draw(H, W, env.state.objs, env.sprites)
     {:observed_image} ~ image_likelihood(rendered, var)
 
-    State(objs, sprites) 
+    env
 end
 
 # #testing
@@ -307,11 +333,11 @@ end
 @gen (static) function model(H, W, T) 
 
     var = .1
-    init_state = {:init} ~ init_model(H,W,var)
+    env = {:init} ~ init_model(H,W,var)
     #@show init_state
-    state = {:steps} ~ unfold_step(T-1, init_state, H, W, var)
+    {:steps} ~ unfold_step(T-1, env.state, env, H, W, var)
 
-    return state
+    return env
 end
 
 # #testing

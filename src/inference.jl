@@ -73,7 +73,12 @@ function total_update(tr)
     tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
     if accepted
         print("added/removed sprite")
+        #@show tr
+        #dfklajk
     end
+
+    #@show tr
+    
 
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
     

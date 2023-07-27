@@ -3,11 +3,72 @@
 
 
 
+        # scores = zeros(Float64, H*W)
 
-@dist uniform_not_x(x, min, max) = uniform(min, max - 1) < x ? uniform(min, max - 1) : uniform(min + 1, max)
+    # for hi in 1:H
+    #     for wi in 1:W
+    #         #heat score + closeness to old x, y (- distance)
+    #         #can change weight about how much the distance vs heatmap matters
+    #         scores[(wi-1)*H + hi] = - 5*sqrt((hi - oldy)^2 + (wi - oldx)^2) + heatmap[hi, wi]
+            
+            
+    #     end
+    # end
+
+    # # ##uncomment to render heatmap with weighted for distance 
+    # # matrixver = reshape(scores, (H, W)) 
+    # # html_body(render_matrix(matrixver))
+
+    # #@show prescores 
+    # scores_logsumexp = logsumexp(scores)
+    # scores =  exp.(scores .- scores_logsumexp)
+        #@show old_sindicies
+        #@show change_plan
 
 
 
+        #@show "THESE ARENT FINAL "
+        #@show new_trace_choices
+
+        # # #if object of a sprite type of index greater than the one removed, change its sprite index down by ones
+        # for j in 1:new_trace_choices[:init => :N]#could be more efficient to do these loops at once 
+        #     si = new_trace_choices[:init => :init_objs => j => :sprite_index]
+        #     if si > sprite_index
+        #         new_trace_choices[:init => :init_objs => j => :sprite_index] = si - 1  
+        #     end
+        # end
+
+
+
+
+
+        #old ver 
+
+
+
+        # for noti in 1:tr[:init => :N]
+        #     i = tr[:init => :N] - noti + 1 #going in reverse order to not mess up the cascades
+        #     si = tr[:init => :init_objs => i => :sprite_index]
+        #     @show i
+        #     @show si
+        #     #if object of the type to remove
+        #     if si == sprite_index
+        #         pos = tr[:init => :init_objs => i => :pos]
+        #         # push!(positions, pos)
+        #         Nremoved+=1
+        #         backward_choices[:positions => Nremoved => :pos] = pos #this will have to change 
+        #         if i != newN
+        #             #shifty thing 
+        #             shiftallobjs(i+1, newN, x -> x-1, new_trace_choices, tr)
+        #         end
+        #         newN -= 1
+        #     #if object of a sprite type of index greater than the one removed, change its sprite index down by ones
+        #     elseif si > sprite_index
+                
+        #         new_trace_choices[:init => :init_objs => i => :sprite_index] = si - 1 #doesn't mix well with shiftallobjs 
+        #     end
+        #     new_trace = update(new_trace, get_args(tr), (NoChange(),), new_trace_choices)
+        # end
 
 # # #SPLIT MERGE SPRITE 
 # @gen function get_split_merge(tr)

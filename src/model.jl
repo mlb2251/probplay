@@ -46,10 +46,15 @@ end
 
 const uniform_position = UniformPosition()
 
-
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
 
-allpositions = Map(uniform_position)
+@gen (static) function get_position(i, H, W)
+    pos ~ uniform_position(H, W)
+    return pos
+end
+
+allpositions = Map(get_position) #works with this not uniform pos 
+
 
 struct UniformDriftPosition <: Gen.Distribution{Position} end
 
@@ -64,6 +69,7 @@ function Gen.logpdf(::UniformDriftPosition, pos_new, pos, max_drift)
 end
 
 const uniform_drift_position = UniformDriftPosition()
+
 
 (::UniformDriftPosition)(pos, max_drift) = random(UniformDriftPosition(), pos, max_drift)
 

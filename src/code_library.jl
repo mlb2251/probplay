@@ -187,19 +187,24 @@ mutable struct CFunc
     body::SExpr
 end
 
-struct CLibrary
-    fns::Vector{CFunc}
+# struct CLibrary
+#     fns::Vector{CFunc}
+# end
+
+mutable struct State
+    objs::Vector{Object}
+    globals::Vector{Any}
 end
 
 mutable struct Env
     locals::Vector{Any}
-    globals::Vector{Any}
-    objects::Vector{Object}
+    state::State
+    step_of_obj::Vector{Int} # which step function for each object
     sprites::Vector{Sprite}
-    code_library::CLibrary
+    code_library::Vector{CFunc}
 end
 
-new_env() = Env([], [], Object[], Sprite[], CLibrary(CFunc[]))
+new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[])
 
 
 @gen function call_func(func::CFunc, args::Vector{Any}, env::Env)
@@ -210,7 +215,7 @@ new_env() = Env([], [], Object[], Sprite[], CLibrary(CFunc[]))
     return res
 end
 
-@gen function exec(e::SExpr, env::Env) 
+@gen function exec(e::SExpr, env::Env)
     if e.is_leaf
         return e.leaf
     end
@@ -219,6 +224,45 @@ end
 
     if head === :pass
         return nothing
+    elseif head === :spawn
+        ty ~ exec(e.children[2], env)
+        ty::TyRef
+        sprite ~ exec(e.children[3], env)
+        pos ~ exec(e.children[4], env)
+        attrs = []
+        for (i,attr_ty) in enumerate(env.types[ty.id].attrs)
+            attr = {:attrs => i} ~ exec(e.children[4+i], env)
+            attr::attr_ty # type assert
+            push!(attrs, attr)
+        end
+        obj = Object(sprite, pos, attrs)
+        # todo have it reuse slots that have been freed
+        push!(env.state.objs, obj)
+        return ObjRef(length(env.state.objs))
+    elseif head === :despawn
+        obj ~ exec(e.children[2], env)
+        obj::ObjRef
+        obj.id = 0
+        # find every objref to this and set it to null
+        # for obj2 in env.state.objs
+        #     if obj2 isa Object
+        #         for i in eachindex(obj2.attrs)
+        #             obj3 = obj2.attrs[i]
+        #             if obj3 isa ObjRef && obj3.id == obj.id
+        #                 obj2.attrs[i].id = 0
+        #             end
+        #         end
+        #     end
+        # end
+        return nothing
+    elseif head === :ty
+        id = unwrap(e.children[2])::Int
+        @assert 0 < id <= length(env.types)
+        return TypeRef(id)
+    elseif head === :+
+        a ~ exec(e.children[2], env)
+        b ~ exec(e.children[3], env)
+        return a + b
     elseif head === :normal_vec
         mu ~ exec(e.children[2], env)
         var ~ exec(e.children[3], env)
@@ -250,6 +294,12 @@ end
             obj.attrs[attr] = value
         end
         return nothing
+    elseif head === :isnull
+        obj ~ exec(e.children[2], env)
+        obj::ObjRef
+        return obj.id == 0
+    elseif head === :null
+        return ObjRef(0)
     else
         @assert head isa Symbol "$(typeof(head))"
         @assert !startswith(string(head), ":") "the symbol $head has an extra leading colon (:) note that parsing sexprs inserts colons so you may have unnecessarily included one"

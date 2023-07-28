@@ -17,6 +17,7 @@ if add samples sprite id, sprite mask, sprite color, list of obj ids, list of po
         mask ~ bernoulli_2d(0.8, height, width) #change this
         color ~ rgb_dist()
         
+        
         N = tr[:init => :N]
         num_objs ~ poisson_plus_1(0.5)
 
@@ -30,49 +31,139 @@ if add samples sprite id, sprite mask, sprite color, list of obj ids, list of po
 end 
 
 
-#from heatmap, pick a badly explained place and flood fill around it everything of the same color? 
+# #from heatmap, pick a badly explained place and flood fill around it everything of the same color? 
+function update_min_max(pos, miny, minx, maxy, maxx)
+    if pos.y < miny
+        miny = pos.y
+    end
+    if pos.y > maxy
+        maxy = pos.y
+    end
+    if pos.x < minx
+        minx = pos.x
+    end
+    if pos.x > maxx
+        maxx = pos.x
+    end
+    return miny, minx, maxy, maxx
+end
 
 
-# @gen function get_new_ff_sprite(tr, heatmap)
-#     #samples a place to start filling from based on heatmap
-#     scores = scores_from_heatmap(heatmap)
-#     place ~ categorical(scores)
-#     #get the color of the place
-#     observed_image = tr[:init => :observed_image]
-#     @show place 
-#     COME BACK TO THIS 
-# end 
+@gen function get_new_ff_sprite(tr, heatmap)
+    #samples a place to start filling from based on heatmap
+    H, W = size(heatmap)
+    scores = scores_from_heatmap(heatmap)
+    flat_matrix_place_index ~ categorical(scores)
+    base_pos = position_from_flatmatrixindex(flat_matrix_place_index, H, W) 
 
-#STOPPED HERE
+    #get the color of the place
+    observed_image = tr[:init => :observed_image]
+    base_color = observed_image[:, base_pos.y, base_pos.x]
+
+    #floodfill to get mask of a sprite of that color 
+    massive_mask = fill(0, (H,W))
+    pos_queue = [base_pos]
+    finished_queue = []
+
+    miny, minx = H, W
+    maxy, maxx = 1, 1
+
+    increasingnumber = 0
+    while length(pos_queue) > 0
+        increasingnumber += 1
+        # @show pos_queue
+        # @show finished_queue
+        pos = popfirst!(pos_queue)
+        push!(finished_queue, pos)
+        #color difference 
+        color_diff = sum(abs.(observed_image[:, pos.y, pos.x] - base_color))/3 #ranges from 0 to 1, make not have 0 or 100 
+
+        #if near color, sampling this for full support, add to mask and add neibors to queue
+        distance = ((pos.y-base_pos.y)^2 + (pos.x-base_pos.x)^2)^0.5
+        in_mask = {(:in_mask,increasingnumber)} ~ bernoulli(((1 - color_diff)*0.99+0.005)^(distance))#fix 
+        #maybe include smth abt distance to base_pos 
+        if in_mask 
+            miny, minx, maxy, maxx = update_min_max(pos, miny, minx, maxy, maxx)
+            #add to mask
+            massive_mask[pos.y, pos.x] = 1
+            #add neighbors to pos_queue
+            neighbor_list = ((0,-1), (-1,0), (0,1), (1,0), (1,1), (1,-1), (-1,1), (-1,-1))
+            for dydx in neighbor_list
+                dy, dx = dydx
+                #if in image bounds 
+                if pos.y + dy > 0 && pos.y + dy <= H && pos.x + dx > 0 && pos.x + dx <= W
+                    neighbor_pos = Position(pos.y + dy, pos.x + dx)
+                    if !((neighbor_pos in finished_queue) || (neighbor_pos in pos_queue))
+                        push!(pos_queue, neighbor_pos)
+                    end
+                end
+            end 
+        end 
+    end 
+
+    #shrink the mask to the smallest possible and get the position of massive_mask 
+    mask_pos = Position(miny, minx)
+    mask = massive_mask[miny:maxy, minx:maxx]
+    #rendering for testing 
+    html_body(render_matrix(mask, 3))
+    
+    r ~ beta(get_alpha(base_color[1]), 1)
+    g ~ beta(get_alpha(base_color[2]), 1)
+    b ~ beta(get_alpha(base_color[3]), 1)
+
+    color = [r, g, b]
+    sprite = Sprite(mask, color)
+    #return sprite, mask_pos
+    return sprite 
+end 
 
 
 
+
+
+
+@gen function get_color_bernoulli(i, observed_image, pos, base_color)
+    color_diff = sum(abs.(observed_image[:, pos.y, pos.x] - base_color))/3 #ranges from 0 to 1	
+    in_mask ~ bernoulli(1 - color_diff) #if near color, sampling this for full support(will use to decide to ask to mask and neibors to queue)
+end
+
+get_all_color_bernoulli = Map(get_color_bernoulli)
 
 @gen function dd_add_remove_sprite_random(tr, heatmap)
     """
     if remove samples sprite id
     if add samples sprite id, sprite mask, sprite color, list of obj ids, list of positions"""
-        num_sprite_types = tr[:init => :num_sprite_types]
-        if({:add_or_remove} ~ bernoulli(num_sprite_types == 1 ? 1 : 0.5)) 
-            #adding 
-            #make this data driven 
-            C, H, W = size(tr[:init => :observed_image])
-            height ~ uniform_discrete(1,H)
-            width ~ uniform_discrete(1,W)
-            mask ~ bernoulli_2d(0.8, height, width) #change this
-            color ~ rgb_dist()
-            
-            N = tr[:init => :N]
-            num_objs ~ poisson_plus_1(0.5)
-    
-            #todo make them not all add to the end 
-            #sample position for each new object, to do make data drivennnn
-            positions ~ allpositions(collect(1:num_objs), [H for _ in 1:num_objs], [W for _ in 1:num_objs])
-        else 
-            #removing 
-            rm_sprite_index ~ uniform_discrete(1, num_sprite_types)
-        end 
+    num_sprite_types = tr[:init => :num_sprite_types]
+    if({:add_or_remove} ~ bernoulli(num_sprite_types == 1 ? 1 : 0.5)) 
+        #adding 
+        #make this data driven 
+        C, H, W = size(tr[:init => :observed_image])
+        #sprite, mask_pos ~ get_new_ff_sprite(tr, heatmap) #how to do this 
+        #@show get_new_ff_sprite(tr, heatmap)
+
+        #@show get_choices(get_new_ff_sprite(tr, heatmap))
+        #sprite = get_new_ff_sprite(tr, heatmap) #new supmap of choicemap called sprite with the choices
+
+        @show generate(get_new_ff_sprite, (tr, heatmap))
+        
+        #map[:sprite] = get_new_ff_sprite(tr, heatmap)
+        #sprite = {:sprite} ~ get_new_ff_sprite(tr, heatmap) #new supmap of choicemap called sprite with the choices 
+        
+        sprite ~ get_new_ff_sprite(tr, heatmap)
+
+        num_objs ~ poisson_plus_1(0.5)
+
+        #todo make them not all add to the end 
+        #sample position for each new object, to do make data drivennnn
+        #todo incorporate mask_pos here!!
+        positions ~ allpositions(collect(1:num_objs), [H for _ in 1:num_objs], [W for _ in 1:num_objs])
+        return sprite 
+    else 
+        #removing 
+        #todo make data driven 
+        rm_sprite_index ~ uniform_discrete(1, num_sprite_types)
     end 
+end 
 
 
 
@@ -158,6 +249,94 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
 end 
 
 
+function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, proposal_args)
+    @show add_remove_random
+    #@show tr
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+
+    if add_remove_random[:add_or_remove]
+        #add the new sprite , when we add the ability to add a middle sprite, make sure to deal with the cascade
+        sprite = forward_retval 
+        snp1num = tr[:init => :num_sprite_types] + 1
+        new_trace_choices[:init => :num_sprite_types] = snp1num
+
+        #@show sprite
+        new_trace_choices[:init => :init_sprites => snp1num => :mask] = sprite.mask
+        new_trace_choices[:init => :init_sprites => snp1num => :color] = sprite.color
+        #UHH BE CAREFUL WE DON"T NEED THESE 
+        # new_trace_choices[:init => :init_sprites => snp1num => :height] = sprite.height
+        # new_trace_choices[:init => :init_sprites => snp1num => :width] = sprite.width
+
+        #add the new objects 
+        new_trace_choices[:init => :N] = tr[:init => :N] + add_remove_random[:num_objs]
+        for i in 1:add_remove_random[:num_objs]
+            new_trace_choices[:init => :init_objs => tr[:init => :N] + i => :pos] = add_remove_random[:positions => i => :pos]
+            new_trace_choices[:init => :init_objs => tr[:init => :N] + i => :sprite_index] = tr[:init => :num_sprite_types] + 1
+        end
+
+        backward_choices[:add_or_remove] = false
+        backward_choices[:rm_sprite_index] = tr[:init => :num_sprite_types] + 1
+
+    else 
+        #remove 
+        sprite_index = add_remove_random[:rm_sprite_index]
+        new_trace_choices[:init => :num_sprite_types] = tr[:init => :num_sprite_types] - 1
+
+        positions = []
+        #remove each object
+        #remember to change N 
+        # newN = tr[:init => :N]
+        Nremoved = 0
+
+
+        #remove all objects of that sprite type, shift all the other objects down their ois and if higher si down one
+        old_sindicies = [] 
+        change_plan = [] #1 means removed, negative/zero means how much to go down
+        for i in 1:tr[:init => :N] 
+            si = tr[:init => :init_objs => i => :sprite_index]
+            #push!(old_sindicies, si)
+            if si == sprite_index
+                #push!(change_plan, 1)
+                Nremoved += 1 
+            else
+                shiftallobjs(i, i, x -> x - Nremoved, new_trace_choices, tr)#just one obj actually 
+                if si > sprite_index 
+                    new_trace_choices[:init => :init_objs => i - Nremoved => :sprite_index] = si - 1
+                end 
+                #push!(change_plan, -Nremoved) #change this
+            end
+        end
+
+        new_trace_choices[:init => :N] = tr[:init => :N] - Nremoved
+
+        
+        #remove the sprite
+        if sprite_index != tr[:init => :num_sprite_types] #idk if this is causing the error/neccesary
+            #if not the last sprite, shift all the sprites 
+            shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+        end
+        #shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+        
+
+        backward_choices[:add_or_remove] = true
+        old_mask = tr[:init => :init_sprites => sprite_index => :mask]
+
+        #set_submap!(backward_choices, :sprite, get_choices(Sprite(old_mask, tr[:init => :init_sprites => sprite_index => :color])))
+        backward_choices[:sprite] = Sprite(old_mask, tr[:init => :init_sprites => sprite_index => :color]) #mayyybe
+        #set_submap(backward_choices, :sprite, get_submap(add_remove_random[:sprite]))
+        #need info like ff about how this sprite was made 
+        #LOOK HERE 
+
+        #backward_choices[:sprite] = forward_retval#this is so beyond incorrect 
+        backward_choices[:num_objs] = Nremoved
+        #backward_choices[:positions] = positions
+    end
+    #@show new_trace_choices
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    #@show new_trace
+    (new_trace, backward_choices, weight)
+end 
 
 
 
@@ -605,7 +784,15 @@ end
     bnew ~ uniform(mins[3], maxs[3])
     
 end
-
+function get_alpha(peak) #idk whats going on here lol 
+    if peak <= 0
+        return 0.00001
+    elseif peak >= 1
+        return 0.99999
+    else
+        return peak / (1 - peak)
+    end
+end
 
 @gen function dd_get_random_new_color(tr, i)
     r, g, b = tr[:init => :init_sprites => i => :color]
@@ -660,15 +847,7 @@ end
     # bnew ~ beta_with_peak(bavg)
 
 
-    function get_alpha(peak) #idk whats going on here lol 
-        if peak <= 0
-            return 0.00001
-        elseif peak >= 1
-            return 0.99999
-        else
-            return peak / (1 - peak)
-        end
-    end
+    
 
     rnew ~ beta(get_alpha(ravg), 1)
     gnew ~ beta(get_alpha(gavg), 1)
@@ -676,6 +855,8 @@ end
     
     
 end 
+
+
 
 function color_involution(tr, colors, forward_retval, proposal_args)
     i = proposal_args[1]
@@ -755,6 +936,12 @@ function scores_from_heatmap(heatmap, other_hiwi_func=nothing)
     return scores
 end
 
+function position_from_flatmatrixindex(index, H, W)
+    x = floor(index / H) + 1
+    y = index % H
+
+    return Position(y, x)
+end
 
 
 function shift_involution(tr, drift, forward_retval, proposal_args) 
@@ -798,10 +985,10 @@ function dd_shift_involution(tr, newspot, forward_retval, proposal_args)
 
 
     flatmatrixindex = newspot[:flatmatrixindex]
-    newx = floor(flatmatrixindex / H) + 1
-    newy = flatmatrixindex % H
+    # newx = floor(flatmatrixindex / H) + 1
+    # newy = flatmatrixindex % H
 
-    newpos = Position(newy, newx)
+    newpos = position_from_flatmatrixindex(flatmatrixindex, H, W)
     new_trace_choices[(:init => :init_objs => i => :pos)] = newpos
 
     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)

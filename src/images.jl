@@ -65,11 +65,11 @@ function render_heatmap(heatmap)
     final_heatmap = spread_heatmap
 
     
-    render_matrix(final_heatmap)
+    render_matrix(final_heatmap, -1)
 
 end 
 
-function render_matrix(m, color=1)
+function render_matrix(m, color=2, render=false)
     #getting between 0 and 1
     m = (m .- minimum(m)) ./ (maximum(m) - minimum(m))
     H, W = size(m)
@@ -79,7 +79,12 @@ function render_matrix(m, color=1)
             img[color, i, j] = m[i,j]
         end
     end
-    html_img(img)
+    if render
+        html_body(html_img(img))
+        render()
+    else
+        return html_img(img)
+    end 
 end 
 
 

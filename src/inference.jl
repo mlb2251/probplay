@@ -29,10 +29,18 @@ function test_one_involution(frame)
     tr = generate(model, (H, W, 1), cm)[1]
 
 
-
     for repeat in 1:100#0
+        #THING U WANNA TEST HERE 
         #tr, accepted = mh(tr, get_split_merge, (), split_merge_involution)
-        tr = total_update(tr)
+        #tr = total_update(tr)
+        @show tr
+        
+        heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
+        tr, accepted = mh(tr, dd_add_remove_sprite_random, (heatmap,), dd_add_remove_sprite_involution)
+        if accepted
+            print("added/removed sprite")
+        end
+    
 
 
         # if accepted
@@ -53,7 +61,7 @@ function total_update(tr)
     
     heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
     #@show heatmap
-    eheatmap = 2.71828 .^ heatmap
+    #eheatmap = 2.71828 .^ heatmap
     #@show eheatmap
     #@show minimum(heatmap),  maximum(heatmap), minimum(eheatmap), maximum(eheatmap)
     
@@ -69,15 +77,19 @@ function total_update(tr)
 
     #sprite proposals 
 
-    #add/remove sprite TODO
-    tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
+    # #add/remove sprite 
+    # tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
+    # if accepted
+    #     print("added/removed sprite")
+    # end
+
+
+    #dd add/remove sprite 
+    @show tr
+    tr, accepted = mh(tr, dd_add_remove_sprite_random, (heatmap,), dd_add_remove_sprite_involution)
     if accepted
         print("added/removed sprite")
-        #@show tr
-        #dfklajk
     end
-
-    #@show tr
     
 
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well

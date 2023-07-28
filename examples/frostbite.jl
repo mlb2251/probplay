@@ -34,7 +34,7 @@ end
 
 function code_test()
     H,W = 40,40
-    T = 200
+    T = 20
     objs = Object[]
     sprites = Sprite[]
     c = circle!(sprites,[.7,0.,0.], 3)
@@ -57,12 +57,15 @@ function code_test()
     frames = zeros(Float64, 3, H, W, T)
     frames[:,:,:,1] = first_frame
 
+
+    func = 1
+
     @time for t in 2:T
-        # objs[1] = set_pos(objs[1], objs[1].pos + vel)
-        call_func(env.code_library[1], Any[objs[1]], env)
+        call_func(env.code_library[func], Any[objs[1]], env)
         frames[:,:,:,t] = draw(H, W, objs, sprites)
-        # @show objs[1]
-        # vel += Vec(rand()-.7, rand()-.7)
+        if t == 10
+            func = 2
+        end
     end
     html_body("<code> (set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0)) </code> <br><br>")
     html_body(html_gif(frames, width="400px"))

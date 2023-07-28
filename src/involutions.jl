@@ -322,8 +322,19 @@ function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, 
         backward_choices[:add_or_remove] = true
         old_mask = tr[:init => :init_sprites => sprite_index => :mask]
 
-        #set_submap!(backward_choices, :sprite, get_choices(Sprite(old_mask, tr[:init => :init_sprites => sprite_index => :color])))
+
+        #SOMETHING LIKE THIS??
         backward_choices[:sprite] = Sprite(old_mask, tr[:init => :init_sprites => sprite_index => :color]) #mayyybe
+        
+        for i in 1:size(old_mask)
+            backward_choices[:sprite => :in_mask, i] = true
+        end 
+        backward_choices[:sprite => :r] = tr[:init => :init_sprites => sprite_index => :color][1]
+        backward_choices[:sprite => :g] = tr[:init => :init_sprites => sprite_index => :color][2]
+        backward_choices[:sprite => :b] = tr[:init => :init_sprites => sprite_index => :color][3]
+        #how do I set backward retval 
+
+        
         #set_submap(backward_choices, :sprite, get_submap(add_remove_random[:sprite]))
         #need info like ff about how this sprite was made 
         #LOOK HERE 

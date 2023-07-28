@@ -124,7 +124,10 @@ function first_frame(;particles=8, steps=1000, step_chunk=50)
     #frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
 
     #tiny
-    frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
+    #frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
+
+    #big 
+    frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=1, tskip=4)[:,:,:,1]
 
 
     (C,H,W) = size(frame)
@@ -153,3 +156,13 @@ function joke(;particles=8, steps=100, step_chunk=30)
     Atari.process_first_frame_v2(frame; num_particles=particles, steps=steps, step_chunk=step_chunk)
 end
 
+
+function test_involution()
+    frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
+
+
+    (C,H,W) = size(frame)
+
+    html_body("<h1>Observations</h1>", html_img(frame))
+    Atari.test_one_involution(frame)
+end 

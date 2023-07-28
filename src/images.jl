@@ -65,21 +65,42 @@ function render_heatmap(heatmap)
     final_heatmap = spread_heatmap
 
     
-    render_matrix(final_heatmap)
+    render_matrix(final_heatmap, 1)
 
 end 
 
-function render_matrix(m)
+function get_other_colors(color)
+    if color == 1
+        return [2,3]
+    elseif color == 2
+        return [1,3]
+    elseif color == 3
+        return [1,2]
+    end
+end
+
+
+function render_matrix(m, color=2, render=false)
     #getting between 0 and 1
     m = (m .- minimum(m)) ./ (maximum(m) - minimum(m))
     H, W = size(m)
     img = zeros(3, H, W)
     for i in 1:H
         for j in 1:W
-            img[1, i, j] = m[i,j]
+
+            img[color, i, j] = 1
+            other_colors = get_other_colors(color)
+
+            img[other_colors[1], i, j] = m[i,j]
+            img[other_colors[2], i, j] = m[i,j]
         end
     end
-    html_img(img)
+    if render
+        html_body(html_img(img))
+        render()
+    else
+        return html_img(img)
+    end 
 end 
 
 

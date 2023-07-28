@@ -1,227 +1,686 @@
 using Gen
 using Distributions
+#using Random
 
 #SPRITE STUFFFF-----------------------------------------------------------------------------------------------
-
-#ADD REMOVE SPRITE TODO 
-#the adding sprite won't affect anything visually hmmmm
-
-
-# #SPLIT MERGE SPRITE 
-@gen function get_split_merge(tr)
-
-    N = tr[:init => :N]
-    
-    H, W = size(tr[:init => :observed_image])
-
-
-    if({:split_or_merge} ~ bernoulli(N == 1 ? 1 : 0.5)) 
-        #splitting a sprite
-        #note could be same sprite type...
-
-        obin ~ uniform_discrete(1, N)
-        sprite_index = tr[:init => :init_objs => obin => :sprite_index]
-
-        #for now, new second sprite index and new obj index arent perf 
-        new_second_sprite_index ~ uniform_discrete(tr[:init => :num_sprite_types], tr[:init => :num_sprite_types])
-        #new_second_sprite_index ~ uniform_discrete(1, tr[:init => :num_sprite_types])
-        #new_obin ~ uniform_discrete(1, N+1)
-
-        mask = tr[:init => :init_sprites => sprite_index => :mask]
-        height, width = size(mask)
-
-
-        #splitting vertically or horizontally
-
-        if({:vertical_or_horizontal} ~ bernoulli(height == 1 ? 0 : width ==1 ? 1 : 0.5)) #what if has width AND  height one lmao rip 
-            #splitting vertically, split point is first row of second sprite 
-            #not sounds since part could be under the other sprite, or splitting with a gap in the middle
-            exception ~ bernoulli(0.0)
-            if height <= 1
-                @show height
-            end 
-            split_point ~ uniform_discrete(2, height)
-        else 
-            if width <= 1
-                exception ~ bernoulli(1.0) #hackey
-            else 
-                exception ~ bernoulli(0.0)
-            #splitting horizontally
-                split_point ~ uniform_discrete(2, width) 
-            end 
-        end
-
-    else 
-        #merging two sprites 
-
-        Nm1 = N - 1
+@gen function add_remove_sprite_random(tr)
+"""
+if remove samples sprite id
+if add samples sprite id, sprite mask, sprite color, list of obj ids, list of positions"""
+    num_sprite_types = tr[:init => :num_sprite_types]
+    if({:add_or_remove} ~ bernoulli(num_sprite_types == 1 ? 1 : 0.5)) 
+        #adding 
+        #make this data driven 
+        C, H, W = size(tr[:init => :observed_image])
+        height ~ uniform_discrete(1,H)
+        width ~ uniform_discrete(1,W)
+        mask ~ bernoulli_2d(0.8, height, width) #change this
+        color ~ rgb_dist()
         
-        obin1 ~ uniform_discrete(1, Nm1)
-        #@show N, Nm1, obin1
-        obin2 ~ uniform_discrete(obin1 + 1, N)#this isn't correct
+        
+        N = tr[:init => :N]
+        num_objs ~ poisson_plus_1(0.5)
+
+        #todo make them not all add to the end 
+        #sample position for each new object, to do make data drivennnn
+        positions ~ allpositions(collect(1:num_objs), [H for _ in 1:num_objs], [W for _ in 1:num_objs])
+    else 
+        #removing 
+        rm_sprite_index ~ uniform_discrete(1, num_sprite_types)
     end 
+end 
+
+
+# #from heatmap, pick a badly explained place and flood fill around it everything of the same color? 
+function update_min_max(pos, miny, minx, maxy, maxx)
+    if pos.y < miny
+        miny = pos.y
+    end
+    if pos.y > maxy
+        maxy = pos.y
+    end
+    if pos.x < minx
+        minx = pos.x
+    end
+    if pos.x > maxx
+        maxx = pos.x
+    end
+    return miny, minx, maxy, maxx
 end
 
-function get_merged_sprite(obj1, sprite1, obj2, sprite2)
-    """
-    gets sprite and relative position to obj1's position of combined sprite
-    """
-    miny, minx = min(obj1.pos.y, obj2.pos.y), min(obj1.pos.x, obj2.pos.x)
-    #@show miny, obj1.pos.y 
-    relativey1 = (miny + (-1) * obj1.pos.y)
-    relativex1 = (minx + (-1) * obj1.pos.x)
-    relativey2 = min(obj1.pos.y, obj2.pos.y) + (-1) * obj2.pos.y
-    relativex2 = min(obj1.pos.x, obj2.pos.x)  + (-1) * obj2.pos.x
-    height1, width1 = size(sprite1.mask)
-    height2, width2 = size(sprite2.mask)
-    stopi = max(obj1.pos.y + height1, obj2.pos.y + height2)
-    stopj = max(obj1.pos.x + width1, obj2.pos.x + width2)
-    height = stopi  + (-1) * miny
-    width = stopj  + (-1) * minx #check bounds 
 
-    #make a mask combining the two masks 
-    newmask = fill(0, (height, width))
+@gen function get_new_ff_sprite(tr, heatmap)
+    #samples a place to start filling from based on heatmap
+    H, W = size(heatmap)
+    scores = scores_from_heatmap(heatmap)
+    flat_matrix_place_index ~ categorical(scores)
+    base_pos = position_from_flatmatrixindex(flat_matrix_place_index, H, W) 
 
-    #fill with relevant portions of mask1 and mask 1
-    #@show relativex1, relativey1, relativex2, relativey2
+    #get the color of the place
+    observed_image = tr[:init => :observed_image]
+    base_color = observed_image[:, base_pos.y, base_pos.x]
 
+    #floodfill to get mask of a sprite of that color 
+    massive_mask = fill(0, (H,W))
+    pos_queue = [base_pos]
+    finished_queue = []
 
-    newmask[1-relativey1:height1-relativey1, 1-relativex1:width1-relativex1] = sprite1.mask
-    newmask[1-relativey2:height2-relativey2, 1-relativex2:width2-relativex2] = sprite2.mask
-    #second ovverides first, ok
+    miny, minx = H, W
+    maxy, maxx = 1, 1
+
     
-    #averages two colors 
-    newcolor = (sprite1.color + sprite2.color) / 2#this prob wont work 
+    while length(pos_queue) > 0
+        #increasingnumber += 1
+        # @show pos_queue
+        # @show finished_queue
+        pos = popfirst!(pos_queue)
+        push!(finished_queue, pos)
+        #color difference 
+        color_diff = sum(abs.(observed_image[:, pos.y, pos.x] - base_color))/3 #ranges from 0 to 1, make not have 0 or 100 
+        #if near color, sampling this for full support, add to mask and add neibors to queue
+        distance = ((pos.y-base_pos.y)^2 + (pos.x-base_pos.x)^2)^0.5
+        in_mask = {(:in_mask,pos.y,pos.x)} ~ bernoulli(((1 - color_diff)*0.99+0.005)^(distance))#fix 
+        #maybe include smth abt distance to base_pos 
+        if in_mask 
+            miny, minx, maxy, maxx = update_min_max(pos, miny, minx, maxy, maxx)
+            #add to mask
+            massive_mask[pos.y, pos.x] = 1
+            #add neighbors to pos_queue
+            neighbor_list = ((0,-1), (-1,0), (0,1), (1,0), (1,1), (1,-1), (-1,1), (-1,-1))
+            for dydx in neighbor_list
+                dy, dx = dydx
+                #if in image bounds 
+                if pos.y + dy > 0 && pos.y + dy <= H && pos.x + dx > 0 && pos.x + dx <= W
+                    neighbor_pos = Position(pos.y + dy, pos.x + dx)
+                    if !((neighbor_pos in finished_queue) || (neighbor_pos in pos_queue))
+                        push!(pos_queue, neighbor_pos)
+                    end
+                end
+            end 
+        end 
+    end 
 
-    return Sprite(newmask, newcolor), relativey1, relativex1, relativey2, relativex2
+    #filling in the rest false #check how legit this is OH shoot i forgot about the position distinction 
+    for i in 1:H
+        for j in 1:W
+            if !(Position(i, j) in finished_queue)
+                in_mask = {(:in_mask,pos.y,pos.x)} ~ bernoulli(0.0001)
+                if in_mask
+                    miny, minx, maxy, maxx = update_min_max(pos, miny, minx, maxy, maxx)
+                    massive_mask[pos.y, pos.x] = 1
+                end
+            end
+        end 
+    end
+
+    #shrink the mask to the smallest possible and get the position of massive_mask 
+    mask_pos = Position(miny, minx)
+    mask = massive_mask[miny:maxy, minx:maxx]
+    #rendering for testing 
+    html_body(render_matrix(mask, 3))
+    
+    r ~ beta(get_alpha(base_color[1]), 1)
+    g ~ beta(get_alpha(base_color[2]), 1)
+    b ~ beta(get_alpha(base_color[3]), 1)
+
+    color = [r, g, b]
+    sprite = Sprite(mask, color)
+    #return sprite, mask_pos
+    return sprite 
+end 
+
+
+
+
+
+
+@gen function get_color_bernoulli(i, observed_image, pos, base_color)
+    color_diff = sum(abs.(observed_image[:, pos.y, pos.x] - base_color))/3 #ranges from 0 to 1	
+    in_mask ~ bernoulli(1 - color_diff) #if near color, sampling this for full support(will use to decide to ask to mask and neibors to queue)
 end
 
-function split_merge_involution(tr, split_merge, forward_retval, proposal_args)
+get_all_color_bernoulli = Map(get_color_bernoulli)
 
-    #EVERYTHING ABOUT THIS IS NOT PERFECT IN REVERSE FIX TODO LIKE ALL THE NUMBERING STUFF AND MORE
+@gen function dd_add_remove_sprite_random(tr, heatmap)
+    """
+    if remove samples sprite id
+    if add samples sprite id, sprite mask, sprite color, list of obj ids, list of positions"""
+    num_sprite_types = tr[:init => :num_sprite_types]
+    if({:add_or_remove} ~ bernoulli(num_sprite_types == 1 ? 1 : 0.5)) 
+        #adding 
+        #make this data driven 
+        C, H, W = size(tr[:init => :observed_image])
+        #sprite, mask_pos ~ get_new_ff_sprite(tr, heatmap) #how to do this 
+        #@show get_new_ff_sprite(tr, heatmap)
+
+        #@show get_choices(get_new_ff_sprite(tr, heatmap))
+        #sprite = get_new_ff_sprite(tr, heatmap) #new supmap of choicemap called sprite with the choices
+
+        #@show generate(get_new_ff_sprite, (tr, heatmap))
+        
+        #map[:sprite] = get_new_ff_sprite(tr, heatmap)
+        #sprite = {:sprite} ~ get_new_ff_sprite(tr, heatmap) #new supmap of choicemap called sprite with the choices 
+        
+        sprite ~ get_new_ff_sprite(tr, heatmap)
+
+        num_objs ~ poisson_plus_1(0.5)
+
+        #todo make them not all add to the end 
+        #sample position for each new object, to do make data drivennnn
+        #todo incorporate mask_pos here!!
+        positions ~ allpositions(collect(1:num_objs), [H for _ in 1:num_objs], [W for _ in 1:num_objs])
+        #@show positions 
+        return sprite 
+    else 
+        #removing 
+        #todo make data driven 
+        rm_sprite_index ~ uniform_discrete(1, num_sprite_types)
+    end 
+end 
 
 
-    #would it be better to take in one sprite as i? 
+
+function add_remove_sprite_involution(tr, add_remove_random, forward_retval, proposal_args)
+    #@show add_remove_random
+    #@show tr
     new_trace_choices = choicemap()
     backward_choices = choicemap()
 
+    if add_remove_random[:add_or_remove]
+        #add the new sprite , when we add the ability to add a middle sprite, make sure to deal with the cascade 
+        snp1num = tr[:init => :num_sprite_types] + 1
+        new_trace_choices[:init => :num_sprite_types] = snp1num
 
-    #num_sprite_types = tr[:init => :num_sprite_types]
-    backward_choices[:split_or_merge] = !split_merge[:split_or_merge]
+        new_trace_choices[:init => :init_sprites => snp1num => :mask] = add_remove_random[:mask]
+        new_trace_choices[:init => :init_sprites => snp1num => :color] = add_remove_random[:color]
+        new_trace_choices[:init => :init_sprites => snp1num => :height] = add_remove_random[:height]
+        new_trace_choices[:init => :init_sprites => snp1num => :width] = add_remove_random[:width]
 
-    if split_merge[:split_or_merge]
-        #split 
-        if split_merge[:exception]
-            backward_choices[:obin1] = 1
-            backward_choices[:obin2] = 1 
-
-            new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
-            return (new_trace, backward_choices, weight)   
-            
-        end 
-
-        obin = split_merge[:obin]
-        sprite_index = tr[:init => :init_objs => obin => :sprite_index]
-        new_second_sprite_index = split_merge[:new_second_sprite_index]
-
-        backward_choices[:obin1] = obin
-        backward_choices[:obin2] = tr[:init => :N] + 1 #fix this 
-
-        pre_split_mask = tr[:init => :init_sprites => sprite_index => :mask]
-        vertical_or_horizontal = split_merge[:vertical_or_horizontal]
-
-        if vertical_or_horizontal
-            #split vertically 
-            split_point = split_merge[:split_point]
-            mask1 = pre_split_mask[1:split_point-1, :]
-            mask2 = pre_split_mask[split_point:end, :]
-            yshift, xshift = split_point - 1, 0
-            
-        else 
-            #split horizontally 
-            split_point = split_merge[:split_point]
-            mask1 = pre_split_mask[:, 1:split_point-1]
-            mask2 = pre_split_mask[:, split_point:end]
-            yshift, xshift = 0, split_point - 1
+        #add the new objects 
+        new_trace_choices[:init => :N] = tr[:init => :N] + add_remove_random[:num_objs]
+        for i in 1:add_remove_random[:num_objs]
+            new_trace_choices[:init => :init_objs => tr[:init => :N] + i => :pos] = add_remove_random[:positions => i => :pos]
+            new_trace_choices[:init => :init_objs => tr[:init => :N] + i => :sprite_index] = tr[:init => :num_sprite_types] + 1
         end
 
-        color = tr[:init => :init_sprites => sprite_index => :color]
-        #set the first sprite 
-        new_trace_choices[(:init => :init_sprites => sprite_index => :mask)] = mask1
-        new_trace_choices[(:init => :init_sprites => sprite_index => :color)] = color
+        backward_choices[:add_or_remove] = false
+        backward_choices[:rm_sprite_index] = tr[:init => :num_sprite_types] + 1
 
-        #set the second sprite
-        new_trace_choices[(:init => :init_sprites => new_second_sprite_index => :mask)] = mask2
-        new_trace_choices[(:init => :init_sprites => new_second_sprite_index => :color)] = color
+    else 
+        #remove 
+        sprite_index = add_remove_random[:rm_sprite_index]
+        new_trace_choices[:init => :num_sprite_types] = tr[:init => :num_sprite_types] - 1
 
-        #shift all of the sprites if that displaced anything TODO 
+        positions = []
+        #remove each object
+        #remember to change N 
+        # newN = tr[:init => :N]
+        Nremoved = 0
 
-        #for all objects of that type, split into two objects 
-        newN = tr[:init => :N]
 
-        for obin in 1:tr[:init => :N]
-            #is object sprite index is the sprite index
-            if tr[:init => :init_objs => obin => :sprite_index] == sprite_index
-                pos = tr[:init => :init_objs => obin => :pos]
-                #make a second object with the second part of the sprite 
-                newN += 1
-                newy, newx= pos.y + yshift, pos.x + xshift
-                #I can't just add them to the end 
-                new_trace_choices[:init => :init_objs => newN => :pos] = Position(newy, newx)
-                new_trace_choices[:init => :init_objs => newN => :sprite_index] = new_second_sprite_index
-            end 
-        end 
-
-        new_trace_choices[:init => :N] = newN
-
-    else
-        #merge 
-        obin1, obin2 = split_merge[:obin1], split_merge[:obin2]
-        sprite_index1, sprite_index2 = tr[:init => :init_objs => obin1 => :sprite_index], tr[:init => :init_objs => obin2 => :sprite_index]
-
-        newsprite, relativey1, relativex1, relativey2, relativex2 = get_merged_sprite(tr[:init => :init_objs => obin1], tr[:init => :init_sprites => sprite_index1], tr[:init => :init_objs => obin2], tr[:init => :init_sprites => sprite_index2])
-
-        new_trace_choices[(:init => :init_sprites => sprite_index1 => :mask)] = newsprite.mask
-        new_trace_choices[(:init => :init_sprites => sprite_index1 => :color)] = newsprite.color
-
-        #what to do with the second sprite? shift all the others i guess TODO 
-
-        #move all of the objects with those sprites 
-        N = tr[:init => :N]
-
-        for obin in 1:N
-            # if sprite index 1
-            if tr[:init => :init_objs => obin => :sprite_index] == sprite_index1
-                pos = tr[:init => :init_objs => obin => :pos]
-                newy, newx = pos.y + relativey1, pos.x + relativex1
-                new_trace_choices[(:init => :init_objs => obin => :pos)] = Position(newy, newx)
-            end 
-            #if sprite index 2
-            if tr[:init => :init_objs => obin => :sprite_index] == sprite_index2
-                pos = tr[:init => :init_objs => obin => :pos]
-                newy, newx = pos.y + relativey2, pos.x + relativex2
-                new_trace_choices[(:init => :init_objs => obin => :pos)] = Position(newy, newx)
-                new_trace_choices[(:init => :init_objs => obin => :sprite_index)] = sprite_index1
+        #remove all objects of that sprite type, shift all the other objects down their ois and if higher si down one
+        old_sindicies = [] 
+        change_plan = [] #1 means removed, negative/zero means how much to go down
+        for i in 1:tr[:init => :N] 
+            si = tr[:init => :init_objs => i => :sprite_index]
+            #push!(old_sindicies, si)
+            if si == sprite_index
+                #push!(change_plan, 1)
+                Nremoved += 1 
+            else
+                shiftallobjs(i, i, x -> x - Nremoved, new_trace_choices, tr)#just one obj actually 
+                if si > sprite_index 
+                    new_trace_choices[:init => :init_objs => i - Nremoved => :sprite_index] = si - 1
+                end 
+                #push!(change_plan, -Nremoved) #change this
             end
-        end 
+        end
 
+        new_trace_choices[:init => :N] = tr[:init => :N] - Nremoved
 
-        #for backward choices need new #obin, new_second_sprite_index, vertical_or_horizontal, split_point
-        backward_choices[:obin] = obin1
-        backward_choices[:exception] = false
-        backward_choices[:new_second_sprite_index] = sprite_index2 #aak 
-        backward_choices[:vertical_or_horizontal] = 1 #aaaaak 
-        backward_choices[:split_point] = 1 #something about displacement 
-    end 
-    # @show split_merge
-    # @show new_trace_choices
-    # @show backward_choices
-
-    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
-    (new_trace, backward_choices, weight)    
         
+        #remove the sprite
+        if sprite_index != tr[:init => :num_sprite_types] #idk if this is causing the error/neccesary
+            #if not the last sprite, shift all the sprites 
+            shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+        end
+        #shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+        
+
+        backward_choices[:add_or_remove] = true
+        old_mask = tr[:init => :init_sprites => sprite_index => :mask]
+        backward_choices[:mask] = old_mask
+        backward_choices[:height], backward_choices[:width] = size(old_mask)
+        backward_choices[:color] = tr[:init => :init_sprites => sprite_index => :color]
+        backward_choices[:num_objs] = Nremoved
+        #backward_choices[:positions] = positions
+    end 
+    #@show new_trace_choices
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    #@show new_trace
+    (new_trace, backward_choices, weight)
 end 
 
+
+function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, proposal_args)
+    @show add_remove_random
+    #@show tr
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+
+    if add_remove_random[:add_or_remove]
+        #add the new sprite , when we add the ability to add a middle sprite, make sure to deal with the cascade
+        sprite = forward_retval 
+        snp1num = tr[:init => :num_sprite_types] + 1
+        new_trace_choices[:init => :num_sprite_types] = snp1num
+
+        #@show sprite
+        new_trace_choices[:init => :init_sprites => snp1num => :mask] = sprite.mask
+        new_trace_choices[:init => :init_sprites => snp1num => :color] = sprite.color
+        #UHH BE CAREFUL WE DON"T NEED THESE 
+        # new_trace_choices[:init => :init_sprites => snp1num => :height] = sprite.height
+        # new_trace_choices[:init => :init_sprites => snp1num => :width] = sprite.width
+
+        #add the new objects 
+        new_trace_choices[:init => :N] = tr[:init => :N] + add_remove_random[:num_objs]
+        for i in 1:add_remove_random[:num_objs]
+            new_trace_choices[:init => :init_objs => tr[:init => :N] + i => :pos] = add_remove_random[:positions => i => :pos]
+            new_trace_choices[:init => :init_objs => tr[:init => :N] + i => :sprite_index] = tr[:init => :num_sprite_types] + 1
+        end
+
+        backward_choices[:add_or_remove] = false
+        backward_choices[:rm_sprite_index] = tr[:init => :num_sprite_types] + 1
+
+    else 
+        #remove 
+        sprite_index = add_remove_random[:rm_sprite_index]
+        new_trace_choices[:init => :num_sprite_types] = tr[:init => :num_sprite_types] - 1
+
+        
+        #remove each object
+        #remember to change N 
+        # newN = tr[:init => :N]
+        Nremoved = 0
+        oneposTEMP = Position(1,1)	
+
+        #remove all objects of that sprite type, shift all the other objects down their ois and if higher si down one
+        old_sindicies = [] 
+        change_plan = [] #1 means removed, negative/zero means how much to go down
+        for i in 1:tr[:init => :N] 
+            si = tr[:init => :init_objs => i => :sprite_index]
+            #push!(old_sindicies, si)
+            if si == sprite_index
+                #push!(change_plan, 1)
+                pos = tr[:init => :init_objs => i => :pos]
+                backward_choices[:positions => i => :pos] = pos
+                oneposTEMP = pos 
+                Nremoved += 1 
+            else
+                shiftallobjs(i, i, x -> x - Nremoved, new_trace_choices, tr)#just one obj actually 
+                if si > sprite_index 
+                    new_trace_choices[:init => :init_objs => i - Nremoved => :sprite_index] = si - 1
+                end 
+                #push!(change_plan, -Nremoved) #change this
+            end
+        end
+
+        new_trace_choices[:init => :N] = tr[:init => :N] - Nremoved
+
+        
+        #remove the sprite
+        if sprite_index != tr[:init => :num_sprite_types] #idk if this is causing the error/neccesary
+            #if not the last sprite, shift all the sprites 
+            shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+        end
+        #shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+        
+
+        backward_choices[:add_or_remove] = true
+        old_mask = tr[:init => :init_sprites => sprite_index => :mask]
+
+
+        #SOMETHING LIKE THIS??
+        #backward_choices[:sprite] = Sprite(old_mask, tr[:init => :init_sprites => sprite_index => :color]) #mayyybe
+        old_mask_vol = size(old_mask)[1]*size(old_mask)[2]
+        for i in 1:old_mask_vol
+            backward_choices[:sprite => (:in_mask,i)] = true
+        end 
+        backward_choices[:sprite => :r] = tr[:init => :init_sprites => sprite_index => :color][1]
+        backward_choices[:sprite => :g] = tr[:init => :init_sprites => sprite_index => :color][2]
+        backward_choices[:sprite => :b] = tr[:init => :init_sprites => sprite_index => :color][3]
+        #next line tech incorrect 
+        @show oneposTEMP
+        backward_choices[:sprite => :flat_matrix_place_index] = flatmatrixindex_from_position(oneposTEMP, size(tr[:init => :observed_image])[1], size(tr[:init => :observed_image])[2])
+        #how do I set backward retval 
+
+        
+        #set_submap(backward_choices, :sprite, get_submap(add_remove_random[:sprite]))
+        #need info like ff about how this sprite was made 
+        #LOOK HERE 
+
+        #backward_choices[:sprite] = forward_retval#this is so beyond incorrect 
+        backward_choices[:num_objs] = Nremoved
+        #backward_choices[:positions] = positions
+    end
+    #@show new_trace_choices
+    new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    #@show new_trace
+    (new_trace, backward_choices, weight)
+end 
+
+
+
+#move this. useful 
+struct Uniform_not_x <: Gen.Distribution{Int} end
+
+function Gen.random(::Uniform_not_x, x, min, max)
+    #get random int between min and max not xmax
+    y = rand(min:max-1)
+    if y >= x
+        y += 1
+    end
+    return y
+end
+
+function Gen.logpdf(::Uniform_not_x, y, x, min, max)
+    if y == x
+        return -Inf
+    end 
+    if y >= min && y <= max
+        return -log(max-min) #log of (1/(max-min))
+    else 
+        return -Inf
+    end
+end
+
+const uniform_not_x = Uniform_not_x()
+(::Uniform_not_x)(x, min, max) = random(Uniform_not_x(), x, min, max)
+
+
+
+
+
+
+
+
+# @gen function sm_helper(tr, s1, s2, relpos1i, relpos1j, relpos2i, relpos2j)
+#     N = tr[:init => :N]
+#     objs_with_sprite_s1 = []
+#     for objin in 1:N
+#         if tr[:init => :init_objs => objin => :sprite_index] == s1
+#             push!(objs_with_sprite_s1, objin)
+#         end
+#     end 
+#     s1_obj ~ uniform_discrete(objs_with_sprite_s1)#that prob won't work
+
+#     #get obj position and obj mask 
+#     s1_obj_pos = tr[:init => :init_objs => s1_obj => :pos]
+#     s1_obj_mask = tr[:init => :init_sprites => s1 => :mask]
+#     s1_obj_height, s1_obj_width = size(s1_obj_mask)
+
+#     #UG HSOkfdjqksl ,fjikadsfij
+    
+# end
+
+# # #SPLIT MERGE SPRITE 
+# @gen function get_split_merge(tr)
+#     """
+#     samples if split or merge
+#         if split samples: s1, s2, mask1, mask2, relpos1, relpos2, color1, color2
+#         if merge samples: s1, s2, relposto1, relposto2, colorc
+#     """
+
+
+#     # N = tr[:init => :N]
+#     num_sprite_types = tr[:init => :num_sprite_types]
+#     # H, W = size(tr[:init => :observed_image])
+
+#     if({:split_or_merge} ~ bernoulli(num_sprite_types == 1 ? 1 : 0.5)) 
+#         #splitting a sprite 
+
+#         s1 ~ uniform_discrete(1, num_sprite_types)
+#         #s2 is any sprite except s1 
+#         s2 ~ uniform_not_x(s1, 1, num_sprite_types)
+
+#         # get the two relative positions 
+#         #switch to not be separate later
+#         #always the same for s1 for now  
+#         relpos1i ~ uniform_discrete(0,0)
+#         relpos1j ~ uniform_discrete(0,0)
+
+#         #especially change this 
+#         relpos2i ~ uniform_discrete(-100, 100) 
+#         relpos2j ~ uniform_discrete(-100, 100)
+
+#         #get the two masks 
+#         #getting masks is so fucking hard 
+
+        
+
+
+
+
+
+
+#         #splitting a sprite
+#         #note could be same sprite type...
+#         obin ~ uniform_discrete(1, N)
+#         sprite_index = tr[:init => :init_objs => obin => :sprite_index]
+
+#         #for now, new second sprite index and new obj index arent perf 
+#         new_second_sprite_index ~ uniform_discrete(tr[:init => :num_sprite_types], tr[:init => :num_sprite_types])
+#         #new_second_sprite_index ~ uniform_discrete(1, tr[:init => :num_sprite_types])
+#         #new_obin ~ uniform_discrete(1, N+1)
+
+#         mask = tr[:init => :init_sprites => sprite_index => :mask]
+#         height, width = size(mask)
+
+
+#         #splitting vertically or horizontally
+
+#         if({:vertical_or_horizontal} ~ bernoulli(height == 1 ? 0 : width ==1 ? 1 : 0.5)) #what if has width AND  height one lmao rip 
+#             #splitting vertically, split point is first row of second sprite 
+#             #not sounds since part could be under the other sprite, or splitting with a gap in the middle
+#             exception ~ bernoulli(0.0)
+#             if height <= 1
+#                 @show height
+#             end 
+#             split_point ~ uniform_discrete(2, height)
+#         else 
+#             if width <= 1
+#                 exception ~ bernoulli(1.0) #hackey
+#             else 
+#                 exception ~ bernoulli(0.0)
+#             #splitting horizontally
+#                 split_point ~ uniform_discrete(2, width) 
+#             end 
+#         end
+
+#     else 
+#         #merging two sprites 
+
+#         Nm1 = N - 1
+        
+#         obin1 ~ uniform_discrete(1, Nm1)
+#         #@show N, Nm1, obin1
+#         obin2 ~ uniform_discrete(obin1 + 1, N)#this isn't correct
+#     end 
+# end
+
+# function get_merged_sprite(obj1, sprite1, obj2, sprite2)
+#     """
+#     gets sprite and relative position to obj1's position of combined sprite
+#     """
+#     miny, minx = min(obj1.pos.y, obj2.pos.y), min(obj1.pos.x, obj2.pos.x)
+#     #@show miny, obj1.pos.y 
+#     relativey1 = (miny + (-1) * obj1.pos.y)
+#     relativex1 = (minx + (-1) * obj1.pos.x)
+#     relativey2 = min(obj1.pos.y, obj2.pos.y) + (-1) * obj2.pos.y
+#     relativex2 = min(obj1.pos.x, obj2.pos.x)  + (-1) * obj2.pos.x
+#     height1, width1 = size(sprite1.mask)
+#     height2, width2 = size(sprite2.mask)
+#     stopi = max(obj1.pos.y + height1, obj2.pos.y + height2)
+#     stopj = max(obj1.pos.x + width1, obj2.pos.x + width2)
+#     height = stopi  + (-1) * miny
+#     width = stopj  + (-1) * minx #check bounds 
+
+#     #make a mask combining the two masks 
+#     newmask = fill(0, (height, width))
+
+#     #fill with relevant portions of mask1 and mask 1
+#     #@show relativex1, relativey1, relativex2, relativey2
+
+
+#     newmask[1-relativey1:height1-relativey1, 1-relativex1:width1-relativex1] = sprite1.mask
+#     newmask[1-relativey2:height2-relativey2, 1-relativex2:width2-relativex2] = sprite2.mask
+#     #second ovverides first, ok
+
+#     #printrand = rand()
+#     # if height % 5 == 0 #just random so it doesn't happen much 
+#     #     html_body(render_matrix(newmask, color=3)) 
+#     # end
+    
+#     #averages two colors 
+#     newcolor = (sprite1.color + sprite2.color) / 2#this prob wont work 
+
+#     return Sprite(newmask, newcolor), relativey1, relativex1, relativey2, relativex2
+# end
+
+# function split_merge_involution(tr, split_merge, forward_retval, proposal_args)
+
+#     #EVERYTHING ABOUT THIS IS NOT PERFECT IN REVERSE FIX TODO LIKE ALL THE NUMBERING STUFF AND MORE
+
+
+#     #would it be better to take in one sprite as i? 
+#     new_trace_choices = choicemap()
+#     backward_choices = choicemap()
+
+
+#     #num_sprite_types = tr[:init => :num_sprite_types]
+#     backward_choices[:split_or_merge] = !split_merge[:split_or_merge]
+
+#     if split_merge[:split_or_merge]
+#         #split 
+#         if split_merge[:exception]
+#             backward_choices[:obin1] = 1
+#             backward_choices[:obin2] = 1 
+
+#             new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+#             return (new_trace, backward_choices, weight)   
+            
+#         end 
+
+#         obin = split_merge[:obin]
+#         sprite_index = tr[:init => :init_objs => obin => :sprite_index]
+#         new_second_sprite_index = split_merge[:new_second_sprite_index]
+
+#         backward_choices[:obin1] = obin
+#         backward_choices[:obin2] = tr[:init => :N] + 1 #fix this 
+
+#         pre_split_mask = tr[:init => :init_sprites => sprite_index => :mask]
+#         vertical_or_horizontal = split_merge[:vertical_or_horizontal]
+
+#         if vertical_or_horizontal
+#             #split vertically 
+#             split_point = split_merge[:split_point]
+#             mask1 = pre_split_mask[1:split_point-1, :]
+#             mask2 = pre_split_mask[split_point:end, :]
+#             yshift, xshift = split_point - 1, 0
+            
+#         else 
+#             #split horizontally 
+#             split_point = split_merge[:split_point]
+#             mask1 = pre_split_mask[:, 1:split_point-1]
+#             mask2 = pre_split_mask[:, split_point:end]
+#             yshift, xshift = 0, split_point - 1
+#         end
+
+#         # if size(pre_split_mask)[1]%10 == 0 #just so it does it ocassionally 
+#         #     html_body(render_matrix(pre_split_mask, 3))
+#         #     html_body(render_matrix(mask1, 2))
+#         #     html_body(render_matrix(mask2, 2))
+#         # end
+
+#         color = tr[:init => :init_sprites => sprite_index => :color]
+#         #set the first sprite 
+#         new_trace_choices[(:init => :init_sprites => sprite_index => :mask)] = mask1
+#         new_trace_choices[(:init => :init_sprites => sprite_index => :color)] = color
+
+#         #set the second sprite
+#         new_trace_choices[(:init => :init_sprites => new_second_sprite_index => :mask)] = mask2
+#         new_trace_choices[(:init => :init_sprites => new_second_sprite_index => :color)] = color
+
+#         #shift all of the sprites if that displaced anything TODO 
+
+#         #for all objects of that type, split into two objects 
+#         newN = tr[:init => :N]
+
+#         for obin in 1:tr[:init => :N]
+#             #is object sprite index is the sprite index
+#             if tr[:init => :init_objs => obin => :sprite_index] == sprite_index
+#                 pos = tr[:init => :init_objs => obin => :pos]
+#                 #make a second object with the second part of the sprite 
+#                 newN += 1
+#                 newy, newx= pos.y + yshift, pos.x + xshift
+#                 #I can't just add them to the end 
+#                 new_trace_choices[:init => :init_objs => newN => :pos] = Position(newy, newx)
+#                 new_trace_choices[:init => :init_objs => newN => :sprite_index] = new_second_sprite_index
+#             end 
+#         end 
+
+#         new_trace_choices[:init => :N] = newN
+
+#     else
+#         #merge 
+#         obin1, obin2 = split_merge[:obin1], split_merge[:obin2]
+#         sprite_index1, sprite_index2 = tr[:init => :init_objs => obin1 => :sprite_index], tr[:init => :init_objs => obin2 => :sprite_index]
+
+#         newsprite, relativey1, relativex1, relativey2, relativex2 = get_merged_sprite(tr[:init => :init_objs => obin1], tr[:init => :init_sprites => sprite_index1], tr[:init => :init_objs => obin2], tr[:init => :init_sprites => sprite_index2])
+
+#         new_trace_choices[(:init => :init_sprites => sprite_index1 => :mask)] = newsprite.mask
+#         new_trace_choices[(:init => :init_sprites => sprite_index1 => :color)] = newsprite.color
+
+#         #what to do with the second sprite? shift all the others i guess TODO 
+
+#         #move all of the objects with those sprites 
+#         N = tr[:init => :N]
+
+#         for obin in 1:N
+#             # if sprite index 1
+#             if tr[:init => :init_objs => obin => :sprite_index] == sprite_index1
+#                 pos = tr[:init => :init_objs => obin => :pos]
+#                 newy, newx = pos.y + relativey1, pos.x + relativex1
+#                 new_trace_choices[(:init => :init_objs => obin => :pos)] = Position(newy, newx)
+#             end 
+#             #if sprite index 2
+#             if tr[:init => :init_objs => obin => :sprite_index] == sprite_index2
+#                 pos = tr[:init => :init_objs => obin => :pos]
+#                 newy, newx = pos.y + relativey2, pos.x + relativex2
+#                 new_trace_choices[(:init => :init_objs => obin => :pos)] = Position(newy, newx)
+#                 new_trace_choices[(:init => :init_objs => obin => :sprite_index)] = sprite_index1
+#             end
+#         end 
+
+
+#         #for backward choices need new #obin, new_second_sprite_index, vertical_or_horizontal, split_point
+#         backward_choices[:obin] = obin1
+#         backward_choices[:exception] = false
+#         backward_choices[:new_second_sprite_index] = sprite_index2 #aak 
+#         backward_choices[:vertical_or_horizontal] = 1 #aaaaak 
+#         backward_choices[:split_point] = 1 #something about displacement 
+#     end 
+#     # @show split_merge
+#     # @show new_trace_choices
+#     # @show backward_choices
+
+#     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+#     (new_trace, backward_choices, weight)    
+        
+# end 
+
+
+# #new merge plan 
+# #randomly samples 
     
     
 
@@ -355,7 +814,15 @@ end
     bnew ~ uniform(mins[3], maxs[3])
     
 end
-
+function get_alpha(peak) #idk whats going on here lol 
+    if peak <= 0
+        return 0.00001
+    elseif peak >= 1
+        return 0.99999
+    else
+        return peak / (1 - peak)
+    end
+end
 
 @gen function dd_get_random_new_color(tr, i)
     r, g, b = tr[:init => :init_sprites => i => :color]
@@ -373,6 +840,7 @@ end
     for objind in 1:tr[:init => :N]
         if tr[:init => :init_objs => objind => :sprite_index] == i
             pos = tr[:init => :init_objs => objind => :pos]
+            
 
 
             #ACTUALLY GOTTA ONLY CHECK STUFF IN BOUNDS 
@@ -393,6 +861,8 @@ end
         end
     end 
 
+    #
+
     #@show numpixels
     if numpixels == 0 
         ravg, gavg, bavg = 0.5, 0.5, 0.5
@@ -410,15 +880,7 @@ end
     # bnew ~ beta_with_peak(bavg)
 
 
-    function get_alpha(peak) #idk whats going on here lol 
-        if peak <= 0
-            return 0.00001
-        elseif peak >= 1
-            return 0.99999
-        else
-            return peak / (1 - peak)
-        end
-    end
+    
 
     rnew ~ beta(get_alpha(ravg), 1)
     gnew ~ beta(get_alpha(gavg), 1)
@@ -426,6 +888,8 @@ end
     
     
 end 
+
+
 
 function color_involution(tr, colors, forward_retval, proposal_args)
     i = proposal_args[1]
@@ -465,15 +929,30 @@ end
     oldx = tr[:init => :init_objs => i => :pos].x
     oldy = tr[:init => :init_objs => i => :pos].y
 
+
+
+    scores = scores_from_heatmap(heatmap, (hi, wi) -> - 5*sqrt((hi - oldy)^2 + (wi - oldx)^2))
+    
+    
+    
+    #@show scores_logsumexp
+    flatmatrixindex ~ categorical(scores)
+
+
+end 
+
+
+function scores_from_heatmap(heatmap, other_hiwi_func=nothing)
+    H, W = size(heatmap)
     scores = zeros(Float64, H*W)
 
     for hi in 1:H
         for wi in 1:W
-            #heat score + closeness to old x, y (- distance)
-            #can change weight about how much the distance vs heatmap matters
-            scores[(wi-1)*H + hi] = - 5*sqrt((hi - oldy)^2 + (wi - oldx)^2) + heatmap[hi, wi]
-            
-            
+            if other_hiwi_func === nothing
+                scores[(wi-1)*H + hi] = heatmap[hi, wi]
+            else 
+                scores[(wi-1)*H + hi] = heatmap[hi, wi] + other_hiwi_func(hi, wi)
+            end
         end
     end
 
@@ -487,13 +966,19 @@ end
     
     
     #@show scores_logsumexp
-    flatmatrixindex ~ categorical(scores)
+    return scores
+end
 
+function position_from_flatmatrixindex(index, H, W)
+    x = floor(index / H) + 1
+    y = index % H
 
-end 
+    return Position(y, x)
+end
 
-
-
+function flatmatrixindex_from_position(pos, H, W)
+    return (pos.x-1)*H + pos.y
+end
 
 function shift_involution(tr, drift, forward_retval, proposal_args) 
     """moves one obj a little"""
@@ -536,10 +1021,10 @@ function dd_shift_involution(tr, newspot, forward_retval, proposal_args)
 
 
     flatmatrixindex = newspot[:flatmatrixindex]
-    newx = floor(flatmatrixindex / H) + 1
-    newy = flatmatrixindex % H
+    # newx = floor(flatmatrixindex / H) + 1
+    # newy = flatmatrixindex % H
 
-    newpos = Position(newy, newx)
+    newpos = position_from_flatmatrixindex(flatmatrixindex, H, W)
     new_trace_choices[(:init => :init_objs => i => :pos)] = newpos
 
     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
@@ -586,6 +1071,30 @@ function shiftallobjs(min_obj, max_obj, shift_func, new_trace_choices, tr)
     end 
 end
 
+
+function shiftallsprites(min_sprite, max_sprite, shift_func, new_trace_choices, tr)
+    function shiftonething(thing, i)
+        new_trace_choices[(:init => :init_sprites => shift_func(i) => thing)] = tr[:init => :init_sprites => i => thing] 
+    end 
+
+    for i in min_sprite:max_sprite
+        shiftonething(:mask, i)
+        shiftonething(:color, i)
+        shiftonething(:height, i)
+        shiftonething(:width, i)
+        # toshiftmask = tr[:init => :init_sprites => i => :mask]
+        # toshiftcolor = tr[:init => :init_sprites => i => :color]
+        # toshiftheight = tr[:init => :init_sprites => i => :height]
+        # toshiftwidth = tr[:init => :init_sprites => i => :width]
+
+        # new_trace_choices[(:init => :init_sprites => shift_func(i) => :mask)] = toshiftmask
+        # new_trace_choices[(:init => :init_sprites => shift_func(i) => :color)] = toshiftcolor
+        # new_trace_choices[(:init => :init_sprites => shift_func(i) => :height)] = toshiftheight
+        # new_trace_choices[(:init => :init_sprites => shift_func(i) => :width)] = toshiftwidth
+
+    end 
+end 
+
 function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_args)
     new_trace_choices = choicemap()
     backward_choices = choicemap()
@@ -629,8 +1138,9 @@ function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_ar
         new_trace_choices[(:init => :init_objs => N)] = nothing 
         new_trace_choices[(:init => :N)] = N - 1
     end
-
+    #@show new_trace_choices
     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+    #@show new_trace
     (new_trace, backward_choices, weight)
 
 end 

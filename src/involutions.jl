@@ -68,19 +68,18 @@ end
     miny, minx = H, W
     maxy, maxx = 1, 1
 
-    increasingnumber = 0
+    
     while length(pos_queue) > 0
-        increasingnumber += 1
+        #increasingnumber += 1
         # @show pos_queue
         # @show finished_queue
         pos = popfirst!(pos_queue)
         push!(finished_queue, pos)
         #color difference 
         color_diff = sum(abs.(observed_image[:, pos.y, pos.x] - base_color))/3 #ranges from 0 to 1, make not have 0 or 100 
-
         #if near color, sampling this for full support, add to mask and add neibors to queue
         distance = ((pos.y-base_pos.y)^2 + (pos.x-base_pos.x)^2)^0.5
-        in_mask = {(:in_mask,increasingnumber)} ~ bernoulli(((1 - color_diff)*0.99+0.005)^(distance))#fix 
+        in_mask = {(:in_mask,pos.y,pos.x)} ~ bernoulli(((1 - color_diff)*0.99+0.005)^(distance))#fix 
         #maybe include smth abt distance to base_pos 
         if in_mask 
             miny, minx, maxy, maxx = update_min_max(pos, miny, minx, maxy, maxx)
@@ -100,6 +99,19 @@ end
             end 
         end 
     end 
+
+    #filling in the rest false #check how legit this is OH shoot i forgot about the position distinction 
+    for i in 1:H
+        for j in 1:W
+            if !(Position(i, j) in finished_queue)
+                in_mask = {(:in_mask,pos.y,pos.x)} ~ bernoulli(0.0001)
+                if in_mask
+                    miny, minx, maxy, maxx = update_min_max(pos, miny, minx, maxy, maxx)
+                    massive_mask[pos.y, pos.x] = 1
+                end
+            end
+        end 
+    end
 
     #shrink the mask to the smallest possible and get the position of massive_mask 
     mask_pos = Position(miny, minx)
@@ -144,7 +156,7 @@ get_all_color_bernoulli = Map(get_color_bernoulli)
         #@show get_choices(get_new_ff_sprite(tr, heatmap))
         #sprite = get_new_ff_sprite(tr, heatmap) #new supmap of choicemap called sprite with the choices
 
-        @show generate(get_new_ff_sprite, (tr, heatmap))
+        #@show generate(get_new_ff_sprite, (tr, heatmap))
         
         #map[:sprite] = get_new_ff_sprite(tr, heatmap)
         #sprite = {:sprite} ~ get_new_ff_sprite(tr, heatmap) #new supmap of choicemap called sprite with the choices 
@@ -157,6 +169,7 @@ get_all_color_bernoulli = Map(get_color_bernoulli)
         #sample position for each new object, to do make data drivennnn
         #todo incorporate mask_pos here!!
         positions ~ allpositions(collect(1:num_objs), [H for _ in 1:num_objs], [W for _ in 1:num_objs])
+        #@show positions 
         return sprite 
     else 
         #removing 
@@ -283,12 +296,12 @@ function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, 
         sprite_index = add_remove_random[:rm_sprite_index]
         new_trace_choices[:init => :num_sprite_types] = tr[:init => :num_sprite_types] - 1
 
-        positions = []
+        
         #remove each object
         #remember to change N 
         # newN = tr[:init => :N]
         Nremoved = 0
-
+        oneposTEMP = Position(1,1)	
 
         #remove all objects of that sprite type, shift all the other objects down their ois and if higher si down one
         old_sindicies = [] 
@@ -298,6 +311,9 @@ function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, 
             #push!(old_sindicies, si)
             if si == sprite_index
                 #push!(change_plan, 1)
+                pos = tr[:init => :init_objs => i => :pos]
+                backward_choices[:positions => i => :pos] = pos
+                oneposTEMP = pos 
                 Nremoved += 1 
             else
                 shiftallobjs(i, i, x -> x - Nremoved, new_trace_choices, tr)#just one obj actually 
@@ -324,14 +340,17 @@ function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, 
 
 
         #SOMETHING LIKE THIS??
-        backward_choices[:sprite] = Sprite(old_mask, tr[:init => :init_sprites => sprite_index => :color]) #mayyybe
-        
-        for i in 1:size(old_mask)
-            backward_choices[:sprite => :in_mask, i] = true
+        #backward_choices[:sprite] = Sprite(old_mask, tr[:init => :init_sprites => sprite_index => :color]) #mayyybe
+        old_mask_vol = size(old_mask)[1]*size(old_mask)[2]
+        for i in 1:old_mask_vol
+            backward_choices[:sprite => (:in_mask,i)] = true
         end 
         backward_choices[:sprite => :r] = tr[:init => :init_sprites => sprite_index => :color][1]
         backward_choices[:sprite => :g] = tr[:init => :init_sprites => sprite_index => :color][2]
         backward_choices[:sprite => :b] = tr[:init => :init_sprites => sprite_index => :color][3]
+        #next line tech incorrect 
+        @show oneposTEMP
+        backward_choices[:sprite => :flat_matrix_place_index] = flatmatrixindex_from_position(oneposTEMP, size(tr[:init => :observed_image])[1], size(tr[:init => :observed_image])[2])
         #how do I set backward retval 
 
         
@@ -821,6 +840,7 @@ end
     for objind in 1:tr[:init => :N]
         if tr[:init => :init_objs => objind => :sprite_index] == i
             pos = tr[:init => :init_objs => objind => :pos]
+            
 
 
             #ACTUALLY GOTTA ONLY CHECK STUFF IN BOUNDS 
@@ -840,6 +860,8 @@ end
             end
         end
     end 
+
+    #
 
     #@show numpixels
     if numpixels == 0 
@@ -954,6 +976,9 @@ function position_from_flatmatrixindex(index, H, W)
     return Position(y, x)
 end
 
+function flatmatrixindex_from_position(pos, H, W)
+    return (pos.x-1)*H + pos.y
+end
 
 function shift_involution(tr, drift, forward_retval, proposal_args) 
     """moves one obj a little"""

@@ -65,9 +65,20 @@ function render_heatmap(heatmap)
     final_heatmap = spread_heatmap
 
     
-    render_matrix(final_heatmap, -1)
+    render_matrix(final_heatmap, 1)
 
 end 
+
+function get_other_colors(color)
+    if color == 1
+        return [2,3]
+    elseif color == 2
+        return [1,3]
+    elseif color == 3
+        return [1,2]
+    end
+end
+
 
 function render_matrix(m, color=2, render=false)
     #getting between 0 and 1
@@ -76,7 +87,12 @@ function render_matrix(m, color=2, render=false)
     img = zeros(3, H, W)
     for i in 1:H
         for j in 1:W
-            img[color, i, j] = m[i,j]
+
+            img[color, i, j] = 1
+            other_colors = get_other_colors(color)
+
+            img[other_colors[1], i, j] = m[i,j]
+            img[other_colors[2], i, j] = m[i,j]
         end
     end
     if render

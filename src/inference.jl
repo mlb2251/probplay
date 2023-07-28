@@ -33,7 +33,7 @@ function test_one_involution(frame)
         #THING U WANNA TEST HERE 
         #tr, accepted = mh(tr, get_split_merge, (), split_merge_involution)
         #tr = total_update(tr)
-        @show tr
+        #@show tr
         
         heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
         tr, accepted = mh(tr, dd_add_remove_sprite_random, (heatmap,), dd_add_remove_sprite_involution)
@@ -77,19 +77,19 @@ function total_update(tr)
 
     #sprite proposals 
 
-    # #add/remove sprite 
-    # tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
-    # if accepted
-    #     print("added/removed sprite")
-    # end
-
-
-    #dd add/remove sprite 
-    @show tr
-    tr, accepted = mh(tr, dd_add_remove_sprite_random, (heatmap,), dd_add_remove_sprite_involution)
+    #add/remove sprite 
+    tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
     if accepted
         print("added/removed sprite")
     end
+
+
+    # #dd add/remove sprite 
+    # #@show tr
+    # tr, accepted = mh(tr, dd_add_remove_sprite_random, (heatmap,), dd_add_remove_sprite_involution)
+    # if accepted
+    #     print("added/removed sprite")
+    # end
     
 
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
@@ -243,7 +243,7 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         othertable[tracenum + 1, 3] = spritecoloring
         othertable[tracenum + 1, 4] = heatmap
 
-        othertable[1, 2] = "Coloring by particle"
+        othertable[1, 2] = "Coloring by object"
         othertable[1, 3] = "Coloring by sprite"
         othertable[1, 4] = "logpdf heatmap"
 

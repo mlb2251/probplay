@@ -264,6 +264,10 @@ end
         id = unwrap(e.children[2])::Int
         @assert 0 < id <= length(env.types)
         return TypeRef(id)
+    elseif head === :vec
+        y ~ exec(e.children[2], env)
+        x ~ exec(e.children[3], env)
+        return Vec(y,x)
     elseif head === :+
         a ~ exec(e.children[2], env)
         b ~ exec(e.children[3], env)

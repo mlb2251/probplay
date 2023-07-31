@@ -269,6 +269,10 @@ end
     for i in eachindex(env.state.objs)
         {:objs => i} ~ obj_dynamics(i, env)
     end
+    # for i in eachindex(env.state.objs)
+    #     pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)
+    #     env.state.objs[i].pos = pos
+    # end
 
     rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
     observed_image ~ image_likelihood(rendered, var)
@@ -277,10 +281,11 @@ end
 
 unfold_step = Unfold(dynamics_and_render)
  
-@gen (static) function make_object(i, H, W, num_sprites)    
+@gen function make_object(i, H, W, num_sprites, env)
     sprite_index ~ uniform_discrete(1, num_sprites) 
     #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
+    env.step_of_obj[i] = {:step_of_obj => i} ~ uniform_discrete(1, length(env.code_library))
 
     return Object(sprite_index, pos, [])
 end
@@ -312,12 +317,18 @@ make_sprites = Map(make_type)
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
 
     env.code_library = [
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1) 0.5))")),
+        # move with local latent velocity
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
+        # random walk
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+        # move with constant velocity not a local
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (vec 0.5 0.5)))")),
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (vec -2 0)))")),
     ]
+    env.step_of_obj = fill(0,N) # will be set by make_objects
+    env.state.objs = {:init_objs} ~  make_objects(collect(1:N), fill(H,N), fill(W,N), fill(num_sprites,N), fill(env,N))
 
-    env.state.objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprites for _ in 1:N])
-    env.step_of_obj = [2 for _ in 1:N] # not ok lol
+    # env.step_of_obj = [2 for _ in 1:N] # not ok lol
 
     rendered = draw(H, W, env.state.objs, env.sprites)
     {:observed_image} ~ image_likelihood(rendered, var)

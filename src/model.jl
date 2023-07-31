@@ -329,8 +329,6 @@ make_sprites = Map(make_type)
     env.step_of_obj = fill(0,N) # will be set by make_objects
     env.state.objs = {:init_objs} ~  make_objects(collect(1:N), fill(H,N), fill(W,N), fill(num_sprites,N), fill(env,N))
 
-    # env.step_of_obj = [2 for _ in 1:N] # not ok lol
-
     rendered = draw(H, W, env.state.objs, env.sprites)
     {:observed_image} ~ image_likelihood(rendered, var)
 

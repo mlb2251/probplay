@@ -87,6 +87,16 @@ end
 html_gif(gif::Array{Float64,4}, attrs...; kwargs...) = html_gif(Array(colorview(RGB,gif)), attrs...; kwargs...)
 
 function html_gif(gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px")
+
+    # add progress bar along the bottom
+    H,W,T = size(gif)
+    bar_size = 4
+    gif = cat(gif, fill(RGB(0.5,0.,0.), bar_size, W, T), dims=1)
+    for t in 1:T
+        # gif[1:bar_size,:,t] .= RGB(0.0,0.,0.)
+        gif[end-bar_size+1:end, 1:round(Int, W*t/T), t] .= RGB(0.,0.75,0.)
+    end
+
     curr_html.num_imgs += 1
     path = "imgs/img_$(curr_html.num_imgs).gif"
     save("out/html/$(curr_html.dir)/$path", gif, fps=fps)

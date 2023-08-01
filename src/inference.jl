@@ -323,6 +323,7 @@ end
 end
 
 const SAMPLES_PER_OBJ = 20
+const SAMPLES = 1
 
 @kernel function fwd_proposal_naive(prev_trace, obs)
     # return (
@@ -335,71 +336,131 @@ const SAMPLES_PER_OBJ = 20
     observed_image = obs[(:steps => t => :observed_image)]
 
     prev_objs = state_of_trace(prev_trace, t - 1).objs
+    prev_state = state_of_trace(prev_trace, t - 1)
     prev_sprites = env_of_trace(prev_trace).sprites
+    prev_env = env_of_trace(prev_trace)
 
     bwd_choices = choicemap()
     trace_updates = choicemap()
 
     # @show typeof(prev_trace.trace)
 
+
+
+
+    curr_state = prev_state
     for obj_id in eachindex(prev_objs)
 
-        # get previous position
-        # prev_pos = get_pos(prev_trace, obj_id, t-1)
-
-        # positions = Vec[]
-
+        states = []
         for j in 1:SAMPLES_PER_OBJ
-            # pos = {obj_id => j} ~  normal_vec(prev_pos, .5)
-            #  ~ exec()
-            # tr = Gen.update()
-            bwd_choices[obj_id => j] = pos
-            push!(positions, pos)
+
+            # env.state = deepcopy(prev_state)
+            # for i in eachindex(env.state.objs)
+            #     {:objs => i} ~ obj_dynamics(i, env)
+            # end
+            # for i in eachindex(env.state.objs)
+            #     pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)
+            #     #sprite noise? 
+            #     env.state.objs[i].pos = pos
+            # end
+        
+            # rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
+            # observed_image ~ image_likelihood(rendered, var)
+
+            env.state = deepcopy(curr_state) # can be less of a deepcopy
+            
+            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, env) #wanna keep these trace choices around
+            
+            trace_updates[:steps => t+1 => :random_stuff => obj_id => j => :dynamics] #UPDATE THIS WITH THE ABOVE??
+            # todo maybe add noise
+
+            push!(states, env.state) #env.state changed
         end
 
-        # manually update, partial draw
-        scores = Float64[]
-        #for each position, score the new image section around the object 
-        (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
+        scores = [] 
+        for state in states
+            rendered = draw(canvas_height, canvas_width, state.objs, env.sprites)
+            push!(scores, image_likelihood(rendered, var))
+        end
 
-        # get a shared bounding box around all the positions
-        ((box_min_y, box_min_x),(box_max_y, box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
-        box_max_y = min(box_max_y + sprite_height, H)
-        box_max_x = min(box_max_x + sprite_width, W)
-
-        objects_one_moved = prev_objs[:]
-        cropped_obs = observed_image[:, box_min_y:box_max_y, box_min_x:box_max_x]
-
-        for pos in positions
-            # move the object
-            objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
-            drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, box_min_y, box_max_y, box_min_x, box_max_x) 
-            # todo var=0.1 is hardcoded for now
-            score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
-            push!(scores, score)
-        end 
-        
-        #making the scores into probabilities 
+        #sample from scores 
         scores_logsumexp = logsumexp(scores)
         scores =  exp.(scores .- scores_logsumexp)
 
-        # sample the actual position
-        idx = {obj_id => :idx} ~ categorical(scores)
-        bwd_choices[obj_id => :idx] = idx
+        idx = {:idx => obj_id} ~ categorical(scores)
+        curr_state = states[idx] #give this state onwards in the loop for the next obj 
 
-        trace_updates[:steps => t => :objs => obj_id => :pos] = positions[idx]
-        
+        #uhh something like this if we wanna keep the randomness around
+        trace_updates[:steps => t+1 => :random_stuff => obj_id] = idx
+
     end
+
+    trace_updates[:steps => t+1 => :objs] = curr_state.objs 
     
 
+
+
+    # Gen.update(prev_trace, trace_updates)
+
     return (
-        trace_updates, # (:init => :N, prev_trace[:init => :N]+1)
-        # bwd proposal doesnt need to be passed any extra information to invert the update! No matter
-        # what choices it makes itll be able to invert the update, since itll just be shortening the
-        # trace by one step as opposed to doing something like probabilistically adjusting :N etc.
+        trace_updates, # choicemap
         bwd_choices
     )
 end
+        
+        
+
+    
+
+
+
+
+
+        # # manually update, partial draw
+        # scores = Float64[]
+        # #for each position, score the new image section around the object 
+        # (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
+
+        # # get a shared bounding box around all the positions
+        # ((box_min_y, box_min_x),(box_max_y, box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
+        # box_max_y = min(box_max_y + sprite_height, H)
+        # box_max_x = min(box_max_x + sprite_width, W)
+
+        # objects_one_moved = prev_objs[:]
+        # cropped_obs = observed_image[:, box_min_y:box_max_y, box_min_x:box_max_x]
+
+        # for pos in positions
+        #     # move the object
+        #     objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
+        #     drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, box_min_y, box_max_y, box_min_x, box_max_x) 
+        #     # todo var=0.1 is hardcoded for now
+        #     score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
+        #     push!(scores, score)
+        # end 
+        
+        # #making the scores into probabilities 
+        # scores_logsumexp = logsumexp(scores)
+        # scores =  exp.(scores .- scores_logsumexp)
+
+        # # sample the actual position
+        # idx = {obj_id => :idx} ~ categorical(scores)
+        # bwd_choices[obj_id => :idx] = idx
+
+        # trace_updates[:steps => t => :objs => obj_id => :pos] = positions[idx]
+    
+    
+    # end
+    
+
+    # return (
+        
+    #     trace_updates, # (:init => :N, prev_trace[:init => :N]+1) # a choice map 
+    #     # bwd proposal doesnt need to be passed any extra information to invert the update! No matter
+    #     # what choices it makes itll be able to invert the update, since itll just be shortening the
+    #     # trace by one step as opposed to doing something like probabilistically adjusting :N etc.
+    #     bwd_choices
+    # )
+# end
 
 @kernel function bwd_proposal_naive(next_trace, obs)
 

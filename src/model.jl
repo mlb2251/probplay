@@ -271,6 +271,7 @@ end
     end
     for i in eachindex(env.state.objs)
         pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)
+        #sprite noise? 
         env.state.objs[i].pos = pos
     end
 
@@ -320,8 +321,8 @@ make_sprites = Map(make_type)
         # move with local latent velocity
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
         # random walk
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
-        # CFunc(parse(SExpr,"(pass)")),
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+        CFunc(parse(SExpr,"(pass)")),
         # move with constant velocity not a local
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))")),
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),

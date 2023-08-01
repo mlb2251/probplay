@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0"
+julia_version = "1.9.1"
 manifest_format = "2.0"
 project_hash = "bfc48283dd868db83dad2cfa06c2151c21774b3a"
 
@@ -496,7 +496,7 @@ version = "0.72.7+0"
 
 [[deps.Gen]]
 deps = ["Compat", "DataStructures", "Distributions", "ForwardDiff", "FunctionalCollections", "JSON", "LinearAlgebra", "MacroTools", "Parameters", "Random", "ReverseDiff", "SpecialFunctions"]
-git-tree-sha1 = "2275d3ac200a97f9257e43ba601744aa6fb468d1"
+git-tree-sha1 = "9b338d5e77aaedd22b6a4a4d6b871f0dad72b2d3"
 repo-rev = "master"
 repo-url = "https://github.com/mlb2251/Gen.jl.git"
 uuid = "ea4f424c-a589-11e8-07c0-fd5c91b9da4a"
@@ -2022,7 +2022,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.7.0+0"
+version = "5.8.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]

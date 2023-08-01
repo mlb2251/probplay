@@ -334,13 +334,15 @@ const SAMPLES_PER_OBJ = 20
     t = prev_T
     observed_image = obs[(:steps => t => :observed_image)]
 
-    prev_objs = state_of_trace(prev_trace, t - 1)
+    prev_objs = state_of_trace(prev_trace, t - 1).objs
     prev_sprites = env_of_trace(prev_trace).sprites
 
     bwd_choices = choicemap()
     trace_updates = choicemap()
 
-    for obj_id in 1:prev_trace[:init => :N]
+    # @show typeof(prev_trace.trace)
+
+    for obj_id in eachindex(prev_objs)
 
         # get previous position
         prev_pos = get_pos(prev_trace, obj_id, t-1)

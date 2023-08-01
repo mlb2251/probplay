@@ -1,5 +1,11 @@
 import DynamicForwardDiff: Dual
+import GenTraceKernelDSL: TraceToken
 
+
+# workaround for annoying bug where if you try to access the return value for trace[:init] followed by trace[:init => :N] has_key will get confused
+# because itll think that :init is both a submap and a value and it'll crash.
+env_of_trace(trace::TraceToken) = env_of_trace(trace.trace)
+state_of_trace(trace::TraceToken, t) = state_of_trace(trace.trace, t)
 
 function env_of_trace(trace)
     return trace[:init]

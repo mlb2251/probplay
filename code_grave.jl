@@ -1,7 +1,30 @@
 #code graveyard for chunks of code one writes and deletes and will never be useful but can't bear to delete them
+# "
 
+# @gen function get_random_new_color(tr, i)
+#     #can't do gaus because it goes past 1 so the log pdf will get messed up 
+#     r, g, b = tr[:init => :init_sprites => i => :color]
 
+#     radius = 0.1
 
+#     #mins are maximum of values minus radius and zero 
+#     mins = [max(0, r - radius), max(0, g - radius), max(0, b - radius)]
+#     maxs = [min(1, r + radius), min(1, g + radius), min(1, b + radius)]
+
+#     rnew ~ uniform(mins[1], maxs[1])	
+#     gnew ~ uniform(mins[2], maxs[2])
+#     bnew ~ uniform(mins[3], maxs[3])
+    
+# end
+# # function get_alpha(peak) #idk whats going on here lol 
+# #     if peak <= 0
+# #         return 0.00001
+# #     elseif peak >= 1"
+#         return 0.99999
+#     else
+#         return peak / (1 - peak)
+#     end
+# end
 
         # scores = zeros(Float64, H*W)
 

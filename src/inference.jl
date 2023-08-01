@@ -345,12 +345,14 @@ const SAMPLES_PER_OBJ = 20
     for obj_id in eachindex(prev_objs)
 
         # get previous position
-        prev_pos = get_pos(prev_trace, obj_id, t-1)
+        # prev_pos = get_pos(prev_trace, obj_id, t-1)
 
-        positions = Vec[]
+        # positions = Vec[]
 
         for j in 1:SAMPLES_PER_OBJ
-            pos = {obj_id => j} ~  normal_vec(prev_pos, .5)
+            # pos = {obj_id => j} ~  normal_vec(prev_pos, .5)
+            #  ~ exec()
+            # tr = Gen.update()
             bwd_choices[obj_id => j] = pos
             push!(positions, pos)
         end

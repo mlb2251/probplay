@@ -6,5 +6,5 @@ include("html.jl")
 include("sam.jl")
 include("inference.jl"); 
 include("involutions.jl");
-#include("distributions.jl");
+include("distributions.jl");
 end # module Atari

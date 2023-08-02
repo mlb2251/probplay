@@ -52,7 +52,6 @@ const uniform_position = UniformPosition()
     pos ~ uniform_position(H, W)
     return pos
 end
-
 allpositions = Map(get_position) #works with this not uniform pos 
 
 

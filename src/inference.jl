@@ -35,12 +35,16 @@ function test_one_involution(frame)
         #tr = total_update(tr)
         #@show tr
         
-        heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
-        tr, accepted = mh(tr, dd_add_remove_sprite_random, (heatmap,), dd_add_remove_sprite_involution)
+        # heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
+        # tr, accepted = mh(tr, dd_add_remove_sprite_random, (heatmap,), dd_add_remove_sprite_involution)
+        # if accepted
+        #     print("added/removed sprite")
+        # end
+        tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution)
         if accepted
             print("added/removed sprite")
         end
-    
+
 
 
         # if accepted
@@ -80,7 +84,7 @@ function total_update(tr)
     #add/remove sprite 
     tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
     if accepted
-        print("added/removed sprite")
+        #print("added/removed sprite")
     end
 
 
@@ -98,9 +102,9 @@ function total_update(tr)
     #recolor involution 
         #tr, accepted = mh(tr, select((:init => :init_sprites => i => :color))) #works but need to change to the involution 
         tr, accepted = mh(tr, dd_get_random_new_color, (i,), color_involution)
-        if accepted
-            #print("sprite color changed")
-        end 
+        # if accepted
+        #     #print("sprite color changed")
+        # end 
 
 
     #resize involution 
@@ -132,11 +136,11 @@ function total_update(tr)
 
     #object proposals 
 
-    #add/remove object involution TODO
+    #add/remove object involution 
     tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution)
-    if accepted
-        # print("added/removed object")
-    end 
+    # if accepted
+    #     print("added/removed object")
+    # end 
 
 
 

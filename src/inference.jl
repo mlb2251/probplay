@@ -326,6 +326,7 @@ const SAMPLES_PER_OBJ = 20
 const SAMPLES = 1
 
 @kernel function fwd_proposal_naive(prev_trace, obs)
+    @show "fwd proposal timee"
     # return (
     #     choicemap((:init => :N, prev_trace[:init => :N]+1)),
     #     choicemap()
@@ -349,6 +350,7 @@ const SAMPLES = 1
 
 
     curr_state = prev_state
+    curr_env = prev_env #not right 
     for obj_id in eachindex(prev_objs)
 
         states = []
@@ -367,20 +369,22 @@ const SAMPLES = 1
             # rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
             # observed_image ~ image_likelihood(rendered, var)
 
-            env.state = deepcopy(curr_state) # can be less of a deepcopy
+            curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
             
-            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, env) #wanna keep these trace choices around
+            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env) #wanna keep these trace choices around
             
-            trace_updates[:steps => t+1 => :random_stuff => obj_id => j => :dynamics] #UPDATE THIS WITH THE ABOVE??
+            #trace_updates[:steps => t+1 => :random_stuff => obj_id => j => :dynamics] #UPDATE THIS WITH THE ABOVE??
             # todo maybe add noise
 
-            push!(states, env.state) #env.state changed
+            push!(states, curr_env.state) #env.state changed
         end
 
-        scores = [] 
+        scores = Float64[]
         for state in states
-            rendered = draw(canvas_height, canvas_width, state.objs, env.sprites)
-            push!(scores, image_likelihood(rendered, var))
+            rendered = draw(H, W, state.objs, curr_env.sprites)
+            html_body(html_img(rendered))
+            score = Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
+            push!(scores, score)
         end
 
         #sample from scores 
@@ -390,12 +394,18 @@ const SAMPLES = 1
         idx = {:idx => obj_id} ~ categorical(scores)
         curr_state = states[idx] #give this state onwards in the loop for the next obj 
 
-        #uhh something like this if we wanna keep the randomness around
-        trace_updates[:steps => t+1 => :random_stuff => obj_id] = idx
+        #uhh something like this 
+        #testing 
+        #trace_updates[:steps] = "test"
+        trace_updates[:steps => t+1 => :random_stuff => (:idx_chosen_for_obj, obj_id)] = idx
+        obj = curr_state.objs[obj_id]
+        trace_updates[:steps => t+1 => :objs => obj_id => :pos] = obj.pos
+        trace_updates[:steps => t+1 => :objs => obj_id => :sprite_index] = obj.sprite_index
+        #trace_updates[:steps => t+1 => :objs => obj_id => :attrs] = uh
 
     end
 
-    trace_updates[:steps => t+1 => :objs] = curr_state.objs 
+    #trace_updates[:steps => t+1 => :objs] = curr_state.objs 
     
 
 

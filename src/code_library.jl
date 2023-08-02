@@ -331,7 +331,7 @@ end
         error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
     end
 
-
+    @show env.constraints #why isn't this showing 
     return ret
 
 end

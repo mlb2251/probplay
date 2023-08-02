@@ -286,7 +286,7 @@ unfold_step = Unfold(dynamics_and_render)
     sprite_index ~ uniform_discrete(1, num_sprites) 
     #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
-    env.step_of_obj[i] = {:step_of_obj => i} ~ uniform_discrete(1, length(env.code_library))
+    env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
 
     return Object(sprite_index, pos, [])
 end

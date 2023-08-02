@@ -207,45 +207,48 @@ mutable struct Env
     step_of_obj::Vector{Int} # which step function for each object
     sprites::Vector{Sprite}
     code_library::Vector{CFunc}
+    ctrace::DynamicChoiceMap
 end
 
-new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[])
+
+new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], choicemap())
 
 
 @gen function call_func(func::CFunc, args::Vector{Any}, env::Env)
     save_locals = env.locals
     env.locals = args
-    res ~ exec(func.body, env);
+    env.ctrace = choicemap()
+    res ~ exec(func.body, env, :res);
     env.locals = save_locals
     return res
 end
 
-@gen function exec(e::SExpr, env::Env)
+@gen function exec(e::SExpr, env::Env, addr)
     if e.is_leaf
         return e.leaf
     end
     @assert length(e.children) > 0
     head = unwrap(e.children[1])
 
-    if head === :pass
-        return nothing
+    ret = if head === :pass
+        nothing
     elseif head === :spawn
-        ty ~ exec(e.children[2], env)
+        ty ~ exec(e.children[2], env, addr => :ty)
         ty::TyRef
-        sprite ~ exec(e.children[3], env)
-        pos ~ exec(e.children[4], env)
+        sprite ~ exec(e.children[3], env, addr => :sprite)
+        pos ~ exec(e.children[4], env, addr => :pos)
         attrs = []
         for (i,attr_ty) in enumerate(env.types[ty.id].attrs)
-            attr = {:attrs => i} ~ exec(e.children[4+i], env)
+            attr = {:attrs => i} ~ exec(e.children[4+i], env, addr => :attrs => i)
             attr::attr_ty # type assert
             push!(attrs, attr)
         end
         obj = Object(sprite, pos, attrs)
         # todo have it reuse slots that have been freed
         push!(env.state.objs, obj)
-        return ObjRef(length(env.state.objs))
+        ObjRef(length(env.state.objs))
     elseif head === :despawn
-        obj ~ exec(e.children[2], env)
+        obj ~ exec(e.children[2], env, addr => :obj)
         obj::ObjRef
         obj.id = 0
         # find every objref to this and set it to null
@@ -263,55 +266,72 @@ end
     elseif head === :ty
         id = unwrap(e.children[2])::Int
         @assert 0 < id <= length(env.types)
-        return TypeRef(id)
+        TypeRef(id)
     elseif head === :vec
-        y ~ exec(e.children[2], env)
-        x ~ exec(e.children[3], env)
-        return Vec(y,x)
+        y ~ exec(e.children[2], env, addr => :y)
+        x ~ exec(e.children[3], env, addr => :x)
+        Vec(y,x)
     elseif head === :+
-        a ~ exec(e.children[2], env)
-        b ~ exec(e.children[3], env)
-        return a + b
-    elseif head === :normal_vec
-        mu ~ exec(e.children[2], env)
-        var ~ exec(e.children[3], env)
-        res ~ normal_vec(mu, var)
-        return res
+        a ~ exec(e.children[2], env, addr => :a)
+        b ~ exec(e.children[3], env, addr => :b)
+        a + b
     elseif head === :get_local
         idx = unwrap(e.children[2])::Int
-        return env.locals[idx]
+        env.locals[idx]
     elseif head === :set_local
         idx = unwrap(e.children[2])::Int
-        value ~ exec(e.children[3], env)
+        value ~ exec(e.children[3], env, addr => :value)
         env.locals[idx] = value
-        return nothing
+        nothing
     elseif head === :get_attr
-        obj ~ exec(e.children[2], env)
+        obj ~ exec(e.children[2], env, addr => :obj)
         attr = unwrap(e.children[3])
         if attr isa Symbol
-            return getproperty(obj, attr)
+            getproperty(obj, attr)
         else
-            return obj.attrs[attr]
+            obj.attrs[attr]
         end
     elseif head === :set_attr
-        obj ~ exec(e.children[2], env)
+        obj ~ exec(e.children[2], env, addr => :obj)
         attr = unwrap(e.children[3])
-        value ~ exec(e.children[4], env)
+        value ~ exec(e.children[4], env, addr => :value)
         if attr isa Symbol
             setproperty!(obj, attr, value)
         else
             obj.attrs[attr] = value
         end
-        return nothing
+        nothing
     elseif head === :isnull
-        obj ~ exec(e.children[2], env)
+        obj ~ exec(e.children[2], env, addr => :obj)
         obj::ObjRef
-        return obj.id == 0
+        obj.id == 0
     elseif head === :null
-        return ObjRef(0)
+        ObjRef(0)
+    # primitive distributions
+    elseif head === :normal_vec
+        mu ~ exec(e.children[2], env, addr => :mu)
+        var ~ exec(e.children[3], env, addr => :var)
+        ret_normal_vec ~ normal_vec(mu, var)
+        env.ctrace[addr => :ret_normal_vec] = ret_normal_vec
+        ret_normal_vec
+    elseif head === :normal
+        mu ~ exec(e.children[2], env, addr => :mu)
+        var ~ exec(e.children[3], env, addr => :var)
+        ret_normal ~ normal(mu, var)
+        env.ctrace[addr => :ret_normal] = ret_normal
+        ret_normal
+    elseif head === :bernoulli
+        p ~ exec(e.children[2], env, addr => :p)
+        ret_bernoulli ~ bernoulli(p)
+        env.ctrace[addr => :ret_bernoulli] = ret_bernoulli
+        ret_bernoulli
     else
         @assert head isa Symbol "$(typeof(head))"
         @assert !startswith(string(head), ":") "the symbol $head has an extra leading colon (:) note that parsing sexprs inserts colons so you may have unnecessarily included one"
         error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
     end
+
+
+    return ret
+
 end

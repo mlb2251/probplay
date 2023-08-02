@@ -207,7 +207,7 @@ mutable struct Env
     step_of_obj::Vector{Int} # which step function for each object
     sprites::Vector{Sprite}
     code_library::Vector{CFunc}
-    ctrace::DynamicChoiceMap
+    constraints::DynamicChoiceMap
 end
 
 
@@ -217,7 +217,7 @@ new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], choicemap())
 @gen function call_func(func::CFunc, args::Vector{Any}, env::Env)
     save_locals = env.locals
     env.locals = args
-    env.ctrace = choicemap()
+    env.constraints = choicemap()
     res ~ exec(func.body, env, :res);
     env.locals = save_locals
     return res
@@ -312,18 +312,18 @@ end
         mu ~ exec(e.children[2], env, addr => :mu)
         var ~ exec(e.children[3], env, addr => :var)
         ret_normal_vec ~ normal_vec(mu, var)
-        env.ctrace[addr => :ret_normal_vec] = ret_normal_vec
+        env.constraints[addr => :ret_normal_vec] = ret_normal_vec
         ret_normal_vec
     elseif head === :normal
         mu ~ exec(e.children[2], env, addr => :mu)
         var ~ exec(e.children[3], env, addr => :var)
         ret_normal ~ normal(mu, var)
-        env.ctrace[addr => :ret_normal] = ret_normal
+        env.constraints[addr => :ret_normal] = ret_normal
         ret_normal
     elseif head === :bernoulli
         p ~ exec(e.children[2], env, addr => :p)
         ret_bernoulli ~ bernoulli(p)
-        env.ctrace[addr => :ret_bernoulli] = ret_bernoulli
+        env.constraints[addr => :ret_bernoulli] = ret_bernoulli
         ret_bernoulli
     else
         @assert head isa Symbol "$(typeof(head))"

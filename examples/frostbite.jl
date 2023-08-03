@@ -43,6 +43,7 @@ function code_test()
     env.code_library = [
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1) 0.5))")),
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))"))
+       # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1) 0.5))")),
     ]
     # push!(env.code_library, CFunc(parse(SExpr,
     #     "(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) 1) 1.0))"
@@ -63,6 +64,7 @@ function code_test()
     @time for t in 2:T
         call_func(env.code_library[func], Any[objs[1]], env)
         frames[:,:,:,t] = draw(H, W, objs, sprites)
+        html_body(html_img(frames[:,:,:,t], width="400px"))
         if t == 10
             func = 2
         end
@@ -184,7 +186,7 @@ function particle_small()
 end
 
 function particle_tiny()
-    @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1:4], 8);
+    @time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1:4], 1);
 end
 
 function gen_tiny()

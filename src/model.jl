@@ -292,7 +292,7 @@ unfold_step = Unfold(dynamics_and_render)
     return Object(sprite_index, pos, [])
 end
 
-@gen (static) function make_type(i, H, W) 
+@gen function make_type(i, H, W) 
     width ~ uniform_discrete(1,W)
     height ~ uniform_discrete(1,H)
     shape ~ bernoulli_2d(0.5, height, width)
@@ -321,18 +321,18 @@ make_sprites = Map(make_type)
     env.code_library = [
         # move with local latent velocity
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
-        
+
         # random walk
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
         # stationary
-        CFunc(parse(SExpr,"(pass)")),
+        # CFunc(parse(SExpr,"(pass)")),
         # move const vel down right
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))")),
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))")),
         # move const vel down
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
 
         #move const vel right a little for frostbite
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 0.5)))")),
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 0.5)))")),
         
     ]
     env.step_of_obj = fill(0,N) # will be set by make_objects
@@ -348,8 +348,8 @@ end
 # testinitmodel = init_model(10, 20, 0.1)
 # #@show testinitmodel
 
-
-@gen (static) function model(H, W, T) 
+#  (static)
+@gen function model(H, W, T) 
 
     var = .1
     env = {:init} ~ init_model(H,W,var)

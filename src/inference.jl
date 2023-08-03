@@ -304,10 +304,12 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     ]))
     html_body("<h2>Reconstructed Images</h2>")
 
-    table = fill("", 2, length(state.traces))
+    table = fill("", 3, length(state.traces))
     for (i,trace) in enumerate(state.traces)
         table[1,i] = "Particle $i ($(round(weights[i],sigdigits=4)))"
-        table[2,i] = html_gif(render_trace(trace));
+        rendered = render_trace(trace)
+        table[2,i] = html_gif(rendered);
+        table[3,i] = html_gif(img_diff(rendered, observed_images));
     end
 
     html_body(html_table(table))
@@ -329,7 +331,7 @@ end
 end
 
 const SAMPLES_PER_OBJ = 40
-
+show_forward_proposals :: Bool = false
 
 @kernel function fwd_proposal_naive(prev_trace, obs)
     # @show "fwd proposal timee"
@@ -353,6 +355,16 @@ const SAMPLES_PER_OBJ = 40
 
     # @show typeof(prev_trace.trace)
 
+    if show_forward_proposals
+        html_body("<h3>New Forward Proposal</h3>")
+        html_body("t=$t <br>")
+        html_body("Observation: <br>", html_img(observed_image), "<br>")
+        curr_img = draw(H, W, curr_env.state.objs, curr_env.sprites)
+        html_body("Current State: <br>", html_img(curr_img), "<br>")
+        html_body("observed-curr<br>", html_img((observed_image .- curr_img .+ 1.0) ./ 2), "<br><br>")
+        html_body(replace(string(get_choices(prev_trace.trace)),"\n"=>"<br>", "\t" => "&emsp;", " " => "&nbsp;"))
+    end
+
     for obj_id in eachindex(curr_env.state.objs)
 
         curr_state = curr_env.state
@@ -375,7 +387,7 @@ const SAMPLES_PER_OBJ = 40
             # observed_image ~ image_likelihood(rendered, var)
 
             curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
-            curr_env.step_of_obj[obj_id] = {(:func, obj_id, j)} ~ uniform_discrete(1, length(curr_env.code_library))
+            # curr_env.step_of_obj[obj_id] = {(:func, obj_id, j)} ~ uniform_discrete(1, length(curr_env.code_library))
             {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env) #wanna keep these trace choices around
              
             
@@ -384,29 +396,52 @@ const SAMPLES_PER_OBJ = 40
             # todo maybe add the noise
 
             push!(states, curr_env.state) #env.state changed
-            push!(constraints, curr_env.constraints)
-            push!(steps, curr_env.step_of_obj[obj_id])
+            push!(constraints, curr_env.exec.constraints)
+            # push!(steps, curr_env.step_of_obj[obj_id])
         end
 
-        html_body("<br>moving obj $obj_id<br>")
         scores = Float64[]
-        for state in states
+        for (i,state) in enumerate(states)
             rendered = draw(H, W, state.objs, curr_env.sprites) #eventually only draw part 
-            html_body(html_img(rendered))
+            # html_body(html_img(rendered))
             score = Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
-            html_body("$score")
+            # html_body("$score")
             push!(scores, score)
         end
+
+
 
         #sample from scores 
         scores_logsumexp = logsumexp(scores)
         scores =  exp.(scores .- scores_logsumexp)
-        @show scores 
+        # @show scores 
 
         idx = {:idx => obj_id} ~ categorical(scores)
         curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
+
+
+        if show_forward_proposals
+
+            html_body("<br>Proposals for object $obj_id<br>")
+
+            table = fill("", 2, SAMPLES_PER_OBJ)
+
+            for (i,state) in enumerate(states)
+                rendered = draw(H, W, state.objs, curr_env.sprites) 
+                score = Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
+                table[1,i] = html_img(rendered)
+                table[2,i] = "$i: $score"
+            end
+
+            html_body(html_table(table))
+            html_body("Chose: $idx<br>")
+
+        end
+
+
         # curr_env.constraints = constraints[idx]
         # curr_env.step_of_obj[obj_id] = steps[idx]
+
 
         # @show trace_updates
         # @show prev_trace
@@ -415,8 +450,8 @@ const SAMPLES_PER_OBJ = 40
 
         # @show t obj_id
         # trace_updates[:steps => t => :objs => obj_id] = constraints[idx]
-        set_submap!(trace_updates,:steps => t => :objs => obj_id, constraints[idx])
-        trace_updates[:init => :init_objs => obj_id => :step_of_obj] = steps[idx]
+        set_submap!(trace_updates,:steps => t => :objs => obj_id => :step, constraints[idx])
+        # trace_updates[:init => :init_objs => obj_id => :step_of_obj] = steps[idx]
         # @show constraints[idx]
 
 
@@ -437,8 +472,13 @@ const SAMPLES_PER_OBJ = 40
     end
 
 
-    html_body("<br>Result<br>")
-    html_body(html_img(draw(H, W, curr_env.state.objs, curr_env.sprites)))
+    if show_forward_proposals
+        res = draw(H, W, curr_env.state.objs, curr_env.sprites)
+        html_body("<br>Result<br>", html_img(res), "<br><br>")
+        # html_body("Heatmap<br>", render_heatmap(logpdfmap(ImageLikelihood(), observed_image, res, .1)), "<br><br>")
+        html_body("observed-res<br>", html_img((observed_image .- res .+ 1.0) ./ 2), "<br><br>")
+        html_body(replace(string(trace_updates),"\n"=>"<br>", "\t" => "&emsp;", " " => "&nbsp;"))
+    end
     # Gen.update(prev_trace, trace_updates, ())
 
     # Gen.set_retval!()

@@ -70,6 +70,9 @@ function render_trace(trace)
     stack([render_trace_frame(trace, t) for t in 0:T-1])
 end
 
+function img_diff(img1, img2)
+    @. (img1 - img2) / 2. + 0.5
+end
 
 
 

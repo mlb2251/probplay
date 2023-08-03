@@ -201,45 +201,64 @@ mutable struct State
     globals::Vector{Any}
 end
 
+mutable struct ExecInfo
+    constraints::DynamicChoiceMap
+    # subconstraint_stack::Vector{DynamicChoiceMap}
+    path::Vector{Any}
+end
+
 mutable struct Env
     locals::Vector{Any}
     state::State
     step_of_obj::Vector{Int} # which step function for each object
     sprites::Vector{Sprite}
     code_library::Vector{CFunc}
-    constraints::DynamicChoiceMap
+    exec::ExecInfo
 end
 
 
-new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], choicemap())
+new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[]))
 
 
 @gen function call_func(func::CFunc, args::Vector{Any}, env::Env)
     save_locals = env.locals
     env.locals = args
-    env.constraints = choicemap()
+    env.exec = ExecInfo(choicemap(), Symbol[])
     res ~ exec(func.body, env, :res);
     env.locals = save_locals
     return res
 end
 
+
+function constrain!(exec::ExecInfo, addr, val)
+    push!(exec.path, addr)
+    path = foldr(Pair,exec.path)
+    set_value!(exec.constraints, path, val)
+    pop!(exec.path);
+end
+
+
 @gen function exec(e::SExpr, env::Env, addr)
     if e.is_leaf
         return e.leaf
     end
+
+    @assert !(addr isa Pair)
+    push!(env.exec.path, addr)
+
     @assert length(e.children) > 0
     head = unwrap(e.children[1])
 
     ret = if head === :pass
         nothing
     elseif head === :spawn
-        ty ~ exec(e.children[2], env, addr => :ty)
+        ty ~ exec(e.children[2], env, :ty)
         ty::TyRef
-        sprite ~ exec(e.children[3], env, addr => :sprite)
-        pos ~ exec(e.children[4], env, addr => :pos)
+        sprite ~ exec(e.children[3], env, :sprite)
+        pos ~ exec(e.children[4], env, :pos)
         attrs = []
         for (i,attr_ty) in enumerate(env.types[ty.id].attrs)
-            attr = {:attrs => i} ~ exec(e.children[4+i], env, addr => :attrs => i)
+            attr = {(:attrs, i)} ~ exec(e.children[4+i], env, (:attrs,i))
             attr::attr_ty # type assert
             push!(attrs, attr)
         end
@@ -248,7 +267,7 @@ end
         push!(env.state.objs, obj)
         ObjRef(length(env.state.objs))
     elseif head === :despawn
-        obj ~ exec(e.children[2], env, addr => :obj)
+        obj ~ exec(e.children[2], env, :obj)
         obj::ObjRef
         obj.id = 0
         # find every objref to this and set it to null
@@ -268,23 +287,23 @@ end
         @assert 0 < id <= length(env.types)
         TypeRef(id)
     elseif head === :vec
-        y ~ exec(e.children[2], env, addr => :y)
-        x ~ exec(e.children[3], env, addr => :x)
+        y ~ exec(e.children[2], env, :y)
+        x ~ exec(e.children[3], env, :x)
         Vec(y,x)
     elseif head === :+
-        a ~ exec(e.children[2], env, addr => :a)
-        b ~ exec(e.children[3], env, addr => :b)
+        a ~ exec(e.children[2], env, :a)
+        b ~ exec(e.children[3], env, :b)
         a + b
     elseif head === :get_local
         idx = unwrap(e.children[2])::Int
         env.locals[idx]
     elseif head === :set_local
         idx = unwrap(e.children[2])::Int
-        value ~ exec(e.children[3], env, addr => :value)
+        value ~ exec(e.children[3], env, :value)
         env.locals[idx] = value
         nothing
     elseif head === :get_attr
-        obj ~ exec(e.children[2], env, addr => :obj)
+        obj ~ exec(e.children[2], env, :obj)
         attr = unwrap(e.children[3])
         if attr isa Symbol
             getproperty(obj, attr)
@@ -292,9 +311,9 @@ end
             obj.attrs[attr]
         end
     elseif head === :set_attr
-        obj ~ exec(e.children[2], env, addr => :obj)
+        obj ~ exec(e.children[2], env, :obj)
         attr = unwrap(e.children[3])
-        value ~ exec(e.children[4], env, addr => :value)
+        value ~ exec(e.children[4], env, :value)
         if attr isa Symbol
             setproperty!(obj, attr, value)
         else
@@ -302,28 +321,28 @@ end
         end
         nothing
     elseif head === :isnull
-        obj ~ exec(e.children[2], env, addr => :obj)
+        obj ~ exec(e.children[2], env, :obj)
         obj::ObjRef
         obj.id == 0
     elseif head === :null
         ObjRef(0)
     # primitive distributions
     elseif head === :normal_vec
-        mu ~ exec(e.children[2], env, addr => :mu)
-        var ~ exec(e.children[3], env, addr => :var)
+        mu ~ exec(e.children[2], env, :mu)
+        var ~ exec(e.children[3], env, :var)
         ret_normal_vec ~ normal_vec(mu, var)
-        env.constraints[addr => :ret_normal_vec] = ret_normal_vec
+        constrain!(env.exec, :ret_normal_vec, ret_normal_vec)
         ret_normal_vec
     elseif head === :normal
-        mu ~ exec(e.children[2], env, addr => :mu)
-        var ~ exec(e.children[3], env, addr => :var)
+        mu ~ exec(e.children[2], env,  :mu)
+        var ~ exec(e.children[3], env,  :var)
         ret_normal ~ normal(mu, var)
-        env.constraints[addr => :ret_normal] = ret_normal
+        constrain!(env.exec, :ret_normal, ret_normal)
         ret_normal
     elseif head === :bernoulli
-        p ~ exec(e.children[2], env, addr => :p)
+        p ~ exec(e.children[2], env,  :p)
         ret_bernoulli ~ bernoulli(p)
-        env.constraints[addr => :ret_bernoulli] = ret_bernoulli
+        constrain!(env.exec, :ret_bernoulli, ret_bernoulli)
         ret_bernoulli
     else
         @assert head isa Symbol "$(typeof(head))"
@@ -331,7 +350,7 @@ end
         error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
     end
 
-    # @show env.constraints #why isn't this showing 
+    @assert pop!(env.exec.path) == addr
     return ret
 
 end

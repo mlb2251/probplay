@@ -321,12 +321,19 @@ make_sprites = Map(make_type)
     env.code_library = [
         # move with local latent velocity
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
+        
         # random walk
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+        # stationary
         CFunc(parse(SExpr,"(pass)")),
-        # move with constant velocity not a local
+        # move const vel down right
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))")),
+        # move const vel down
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
+
+        #move const vel right a little for frostbite
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 0.5)))")),
+        
     ]
     env.step_of_obj = fill(0,N) # will be set by make_objects
     env.state.objs = {:init_objs} ~  make_objects(collect(1:N), fill(H,N), fill(W,N), fill(num_sprites,N), fill(env,N))

@@ -269,6 +269,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             rejuv(state.traces[i])
         end
 
+        
+
         @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, SMCP3Update(
                 fwd_proposal_naive,
@@ -277,6 +279,10 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 (obs,),
                 false, # check are inverses
             ))
+        
+        
+        #render 
+        #html_body(html_img())
     end
 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
@@ -382,21 +388,25 @@ const SAMPLES_PER_OBJ = 40
             push!(steps, curr_env.step_of_obj[obj_id])
         end
 
+        html_body("<br>moving obj $obj_id<br>")
         scores = Float64[]
         for state in states
             rendered = draw(H, W, state.objs, curr_env.sprites) #eventually only draw part 
-            # html_body(html_img(rendered))
+            html_body(html_img(rendered))
             score = Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
+            html_body("$score")
             push!(scores, score)
         end
 
         #sample from scores 
         scores_logsumexp = logsumexp(scores)
         scores =  exp.(scores .- scores_logsumexp)
+        @show scores 
 
         idx = {:idx => obj_id} ~ categorical(scores)
-        curr_env.state = states[idx] #give this state onwards in the loop for the next obj 
-        curr_env.step_of_obj[obj_id] = steps[idx]
+        curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
+        # curr_env.constraints = constraints[idx]
+        # curr_env.step_of_obj[obj_id] = steps[idx]
 
         # @show trace_updates
         # @show prev_trace
@@ -407,6 +417,8 @@ const SAMPLES_PER_OBJ = 40
         # trace_updates[:steps => t => :objs => obj_id] = constraints[idx]
         set_submap!(trace_updates,:steps => t => :objs => obj_id, constraints[idx])
         trace_updates[:init => :init_objs => obj_id => :step_of_obj] = steps[idx]
+        # @show constraints[idx]
+
 
         # set_(trace_updates,:steps => t => :objs => obj_id, constraints[idx])
         #trace_updates[:steps => observed_image] = "test"
@@ -423,6 +435,16 @@ const SAMPLES_PER_OBJ = 40
         
         
     end
+
+
+    html_body("<br>Result<br>")
+    html_body(html_img(draw(H, W, curr_env.state.objs, curr_env.sprites)))
+    # Gen.update(prev_trace, trace_updates, ())
+
+    # Gen.set_retval!()
+
+    # prev_trace.trace[:init] = curr_env
+    # prev_trace.trace[:steps => t] = curr_env.state
 
     #trace_updates[:steps => t+1 => :objs] = curr_state.objs 
     

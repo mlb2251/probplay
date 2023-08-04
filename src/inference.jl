@@ -297,6 +297,17 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
 
     html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
     html_body("<h2>Observations</h2>", html_gif(observed_images))
+
+    html_body("""
+    <div class="slidecontainer">
+        <input type="range" min="1" max="$T" value="1" class="slider" id="t_slider">
+        [autoplay:
+        <input type="checkbox" id="autoplayCheckbox" onclick="autoplay()" checked="true"  >]
+            t=<span id="show_t"></span>
+    </div>
+    """)
+
+
     types = map(i -> objs[i].sprite_index, cluster);
     html_body("<h2>First Frame Processing</h2>",
     html_table(["Observation"                       "Objects"                       "Types";

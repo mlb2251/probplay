@@ -113,6 +113,15 @@ function html_table(table::Matrix, attrs...)
     res
 end
 
+function html_tslider()
+    html_body("""
+    <div class="slidecontainer">
+        <input type="range" class="slider_t"> [autoplay: <input type="checkbox" class="autoplayCheckbox">] t=<span class="show_t"></span>
+    </div>
+    """)
+end
+
+
 function html_render(;open=true, publish::Union{Bool,Nothing}=nothing, styles="css/styles.css", scripts="js/scripts.js")
     if isnothing(publish)
         publish = occursin("csail.mit.edu", gethostname()) && occursin("sketch", gethostname())
@@ -128,10 +137,16 @@ function html_render(;open=true, publish::Union{Bool,Nothing}=nothing, styles="c
 
         <body>
 
-        $(curr_html.body)
-
         <script src="scripts.js"></script>
 
+        <div class="slidecontainer">
+            <input type="range" class="slider_t"> [autoplay: <input type="checkbox" class="autoplayCheckbox">] t=<span class="show_t"></span>
+        </div>
+
+        <p> <b>Controls:</b> E: toggle autoplay; A/D: step time back/forward </p>
+
+
+        $(curr_html.body)
 
         </body>
 

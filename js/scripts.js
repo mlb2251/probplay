@@ -1,51 +1,95 @@
 
 
-// var t = 1;
+var t = 1;
+var tMax;
+var autoplayOn = true;
+var autoplayInterval = undefined;
 
 
-function autoplay() {
-    if (document.getElementById("autoplayCheckbox").checked == true){
-        window.autoplayInterval = setInterval(stepTime, 333);
-    } else {
-        clearInterval(window.autoplayInterval);
+function refreshTMax() {
+    for (elem of document.getElementsByClassName("slider_t")) {
+        elem.min = 1;
+        elem.max = tMax;
+    }
+}
+
+function refresh() {
+    for (elem of document.getElementsByClassName("show_t")) {
+        elem.innerHTML = t;
+    }
+    for (elem of document.getElementsByClassName("slider_t")) {
+        elem.value = t;
+        elem.min = 1;
+        elem.max = tMax;
+    }
+    for (elem of document.getElementsByClassName("anim")) {
+        elem.src = elem.src.split("___T")[0] + "___T" + t + ".png";
+    }
+    for (elem of document.getElementsByClassName("autoplayCheckbox")) {
+        elem.checked = autoplayOn;
+    }
+    if (autoplayOn === true && autoplayInterval === undefined) {
+        autoplayInterval = setInterval(stepTime, 333);
+    }
+    if (autoplayOn === false && autoplayInterval !== undefined) {
+        autoplayInterval = clearInterval(autoplayInterval);
     }
 }
 
 function stepTime() {
-    t = getStep();
-    if (t == document.getElementById("t_slider").max) {
-        setStep(1);
-    } else {
-        setStep(t + 1);
+    t = (t % tMax) + 1;
+    refresh();
+}
+function stepTimeBack() {
+    t -= 1;
+    if (t < 1) {
+        t = tMax;
     }
+    refresh();
 }
 
-function getStep() {
-    return parseInt(document.getElementById("t_slider").value);
-}
-function setStep(t) {
-    document.getElementById("t_slider").value = t;
-    document.getElementById("show_t").innerHTML = t;
-    // var path = "imgs/img_" + t + ".png";
-    for (elem of document.getElementsByClassName("anim")) {
-        elem.src = elem.src.split("___T")[0] + "___T" + t + ".png";
-        console.log(elem.src);
+
+document.onkeydown = function (e) {
+    var key = e.key.toLowerCase()
+
+    if (key == 'a') {
+        stepTimeBack();
     }
+    else if (key == 'd') {
+        stepTime();
+    }
+    else if (key == 'e') {
+        toggleAutoplay();
+    }
+    // console.log(e.key);
 }
 
-setStep(1);
-document.getElementById("t_slider").oninput = function() {
-  setStep(this.value);
+function toggleAutoplay() {
+    autoplayOn = !autoplayOn;
+    refresh();
 }
 
-autoplay();
 
 
+// set stuff up
+window.onload = function() {
 
+    for (elem of document.getElementsByClassName("slider_t")) {
+        elem.oninput = function() {
+            t = parseInt(this.value);
+            refresh();
+        }
+    }
 
-// make a list of imgs/img_1.png imgs/img_2.png imgs/img_3.png etc
-// var imgList = [];
-// for (var i = 1; i <= 19; i++) {
-//     imgList.push("imgs/img_" + i + ".png");
-// }
+    for (elem of document.getElementsByClassName("autoplayCheckbox")) {
+        elem.oninput = function() {
+            autoplayOn = this.checked;
+            refresh();
+        }
+    }
+
+    refreshTMax();
+    refresh();
+}
+
 

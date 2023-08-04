@@ -90,11 +90,11 @@ function html_gif(gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px")
     # save("out/html/$(curr_html.dir)/$path", gif, fps=fps)
     # res = if !isempty(attrs) "<img src=$(path) $attrs>" else "<img src=$(path)>" end
 
-    for t in 1:T
+    for t in 0:T-1
         path = "imgs/img_$(curr_html.num_imgs)___T$t.png"
-        save("out/html/$(curr_html.dir)/$path", gif[:,:,t])
+        save("out/html/$(curr_html.dir)/$path", gif[:,:,t+1])
     end
-    path = "imgs/img_$(curr_html.num_imgs)___T1.png"
+    path = "imgs/img_$(curr_html.num_imgs)___T0.png"
     res = "<img src=\"$path\" $attrs >"
     res
 end

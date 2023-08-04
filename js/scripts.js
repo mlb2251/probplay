@@ -1,6 +1,6 @@
 
 
-var t = 1;
+var t = 0;
 var tMax;
 var autoplayOn = true;
 var autoplayInterval = undefined;
@@ -8,8 +8,8 @@ var autoplayInterval = undefined;
 
 function refreshTMax() {
     for (elem of document.getElementsByClassName("slider_t")) {
-        elem.min = 1;
-        elem.max = tMax;
+        elem.min = 0;
+        elem.max = tMax-1;
     }
 }
 
@@ -19,8 +19,6 @@ function refresh() {
     }
     for (elem of document.getElementsByClassName("slider_t")) {
         elem.value = t;
-        elem.min = 1;
-        elem.max = tMax;
     }
     for (elem of document.getElementsByClassName("anim")) {
         elem.src = elem.src.split("___T")[0] + "___T" + t + ".png";
@@ -45,13 +43,13 @@ function refresh() {
 }
 
 function stepTime() {
-    t = (t % tMax) + 1;
+    t = (t + 1) % tMax;
     refresh();
 }
 function stepTimeBack() {
     t -= 1;
-    if (t < 1) {
-        t = tMax;
+    if (t < 0) {
+        t = tMax - 1;
     }
     refresh();
 }

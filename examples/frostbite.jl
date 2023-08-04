@@ -185,8 +185,8 @@ function particle_small()
     @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=170, bottom=25, left=20, tskip=4)[:,:,:,1:4], 8);
 end
 
-function particle_tiny()
-    @time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1:4], 1);
+function particle_tiny(T=4)
+    @time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=20)[:,:,:,1:T], 1);
 end
 
 function gen_tiny()

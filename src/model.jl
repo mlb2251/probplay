@@ -270,11 +270,11 @@ end
         # @show i
         {:objs => i} ~ obj_dynamics(i, env)
     end
-    for i in eachindex(env.state.objs)
+    # for i in eachindex(env.state.objs)
         # pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)
         #sprite noise? 
         # env.state.objs[i].pos = pos
-    end
+    # end
 
     rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
     observed_image ~ image_likelihood(rendered, var)
@@ -313,7 +313,6 @@ make_sprites = Map(make_type)
 
 @gen function init_model(H,W,var)
     num_sprites ~ poisson_plus_1(4)
-    N ~ poisson(7)
     env = new_env();
 
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
@@ -335,8 +334,8 @@ make_sprites = Map(make_type)
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 0.5)))")),
         
     ]
-    env.step_of_obj = fill(0,N) # will be set by make_objects
-    env.state.objs = {:init_objs} ~  make_objects(collect(1:N), fill(H,N), fill(W,N), fill(num_sprites,N), fill(env,N))
+
+    env.state = {:init_state} ~ init_state(H,W,num_sprites,env)
 
     rendered = draw(H, W, env.state.objs, env.sprites)
     {:observed_image} ~ image_likelihood(rendered, var)
@@ -344,12 +343,20 @@ make_sprites = Map(make_type)
     env
 end
 
+@gen function init_state(H,W,num_sprites,env)
+    N ~ poisson(7)
+    env.step_of_obj = fill(0,N) # will be set by make_objects
+    init_objs ~  make_objects(collect(1:N), fill(H,N), fill(W,N), fill(num_sprites,N), fill(env,N))
+    return State(init_objs, [])
+end
+
+
 # #testing
 # testinitmodel = init_model(10, 20, 0.1)
 # #@show testinitmodel
 
 #  (static)
-@gen function model(H, W, T) 
+@gen (static) function model(H, W, T) 
 
     var = .1
     env = {:init} ~ init_model(H,W,var)

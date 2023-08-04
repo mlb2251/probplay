@@ -2,7 +2,7 @@ import DynamicForwardDiff: Dual
 import GenTraceKernelDSL: TraceToken
 
 
-# workaround for annoying bug where if you try to access the return value for trace[:init] followed by trace[:init => :N] has_key will get confused
+# workaround for annoying bug where if you try to access the return value for trace[:init] followed by trace[:init => :init_state => :N] has_key will get confused
 # because itll think that :init is both a submap and a value and it'll crash.
 env_of_trace(trace::TraceToken) = env_of_trace(trace.trace)
 state_of_trace(trace::TraceToken, t) = state_of_trace(trace.trace, t)
@@ -13,7 +13,7 @@ end
 
 function state_of_trace(trace, t)
     if t == 0
-        return trace[:init].state
+        return trace[:init => :init_state]
     else
         return trace[:steps => t]
     end
@@ -24,14 +24,14 @@ end
 #     (H,W,T) = get_args(trace)
 #     @assert t <= T
 #     objs = Object[] #why grey text here?
-#     for i in 1:trace[:init => :N]
+#     for i in 1:trace[:init => :init_state => :N]
 #         if t == 0
-#             pos = trace[:init => :init_objs => i => :pos]
+#             pos = trace[:init => :init_state => :init_objs => i => :pos]
 #         else
 #             pos = trace[:steps => t => :objs => i => :pos]
 #         end
         
-#         sprite_index = trace[:init => :init_objs => i => :sprite_index]
+#         sprite_index = trace[:init => :init_state => :init_objs => i => :sprite_index]
 #         #@show sprite_index
 #         obj = Object(sprite_index, pos)
 #         push!(objs, obj)

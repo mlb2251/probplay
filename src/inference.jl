@@ -222,15 +222,15 @@ end
 function build_init_obs(H,W, sprites, objs, observed_images)
     init_obs = choicemap(
         (:init => :observed_image, observed_images[:,:,:,1]),
-        (:init => :N, length(objs)),
+        (:init => :init_state => :N, length(objs)),
         (:init => :num_sprites, length(sprites)),
     )
 
     for (i,obj) in enumerate(objs)
         # @show obj.sprite_index
         @assert 0 < obj.pos.x <= W && 0 < obj.pos.y <= H
-        init_obs[(:init => :init_objs => i => :pos)] = obj.pos
-        init_obs[(:init => :init_objs => i => :sprite_index)] = obj.sprite_index #anything not set here it makes a random choice about
+        init_obs[(:init => :init_state => :init_objs => i => :pos)] = obj.pos
+        init_obs[(:init => :init_state => :init_objs => i => :sprite_index)] = obj.sprite_index #anything not set here it makes a random choice about
 
         #EDIT THIS 
         init_obs[:init => :init_sprites => obj.sprite_index => :shape] = sprites[obj.sprite_index].mask # => means go into subtrace, here initializing subtraces, () are optional. => means pair!!
@@ -259,7 +259,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         @show t
         # @show state.log_weights, weights
         # maybe_resample!(state, ess_threshold=num_particles/2, verbose=true)
-        obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t]))
+        obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t+1]))
         # @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
         #     obs, fwd_proposal, (obs,))
 
@@ -269,7 +269,6 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             rejuv(state.traces[i])
         end
 
-        
 
         @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, SMCP3Update(
@@ -278,8 +277,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 (obs,),
                 (obs,),
                 false, # check are inverses
-            ))
-        
+            ))        
         
         #render 
         #html_body(html_img())
@@ -329,7 +327,7 @@ end
 
 @inline function get_pos(trace, obj_id, t)
     if t == 0
-        trace[:init => :init_objs => obj_id => :pos]
+        trace[:init => :init_state => :init_objs => obj_id => :pos]
     else
         trace[:steps => t => :objs => obj_id => :pos]
     end
@@ -339,9 +337,12 @@ const SAMPLES_PER_OBJ = 40
 show_forward_proposals :: Bool = false
 
 @kernel function fwd_proposal_naive(prev_trace, obs)
+
+
+
     # @show "fwd proposal timee"
     # return (
-    #     choicemap((:init => :N, prev_trace[:init => :N]+1)),
+    #     choicemap((:init => :init_state => :N, prev_trace[:init => :init_state => :N]+1)),
     #     choicemap()
     # )
 
@@ -467,7 +468,7 @@ show_forward_proposals :: Bool = false
         # @show t obj_id
         # trace_updates[:steps => t => :objs => obj_id] = constraints[idx]
         set_submap!(trace_updates,:steps => t => :objs => obj_id => :step, constraints[idx])
-        # trace_updates[:init => :init_objs => obj_id => :step_of_obj] = steps[idx]
+        # trace_updates[:init => :init_state => :init_objs => obj_id => :step_of_obj] = steps[idx]
         # @show constraints[idx]
 
 
@@ -483,7 +484,6 @@ show_forward_proposals :: Bool = false
         
         #trace_updates[:steps => t+1 => :objs => obj_id => :attrs] = uh
 
-        
         
     end
 
@@ -563,7 +563,7 @@ end
 
     # return (
         
-    #     trace_updates, # (:init => :N, prev_trace[:init => :N]+1) # a choice map 
+    #     trace_updates, # (:init => :init_state => :N, prev_trace[:init => :init_state => :N]+1) # a choice map 
     #     # bwd proposal doesnt need to be passed any extra information to invert the update! No matter
     #     # what choices it makes itll be able to invert the update, since itll just be shortening the
     #     # trace by one step as opposed to doing something like probabilistically adjusting :N etc.
@@ -582,7 +582,7 @@ end
 
     fwd_choices = choicemap()
 
-    for obj_id in 1:next_trace[:init => :N]
+    for obj_id in 1:next_trace[:init => :init_state => :N]
 
         prev_pos = get_pos(next_trace, obj_id, t-1)
 
@@ -626,11 +626,11 @@ end
 #     prev_sprites = sprites_from_trace(prev_trace, 0) # todo t=0 for now bc no changing sprites over time
 
 #     # now for each object, propose and sample changes 
-#     for obj_id in 1:prev_trace[:init => :N]
+#     for obj_id in 1:prev_trace[:init => :init_state => :N]
 
 #         # get previous position
 #         if t == 1
-#             prev_pos = prev_trace[:init => :init_objs => obj_id => :pos]
+#             prev_pos = prev_trace[:init => :init_state => :init_objs => obj_id => :pos]
 #         else
 #             prev_pos = prev_trace[:steps => t - 1 => :objs => obj_id => :pos]
 #         end
@@ -683,86 +683,86 @@ end
 Does gridding to propose new positions for an object in the vicinity
 of the current position
 """
-@gen function grid_proposal(prev_trace, obs)
+# @gen function grid_proposal(prev_trace, obs)
 
-    (H,W,prev_T) = get_args(prev_trace)
+#     (H,W,prev_T) = get_args(prev_trace)
 
-    t = prev_T
-    grid_size = 2
-    observed_image = obs[(:steps => t => :observed_image)]
+#     t = prev_T
+#     grid_size = 2
+#     observed_image = obs[(:steps => t => :observed_image)]
 
-    prev_objs = state_of_trace(prev_trace, t - 1)
-    prev_sprites = env_of_trace(prev_trace).sprites
+#     prev_objs = state_of_trace(prev_trace, t - 1)
+#     prev_sprites = env_of_trace(prev_trace).sprites
 
-    # now for each object, propose and sample changes 
-    for obj_id in 1:prev_trace[:init => :N]
+#     # now for each object, propose and sample changes 
+#     for obj_id in 1:prev_trace[:init => :init_state => :N]
 
-        # get previous position
-        if t == 1
-            prev_pos = prev_trace[:init => :init_objs => obj_id => :pos]
-        else
-            prev_pos = prev_trace[:steps => t - 1 => :objs => obj_id => :pos]
-        end
+#         # get previous position
+#         if t == 1
+#             prev_pos = prev_trace[:init => :init_state => :init_objs => obj_id => :pos]
+#         else
+#             prev_pos = prev_trace[:steps => t - 1 => :objs => obj_id => :pos]
+#         end
 
-        #way to get positions that avoids negatives, todo fix 
-        positions = Vec[]
-        for dx in -grid_size:grid_size,
-            dy in -grid_size:grid_size
-                push!(positions, Vec(prev_pos.y+dy, prev_pos.x+dx))
-        end
+#         #way to get positions that avoids negatives, todo fix 
+#         positions = Vec[]
+#         for dx in -grid_size:grid_size,
+#             dy in -grid_size:grid_size
+#                 push!(positions, Vec(prev_pos.y+dy, prev_pos.x+dx))
+#         end
         
-        # flatten
-        positions = reshape(positions, :)
+#         # flatten
+#         positions = reshape(positions, :)
         
-        # # total update slower version 
-        # traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
+#         # # total update slower version 
+#         # traces = [Gen.update(trace,choicemap((:steps => t => :objs => obj_id => :pos) => pos))[1] for pos in positions]
 
-        #manually update, partial draw
-        scores = Float64[]
-        #for each position, score the new image section around the object 
-        (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
+#         #manually update, partial draw
+#         scores = Float64[]
+#         #for each position, score the new image section around the object 
+#         (sprite_height, sprite_width) = size(prev_sprites[prev_objs[obj_id].sprite_index].mask)
 
-        # get a shared bounding box around all the positions
-        ((box_min_y, box_min_x),
-        (box_max_y, box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
-        box_max_y = min(box_max_y + sprite_height, H)
-        box_max_x = min(box_max_x + sprite_width, W)
+#         # get a shared bounding box around all the positions
+#         ((box_min_y, box_min_x),
+#         (box_max_y, box_max_x)) = pixel_vec.(inbounds_vec.(min_max_vecs(positions), H, W))
+#         box_max_y = min(box_max_y + sprite_height, H)
+#         box_max_x = min(box_max_x + sprite_width, W)
 
-        objects_one_moved = prev_objs[:]
-        cropped_obs = observed_image[:, box_min_y:box_max_y, box_min_x:box_max_x]
+#         objects_one_moved = prev_objs[:]
+#         cropped_obs = observed_image[:, box_min_y:box_max_y, box_min_x:box_max_x]
 
-        for pos in positions
-            # move the object
-            objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
-            drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, box_min_y, box_max_y, box_min_x, box_max_x) 
-            # todo var=0.1 is hardcoded for now
-            score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
-            push!(scores, score)
-        end 
+#         for pos in positions
+#             # move the object
+#             objects_one_moved[obj_id] = set_pos(objects_one_moved[obj_id], pos)
+#             drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, box_min_y, box_max_y, box_min_x, box_max_x) 
+#             # todo var=0.1 is hardcoded for now
+#             score = Gen.logpdf(image_likelihood, cropped_obs, drawn_moved_obj, 0.1) 
+#             push!(scores, score)
+#         end 
 
-        #update sprite index? todo?
+#         #update sprite index? todo?
         
-        #making the scores into probabilities 
-        scores_logsumexp = logsumexp(scores)
-        scores =  exp.(scores .- scores_logsumexp)
+#         #making the scores into probabilities 
+#         scores_logsumexp = logsumexp(scores)
+#         scores =  exp.(scores .- scores_logsumexp)
 
-        #oldver
-        #scores = Gen.normalize_weights(get_score.(traces))[2]
-        #scores = exp.(scores)
+#         #oldver
+#         #scores = Gen.normalize_weights(get_score.(traces))[2]
+#         #scores = exp.(scores)
 
-        # sample the actual position
-        pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)
+#         # sample the actual position
+#         pos = {:steps => t => :objs => obj_id => :pos} ~ labeled_cat(positions, scores)
 
-        # old version: set the curr `trace` to this trace for future iterations of this loop
-        # idx = findfirst(x -> x == pos, positions)
-        # objs[obj_id] = Object(objs[obj_id].sprite, positions[idx]) 
-        # trace = traces[idx]
-    end
-    nothing 
+#         # old version: set the curr `trace` to this trace for future iterations of this loop
+#         # idx = findfirst(x -> x == pos, positions)
+#         # objs[obj_id] = Object(objs[obj_id].sprite, positions[idx]) 
+#         # trace = traces[idx]
+#     end
+#     nothing 
 
-    #for each sprite type, propose and sample changes
-    #todo 
-end
+#     #for each sprite type, propose and sample changes
+#     #todo 
+# end
 
 
 # end # module Inference

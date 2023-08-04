@@ -73,6 +73,9 @@ end
 function img_diff(img1, img2)
     @. (img1 - img2) / 2. + 0.5
 end
+function img_diff_sum(img1, img2)
+    sum(abs.(img_diff(img1, img2)))
+end
 
 
 

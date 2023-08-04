@@ -34,6 +34,14 @@ function refresh() {
     if (autoplayOn === false && autoplayInterval !== undefined) {
         autoplayInterval = clearInterval(autoplayInterval);
     }
+    for (elem of document.getElementsByClassName("proposal")) {
+        console.log(elem.getAttribute(t))
+        if (elem.getAttribute("t") == t) {
+            elem.style.display = "block";
+        } else {
+            elem.style.display = "none";
+        }
+    }
 }
 
 function stepTime() {

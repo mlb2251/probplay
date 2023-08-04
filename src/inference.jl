@@ -295,7 +295,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     time_str = "particle filter runtime: $(round(elapsed,sigdigits=3))s; $(secs_per_step)s/frame; $fps fps ($num_particles particles))"
     println(time_str)
 
-    html_body("<script>tMax = $T; refresh();</script>")
+    html_body("<script>tMax = $T;</script>")
     html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
     html_body("<h2>Observations</h2>", html_gif(observed_images))
 
@@ -360,15 +360,20 @@ show_forward_proposals :: Bool = false
 
     # @show typeof(prev_trace.trace)
 
+
     if show_forward_proposals
-        html_body("<h3>New Forward Proposal</h3>")
-        html_body("t=$t <br>")
-        html_body("Observation: <br>", html_img(observed_image), "<br>")
-        curr_img = draw(H, W, curr_env.state.objs, curr_env.sprites)
-        html_body("Current State: <br>", html_img(curr_img), "<br>")
-        html_body("observed-curr<br>", html_img((observed_image .- curr_img .+ 1.0) ./ 2), "<br><br>")
+
+        html_body("<div class=\"proposal\" t=$t>")
+        html_body("<h3>Proposal @ t=$t</h3>")
+        html_body("Observation (t=$t): <br>", html_img(observed_image), "<br>")
+        prev_img = render_trace_frame(prev_trace, t-1) #draw(H, W, env_of_trace(prev_trace).state.objs, curr_env.sprites)
+        html_body("Prev State (t=$(t-1)): <br>", html_img(prev_img), "<br>")
+        html_body("(Obs - Prev):<br>", html_img(img_diff(observed_image,prev_img)), "<br><br>")
+        html_body("Prev Choices:<br>")
         html_body(replace(string(get_choices(prev_trace.trace)),"\n"=>"<br>", "\t" => "&emsp;", " " => "&nbsp;"))
+
     end
+
 
     for obj_id in eachindex(curr_env.state.objs)
 
@@ -425,17 +430,23 @@ show_forward_proposals :: Bool = false
         curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
 
 
-        if show_forward_proposals
+        if show_forward_proposals            
 
             html_body("<br>Proposals for object $obj_id<br>")
 
-            table = fill("", 2, SAMPLES_PER_OBJ)
+            table = fill("", 4, SAMPLES_PER_OBJ)
 
             for (i,state) in enumerate(states)
                 rendered = draw(H, W, state.objs, curr_env.sprites) 
-                score = Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
+                score = scores[i] #Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
                 table[1,i] = html_img(rendered)
-                table[2,i] = "$i: $score"
+                table[2,i] = html_img(img_diff(observed_image, rendered))
+                table[3,i] = "$(img_diff_sum(observed_image, rendered))"
+                if i == idx
+                    table[4,i] = "<b>$i: $score</b>"
+                else 
+                    table[4,i] = "$i: $score"
+                end
             end
 
             html_body(html_table(table))
@@ -481,8 +492,10 @@ show_forward_proposals :: Bool = false
         res = draw(H, W, curr_env.state.objs, curr_env.sprites)
         html_body("<br>Result<br>", html_img(res), "<br><br>")
         # html_body("Heatmap<br>", render_heatmap(logpdfmap(ImageLikelihood(), observed_image, res, .1)), "<br><br>")
-        html_body("observed-res<br>", html_img((observed_image .- res .+ 1.0) ./ 2), "<br><br>")
+        html_body("observed-res<br>", html_img(img_diff(observed_image,res)), "<br><br>")
         html_body(replace(string(trace_updates),"\n"=>"<br>", "\t" => "&emsp;", " " => "&nbsp;"))
+
+        html_body("</div>")
     end
     # Gen.update(prev_trace, trace_updates, ())
 

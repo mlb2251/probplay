@@ -337,30 +337,13 @@ const SAMPLES_PER_OBJ = 40
 show_forward_proposals :: Bool = false
 
 @kernel function fwd_proposal_naive(prev_trace, obs)
-
-
-
-    # @show "fwd proposal timee"
-    # return (
-    #     choicemap((:init => :init_state => :N, prev_trace[:init => :init_state => :N]+1)),
-    #     choicemap()
-    # )
-
     (H,W,prev_T) = get_args(prev_trace)
     t = prev_T
     observed_image = obs[(:steps => t => :observed_image)]
-
-    # prev_objs = state_of_trace(prev_trace, t - 1).objs
-    # prev_state = state_of_trace(prev_trace, t - 1)
-    # prev_sprites = env_of_trace(prev_trace).sprites
     curr_env = deepcopy(env_of_trace(prev_trace))
 
     bwd_choices = choicemap()
     trace_updates = choicemap()
-
-
-    # @show typeof(prev_trace.trace)
-
 
     if show_forward_proposals
 
@@ -384,39 +367,17 @@ show_forward_proposals :: Bool = false
         steps = []
         for j in 1:SAMPLES_PER_OBJ
 
-            # env.state = deepcopy(prev_state)
-            # for i in eachindex(env.state.objs)
-            #     {:objs => i} ~ obj_dynamics(i, env)
-            # end
-            # for i in eachindex(env.state.objs)
-            #     pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)
-            #     #sprite noise? 
-            #     env.state.objs[i].pos = pos
-            # end
-        
-            # rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
-            # observed_image ~ image_likelihood(rendered, var)
-
             curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
-            # curr_env.step_of_obj[obj_id] = {(:func, obj_id, j)} ~ uniform_discrete(1, length(curr_env.code_library))
             {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env) #wanna keep these trace choices around
-             
-            
-            #trace_updates[:steps => t+1 => :random_stuff => obj_id => j => :dynamics] #UPDATE THIS WITH THE ABOVE??
-            
-            # todo maybe add the noise
 
             push!(states, curr_env.state) #env.state changed
             push!(constraints, curr_env.exec.constraints)
-            # push!(steps, curr_env.step_of_obj[obj_id])
         end
 
         scores = Float64[]
         for (i,state) in enumerate(states)
             rendered = draw(H, W, state.objs, curr_env.sprites) #eventually only draw part 
-            # html_body(html_img(rendered))
             score = Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
-            # html_body("$score")
             push!(scores, score)
         end
 
@@ -425,7 +386,6 @@ show_forward_proposals :: Bool = false
         #sample from scores 
         scores_logsumexp = logsumexp(scores)
         scores =  exp.(scores .- scores_logsumexp)
-        # @show scores 
 
         idx = {:idx => obj_id} ~ categorical(scores)
         curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
@@ -455,35 +415,7 @@ show_forward_proposals :: Bool = false
 
         end
 
-
-        # curr_env.constraints = constraints[idx]
-        # curr_env.step_of_obj[obj_id] = steps[idx]
-
-
-        # @show trace_updates
-        # @show prev_trace
-        # trace_updates[:steps] = "test"
-        
-
-        # @show t obj_id
-        # trace_updates[:steps => t => :objs => obj_id] = constraints[idx]
         set_submap!(trace_updates,:steps => t => :objs => obj_id => :step, constraints[idx])
-        # trace_updates[:init => :init_state => :init_objs => obj_id => :step_of_obj] = steps[idx]
-        # @show constraints[idx]
-
-
-        # set_(trace_updates,:steps => t => :objs => obj_id, constraints[idx])
-        #trace_updates[:steps => observed_image] = "test"
-        
-        
-
-        # trace_updates[:steps => t+1 => :random_stuff => (:idx_chosen_for_obj, obj_id)] = idx
-        # obj = curr_env.state.objs[obj_id]
-        # trace_updates[:steps => t+1 => :objs => obj_id => :pos] = obj.pos
-        # trace_updates[:steps => t+1 => :objs => obj_id => :sprite_index] = obj.sprite_index
-        
-        #trace_updates[:steps => t+1 => :objs => obj_id => :attrs] = uh
-
         
     end
 
@@ -494,22 +426,8 @@ show_forward_proposals :: Bool = false
         # html_body("Heatmap<br>", render_heatmap(logpdfmap(ImageLikelihood(), observed_image, res, .1)), "<br><br>")
         html_body("observed-res<br>", html_img(img_diff(observed_image,res)), "<br><br>")
         html_body(replace(string(trace_updates),"\n"=>"<br>", "\t" => "&emsp;", " " => "&nbsp;"))
-
         html_body("</div>")
     end
-    # Gen.update(prev_trace, trace_updates, ())
-
-    # Gen.set_retval!()
-
-    # prev_trace.trace[:init] = curr_env
-    # prev_trace.trace[:steps => t] = curr_env.state
-
-    #trace_updates[:steps => t+1 => :objs] = curr_state.objs 
-    
-
-    #bwd_choices delete last step 
-
-    # Gen.update(prev_trace, trace_updates)
 
     return (
         trace_updates, # choicemap

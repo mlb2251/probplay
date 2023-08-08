@@ -251,13 +251,6 @@ include("code_library.jl")
 
 
 
-@gen function obj_dynamics(obj_id::Int, env::Env)
-    step ~ call_func(env.code_library[env.step_of_obj[obj_id]], Any[env.state.objs[obj_id]], env)
-    # pos ~ uniform_drift_position(obj.pos,2);
-    # pos ~ normal_vec(env.state.objs[obj_id].pos,2.);
-    # return Object(obj.sprite_index, pos)
-    return nothing
-end
 
 # all_obj_dynamics = Map(obj_dynamics)
 

@@ -203,8 +203,8 @@ end
 
 mutable struct ExecInfo
     constraints::DynamicChoiceMap
-    # subconstraint_stack::Vector{DynamicChoiceMap}
     path::Vector{Any}
+    has_constraints::Bool
 end
 
 mutable struct Env
@@ -217,24 +217,50 @@ mutable struct Env
 end
 
 
-new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[]))
+new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
 
 
-@gen function call_func(func::CFunc, args::Vector{Any}, env::Env)
+@gen function call_func(func::CFunc, args::Vector{Any}, env::Env, with_constraints::DynamicChoiceMap=choicemap())
     save_locals = env.locals
     env.locals = args
-    env.exec = ExecInfo(choicemap(), Symbol[])
+    empty!(env.exec.path)
+    env.exec.constraints = with_constraints
+    env.exec.has_constraints = !isempty(with_constraints)
     res ~ exec(func.body, env, :res);
     env.locals = save_locals
     return res
 end
 
+@gen function obj_dynamics(obj_id::Int, env::Env, with_constraints::DynamicChoiceMap=choicemap())
+    fn = env.code_library[env.step_of_obj[obj_id]]
+    args = Any[env.state.objs[obj_id]]
+    step ~ call_func(fn, args, env, with_constraints);
+    return nothing
+end
 
-function constrain!(exec::ExecInfo, addr, val)
+# function constrain!(exec::ExecInfo, addr, val)
+#     push!(exec.path, addr)
+#     path = foldr(Pair,exec.path)
+#     set_value!(exec.constraints, path, val)
+#     pop!(exec.path);
+# end
+
+@gen function sample_or_constrained(exec::ExecInfo, addr, fn, args)
     push!(exec.path, addr)
+    push!(exec.path, :retval)
     path = foldr(Pair,exec.path)
-    set_value!(exec.constraints, path, val)
-    pop!(exec.path);
+    res = if has_value(exec.constraints, path)
+        @assert exec.has_constraints || error("sampled the same value twice")
+        get_value(exec.constraints, path)
+    else
+        @assert !exec.has_constraints || error("unconstrained choice encountered")
+        retval ~ fn(args...)
+        set_value!(exec.constraints, path, retval)
+        retval
+    end
+    pop!(exec.path)
+    pop!(exec.path)
+    return res
 end
 
 
@@ -330,19 +356,22 @@ end
     elseif head === :normal_vec
         mu ~ exec(e.children[2], env, :mu)
         var ~ exec(e.children[3], env, :var)
-        ret_normal_vec ~ normal_vec(mu, var)
-        constrain!(env.exec, :ret_normal_vec, ret_normal_vec)
+        # ret_normal_vec ~ normal_vec(mu, var)
+        # constrain!(env.exec, :ret_normal_vec, ret_normal_vec)
+        ret_normal_vec ~ sample_or_constrained(env.exec, :ret_normal_vec, normal_vec, [mu, var])
         ret_normal_vec
     elseif head === :normal
         mu ~ exec(e.children[2], env,  :mu)
         var ~ exec(e.children[3], env,  :var)
-        ret_normal ~ normal(mu, var)
-        constrain!(env.exec, :ret_normal, ret_normal)
+        # ret_normal ~ normal(mu, var)
+        # constrain!(env.exec, :ret_normal, ret_normal)
+        ret_normal ~ sample_or_constrained(env.exec, :ret_normal, normal, [mu, var])
         ret_normal
     elseif head === :bernoulli
         p ~ exec(e.children[2], env,  :p)
-        ret_bernoulli ~ bernoulli(p)
-        constrain!(env.exec, :ret_bernoulli, ret_bernoulli)
+        # ret_bernoulli ~ bernoulli(p)
+        # constrain!(env.exec, :ret_bernoulli, ret_bernoulli)
+        ret_bernoulli ~ sample_or_constrained(env.exec, :ret_bernoulli, bernoulli, [p])
         ret_bernoulli
     else
         @assert head isa Symbol "$(typeof(head))"

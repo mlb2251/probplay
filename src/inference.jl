@@ -338,9 +338,14 @@ show_forward_proposals :: Bool = false
 
 @kernel function fwd_proposal_naive(prev_trace, obs)
     (H,W,prev_T) = get_args(prev_trace)
-    t = prev_T
+    t = prev_T # `t` will be our newly added timestep
     observed_image = obs[(:steps => t => :observed_image)]
     curr_env = deepcopy(env_of_trace(prev_trace))
+
+    """
+    t=0 is the first observation so t=1 is the second observation (after the first step)
+    `T` is the total number of *observations* (`T-1` is the number of steps)
+    """
 
     bwd_choices = choicemap()
     trace_updates = choicemap()
@@ -364,11 +369,11 @@ show_forward_proposals :: Bool = false
         curr_state = curr_env.state
         states = []
         constraints = []
-        steps = []
         for j in 1:SAMPLES_PER_OBJ
 
             curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
-            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env) #wanna keep these trace choices around
+            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env)
+            set_submap!(bwd_choices, :dynamics => obj_id => j, curr_env.exec.constraints)
 
             push!(states, curr_env.state) #env.state changed
             push!(constraints, curr_env.exec.constraints)
@@ -388,6 +393,7 @@ show_forward_proposals :: Bool = false
         scores =  exp.(scores .- scores_logsumexp)
 
         idx = {:idx => obj_id} ~ categorical(scores)
+        bwd_choices[:idx => obj_id] = idx
         curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
 
 
@@ -496,28 +502,40 @@ end
     );
 
     (H,W,next_T) = get_args(next_trace)
-    t = next_T - 1 
+    t = next_T - 1 # `t` for the fwd proposal is equal to prev_T, which is next_T-1
+
+    curr_env = env_of_trace(next_trace)
+    prev_state = state_of_trace(next_trace, t-1) # get the state *before* the proposal even happened (the state we'll be reverted to after this finishes)
 
     fwd_choices = choicemap()
 
-    for obj_id in 1:next_trace[:init => :init_state => :N]
+    # roll back to prev state
+    curr_env.state = prev_state
 
-        prev_pos = get_pos(next_trace, obj_id, t-1)
+    for obj_id in eachindex(next_env.state.objs)
 
-        # sample a random index - uniform bc true posterior is uniform
-        # add to choicemap: the index; and putting the fwd trace value at that index
-        idx = {obj_id => :idx} ~ uniform_discrete(1, SAMPLES_PER_OBJ)
-        fwd_choices[obj_id => :idx] = idx
+        curr_state = curr_env.state
+
+        # sample a random index where we'll keep the actual subtrace
+        idx = fwd_choices[:idx => obj_id] = {:idx => obj_id} ~ uniform_discrete(1, SAMPLES_PER_OBJ)
+        actual_choices = get_submap(next_trace, :steps => t => :objs => obj_id => :step)
 
         for j in 1:SAMPLES_PER_OBJ
+            curr_env.state = deepcopy(curr_state) # possibly slightly overkill to do this in the backward pass
             if j == idx
-                fwd_choices[obj_id => j] = next_trace[:steps => t => :objs => obj_id => :pos]
+                set_submap!(fwd_choices, :dynamics => obj_id => j, actual_choices)
             else
                 # potential problem: if one of those 19 were way better than the chosen one, itll seem like 
                 # the fwd proposal did something super unlikely
-                fwd_choices[obj_id => j] = {obj_id => j} ~  normal_vec(prev_pos, .5)
+                {:dynamics => obj_id => j} ~  obj_dynamics(obj_id, curr_env)
+                set_submap!(fwd_choices, :dynamics => obj_id => j, env.exec.constraints)
             end
         end
+
+        # now run the actual dynamics (untraced, but will make no unconstrained choices)
+        # for this object to get the right intermediate state
+        curr_env.state = deepcopy(curr_state)
+        obj_dynamics(obj_id, curr_env, actual_choices)
 
     end
 
@@ -528,7 +546,6 @@ end
         # other variables aren't changed, and this is simply extending the existing trace, we don't
         # need anything here!
         choicemap(),
-        # 
         fwd_choices
     )
 end

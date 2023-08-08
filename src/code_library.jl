@@ -249,12 +249,11 @@ end
     push!(exec.path, addr)
     push!(exec.path, :retval)
     path = foldr(Pair,exec.path)
-    res = if has_value(exec.constraints, path)
-        @assert exec.has_constraints || error("sampled the same value twice")
+    res = if exec.has_constraints
         get_value(exec.constraints, path)
     else
-        @assert !exec.has_constraints || error("unconstrained choice encountered")
         retval ~ fn(args...)
+        @assert !has_value(exec.constraints, path) || error("sampled same address twice")
         set_value!(exec.constraints, path, retval)
         retval
     end

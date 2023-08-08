@@ -202,7 +202,7 @@ mutable struct State
 end
 
 mutable struct ExecInfo
-    constraints::DynamicChoiceMap
+    constraints::ChoiceMap
     path::Vector{Any}
     has_constraints::Bool
 end
@@ -220,7 +220,7 @@ end
 new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
 
 
-@gen function call_func(func::CFunc, args::Vector{Any}, env::Env, with_constraints::DynamicChoiceMap=choicemap())
+@gen function call_func(func::CFunc, args::Vector{Any}, env::Env, with_constraints::ChoiceMap)
     save_locals = env.locals
     env.locals = args
     empty!(env.exec.path)
@@ -231,7 +231,7 @@ new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choic
     return res
 end
 
-@gen function obj_dynamics(obj_id::Int, env::Env, with_constraints::DynamicChoiceMap=choicemap())
+@gen function obj_dynamics(obj_id::Int, env::Env, with_constraints::ChoiceMap)
     fn = env.code_library[env.step_of_obj[obj_id]]
     args = Any[env.state.objs[obj_id]]
     step ~ call_func(fn, args, env, with_constraints);

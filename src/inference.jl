@@ -276,7 +276,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 bwd_proposal_naive,
                 (obs,),
                 (obs,),
-                false, # check are inverses
+                true, # check are inverses
             ))        
         
         #render 
@@ -333,7 +333,7 @@ end
     end
 end
 
-const SAMPLES_PER_OBJ = 40
+const SAMPLES_PER_OBJ = 1 #40
 show_forward_proposals :: Bool = false
 
 @kernel function fwd_proposal_naive(prev_trace, obs)
@@ -372,7 +372,7 @@ show_forward_proposals :: Bool = false
         for j in 1:SAMPLES_PER_OBJ
 
             curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
-            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env)
+            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
             set_submap!(bwd_choices, :dynamics => obj_id => j, curr_env.exec.constraints)
 
             push!(states, curr_env.state) #env.state changed
@@ -496,10 +496,6 @@ end
 # end
 
 @kernel function bwd_proposal_naive(next_trace, obs)
-    return (
-        choicemap(),
-        choicemap()
-    );
 
     (H,W,next_T) = get_args(next_trace)
     t = next_T - 1 # `t` for the fwd proposal is equal to prev_T, which is next_T-1
@@ -512,13 +508,14 @@ end
     # roll back to prev state
     curr_env.state = prev_state
 
-    for obj_id in eachindex(next_env.state.objs)
+    for obj_id in eachindex(curr_env.state.objs)
 
         curr_state = curr_env.state
 
         # sample a random index where we'll keep the actual subtrace
-        idx = fwd_choices[:idx => obj_id] = {:idx => obj_id} ~ uniform_discrete(1, SAMPLES_PER_OBJ)
-        actual_choices = get_submap(next_trace, :steps => t => :objs => obj_id => :step)
+        idx = {:idx => obj_id} ~ uniform_discrete(1, SAMPLES_PER_OBJ)
+        fwd_choices[:idx => obj_id] = idx
+        actual_choices = get_submap(get_choices(next_trace), :steps => t => :objs => obj_id => :step)
 
         for j in 1:SAMPLES_PER_OBJ
             curr_env.state = deepcopy(curr_state) # possibly slightly overkill to do this in the backward pass
@@ -527,7 +524,7 @@ end
             else
                 # potential problem: if one of those 19 were way better than the chosen one, itll seem like 
                 # the fwd proposal did something super unlikely
-                {:dynamics => obj_id => j} ~  obj_dynamics(obj_id, curr_env)
+                {:dynamics => obj_id => j} ~  obj_dynamics(obj_id, curr_env, choicemap())
                 set_submap!(fwd_choices, :dynamics => obj_id => j, env.exec.constraints)
             end
         end

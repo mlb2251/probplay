@@ -261,7 +261,7 @@ include("code_library.jl")
     env.state = deepcopy(prev_state)
     for i in eachindex(env.state.objs)
         # @show i
-        {:objs => i} ~ obj_dynamics(i, env)
+        {:objs => i} ~ obj_dynamics(i, env, choicemap())
     end
     # for i in eachindex(env.state.objs)
         # pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)

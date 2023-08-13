@@ -1,6 +1,43 @@
 #code graveyard for chunks of code one writes and deletes and will never be useful but can't bear to delete them
 # "
 
+
+#
+#SHIFTING STUFF 
+# @gen function get_drift(tr, i)
+#     """non data driven"""
+#     drifty ~ uniform_discrete(-10, 10)
+#     driftx ~ uniform_discrete(-10, 10)
+# end 
+
+
+
+# function shift_involution(tr, drift, forward_retval, proposal_args) 
+#     """moves one obj a little"""
+    
+
+#     i = proposal_args[1]
+
+#     #@show drift 
+#     new_trace_choices = choicemap()
+#     backward_choices = choicemap()
+
+#     backward_choices[:drifty] = -drift[:drifty]
+#     backward_choices[:driftx] = -drift[:driftx]
+
+#     pos = tr[:init => :init_objs => i => :pos]
+#     newy = pos.y + drift[:drifty]
+#     newx = pos.x + drift[:driftx]
+
+#     newpos = Position(newy, newx)
+#     new_trace_choices[(:init => :init_objs => i => :pos)] = newpos
+
+#     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
+#     (new_trace, backward_choices, weight)
+# end 
+
+
+
 # @gen function get_random_new_color(tr, i)
 #     #can't do gaus because it goes past 1 so the log pdf will get messed up 
 #     r, g, b = tr[:init => :init_sprites => i => :color]

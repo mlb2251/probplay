@@ -288,7 +288,7 @@ make_sprites = Map(make_type)
 # testsprites = make_sprites(collect(1:4), [10 for _ in 1:4], [20 for _ in 1:4])
 # #@show testsprites
 
-@dist poisson_plus_1(lambda) = poisson(lambda) + 1
+@dist poisson_plus_1(lambda) = (poisson(lambda) + 1)
 
 @gen (static) function init_model(H,W,var)
     num_sprite_types ~ poisson_plus_1(0.5)

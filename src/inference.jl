@@ -64,28 +64,11 @@ function total_update(tr)
     #do one pass of making a heatmap
     
     heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
-    #@show heatmap
-    #eheatmap = 2.71828 .^ heatmap
-    #@show eheatmap
-    #@show minimum(heatmap),  maximum(heatmap), minimum(eheatmap), maximum(eheatmap)
     
-    #@show heatmap
-
-
-    # #split merge ksdfjksjfksajfk
-
-    # tr, accepted = mh(tr, get_split_merge, (), split_merge_involution)
-    # if accepted
-    #     print("split/merge")
-    # end
-
     #sprite proposals 
 
     #add/remove sprite 
     tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
-    if accepted
-        #print("added/removed sprite")
-    end
 
 
     # #dd add/remove sprite 
@@ -100,77 +83,34 @@ function total_update(tr)
     
 
     #recolor involution 
-        #tr, accepted = mh(tr, select((:init => :init_sprites => i => :color))) #works but need to change to the involution 
         tr, accepted = mh(tr, dd_get_random_new_color, (i,), color_involution)
-        # if accepted
-        #     #print("sprite color changed")
-        # end 
-
 
     #resize involution 
         tr, accepted = mh(tr, get_random_size, (i,), size_involution)
-        if accepted
-            # print("size changed")
-        end 
 
     #reshape involution 
-        ##one random index
-        for _ in 1:10
+        for _ in 1:10 #doing more of these 
             tr, accepted = mh(tr, get_random_hi_wi, (i,), mask_involution)
-            if accepted
-                # print("mask changed")
-            end 
         end 
-
-
-        # #all indicies
-        # height, width = size(tr[:init => :init_sprites => i => :mask])
-        # for hi=1:height
-        #     for wi=1:width
-        #         tr, accepted = mh(tr, get_always_true, (i, hi, wi,), mask_involution_v2)
-        #     end 
-        # end
-
-
     end 
 
     #object proposals 
 
     #add/remove object involution 
     tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution)
-    # if accepted
-    #     print("added/removed object")
-    # end 
-
-
 
     #relayer order objects
     tr, accepted = mh(tr, get_layer_swap, (), layer_involution)
-    if accepted
-        # print("relayered objects")
-    end 
 
     for i=1:tr[:init => :N]
         #shift objects involution 
-        #tr, = mh(tr, select((:init => :init_objs => i => :pos))) #correct? 
-        #ideally use the uniform drift position we already have 
-        #tr, accepted = mh(tr, get_drift, (i,), shift_involution) #drift?
 
         tr, accepted = mh(tr, dd_get_drift, (i, heatmap,), dd_shift_involution) 
-        if accepted
-            # print("drifted")
-        end 
 
-        
         #resprite object involution ok. 
         tr, accepted = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
-        if accepted
-            # print("resprited")
-        end 
-    
     end 
 
-    #tr, accepted = mh(tr, get_random, (), update_detect)#tr is an arg but it is assumed
     tr
 end 
 

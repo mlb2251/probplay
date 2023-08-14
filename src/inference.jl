@@ -276,7 +276,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 bwd_proposal_naive,
                 (obs,),
                 (obs,),
-                true, # check are inverses
+                false, # check are inverses
             ))        
         
         #render 
@@ -333,7 +333,7 @@ end
     end
 end
 
-const SAMPLES_PER_OBJ = 1 #40
+const SAMPLES_PER_OBJ = 40 # 1
 show_forward_proposals :: Bool = false
 
 @kernel function fwd_proposal_naive(prev_trace, obs)

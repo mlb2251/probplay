@@ -45,6 +45,14 @@ function render_trace(trace)
     stack([render_trace_frame(trace, t) for t in 0:T-1])
 end
 
+function img_diff(img1, img2)
+    @. (img1 - img2) / 2. + 0.5
+end
+function img_diff_sum(img1, img2)
+    sum(abs.(img_diff(img1, img2)))
+end
+
+
 function render_heatmap(heatmap)
     (H, W) = size(heatmap)
 
@@ -130,6 +138,14 @@ function color_labels(frames...; orig=nothing)
         push!(res,colored)
     end
     res
+end
+
+"""
+get N colors evenly distributed in terms of hue
+"""
+function get_colors(N)
+    rgbs = [RGB(HSV(i/N*360, .8, .7)) for i in 1:N]
+    return [[c.r, c.g, c.b] for c in rgbs]
 end
 
 function obj_frame(objs, sprites, H, W)

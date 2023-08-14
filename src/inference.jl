@@ -140,13 +140,13 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         table[i*2,1] = "Particle $i"
     end
 
-    for i in 1:steps
-        if i % step_chunk == 1
+    elapsed=@elapsed for i in 1:steps
+        if i % step_chunk == 1 || i == steps
             println("update: $i")
             col = String[]
             for tr in traces
                 push!(col, html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])))
-                push!(col, "N=$(tr[:init => :N])<br>sprites=$(tr[:init => :num_sprite_types])")
+                push!(col, "step=$i<br>N=$(tr[:init => :N])<br>sprites=$(tr[:init => :num_sprite_types])")
             end
             table = hcat(table, col)
         end
@@ -164,9 +164,14 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         end
     end
 
+    secs_per_step = round(elapsed/steps,sigdigits=3)
+    fps = round(1/secs_per_step,sigdigits=3)
+    time_str = "MCMC runtime: $(round(elapsed,sigdigits=3))s; $(secs_per_step)s/step; $fps step/s ($num_particles particles))"
+    println(time_str)
+
     #TODO MAKE 2 other tables so this isn't uglyy 
 
-    othertable = fill("", num_particles + 1, 4)
+    othertable = fill("", num_particles + 1, 7)
     
 
     tracenum = 0
@@ -178,18 +183,16 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         #@show obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W)
         #@show color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))
         
+        bboxes = html_img(draw_bboxes(render_trace_frame(tr, 0), tr[:init => :init_objs], tr[:init => :init_sprites], 1, H, 1, W))
+
         objcoloring = html_img(color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
         spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
         heatmap = render_heatmap(logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1))
+        diff = html_img(img_diff(tr[:init => :observed_image], render_trace_frame(tr, 0)))
 
-        othertable[tracenum + 1, 1] = "Particle $tracenum"
-        othertable[tracenum + 1, 2] = objcoloring
-        othertable[tracenum + 1, 3] = spritecoloring
-        othertable[tracenum + 1, 4] = heatmap
+        othertable[tracenum + 1, :] = ["Particle $tracenum at step=$steps", html_img(render_trace_frame(tr, 0)), bboxes, objcoloring, spritecoloring, heatmap, diff]
 
-        othertable[1, 2] = "Coloring by object"
-        othertable[1, 3] = "Coloring by sprite"
-        othertable[1, 4] = "logpdf heatmap"
+        othertable[1, :] = ["", "Rendered", "Bounding Boxes", "Coloring by object", "Coloring by sprite", "logpdf heatmap", "(actual - rendered)"]
 
         #heatmap 
 
@@ -197,6 +200,7 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
     
     html_body(html_table(othertable))
     html_body(html_table(table))
+    html_body(time_str)
 
 
 end 

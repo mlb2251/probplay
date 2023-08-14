@@ -169,11 +169,7 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     for obj::Object in objs
         sprite_index = obj.sprite_index
         sprite_type = sprites[sprite_index]::Sprite
-
         sprite_height, sprite_width = size(sprite_type.mask)
-
-        
-
 
         # not at all in bounds
         if obj.pos.y > ymax || obj.pos.x > xmax || obj.pos.y+sprite_height-1 < ymin || obj.pos.x+sprite_width-1 < xmin
@@ -184,7 +180,6 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
         starti, startj, stopi, stopj = get_bounds(obj, sprite_type, ymin, ymax, xmin, xmax)
         # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
         
-
         mask = @views sprite_type.mask[starti:stopi, startj:stopj]
         mask = reshape(mask, 1, size(mask)...)
 
@@ -192,7 +187,32 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
         target .= ifelse.(mask, sprite_type.color, target)
     end
     canvas 
-end 
+end
+
+function draw_bboxes(canvas, objs, sprites, ymin, ymax, xmin, xmax)
+
+    colors = get_colors(length(sprites))
+    for obj::Object in objs
+        sprite_index = obj.sprite_index
+        sprite_type = sprites[sprite_index]::Sprite
+        sprite_height, sprite_width = size(sprite_type.mask)
+
+        # not at all in bounds
+        if obj.pos.y > ymax || obj.pos.x > xmax || obj.pos.y+sprite_height-1 < ymin || obj.pos.x+sprite_width-1 < xmin
+            continue
+        end
+        
+        starti, startj, stopi, stopj = get_bounds(obj, sprite_type, ymin, ymax, xmin, xmax)
+        # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
+        target = @views canvas[:, obj.pos.y+starti-ymin : obj.pos.y+stopi-ymin , obj.pos.x+startj-xmin : obj.pos.x+stopj-xmin]
+        # add box
+        target[:, 1, :] .= colors[sprite_index]
+        target[:, end, :] .= colors[sprite_index]
+        target[:, :, 1] .= colors[sprite_index]
+        target[:, :, end] .= colors[sprite_index]
+    end
+    canvas 
+end
 
 
 

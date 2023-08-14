@@ -2,11 +2,10 @@ using Atari
 using Gen
 
 
-function tff(;particles=3, steps=181, step_chunk=60)
+function tff(;particles=3, steps=200, step_chunk=50, which=:big)
     #@show particles, steps, step_chunk
     fresh(); 
-    first_frame(particles=particles, steps=steps, step_chunk=step_chunk)
-
+    first_frame(particles=particles, steps=steps, step_chunk=step_chunk, which=which)
     
     render();
 end
@@ -114,7 +113,7 @@ function get_choices_tiny()
     Gen.get_choices(generate(model, (2, 2, 3))[1])
 end
 
-function first_frame(;particles=8, steps=1000, step_chunk=50)
+function first_frame(;particles=8, steps=1000, step_chunk=50, which=:big)
     #@show particles, steps, step_chunk
     #first_frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=25, left=20, tskip=4)[:,:,:,1]	
     #@time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=100, bottom=20, left=20, tskip=4)[:,:,:,1:4], 4)
@@ -124,10 +123,11 @@ function first_frame(;particles=8, steps=1000, step_chunk=50)
     #frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
 
     #tiny
-    #frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
-
-    #big 
-    frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=1, tskip=4)[:,:,:,1]
+    frame = if which === :big
+        crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=1, tskip=4)[:,:,:,1]
+    elseif which === :tiny
+        crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
+    end
 
 
     (C,H,W) = size(frame)

@@ -60,7 +60,26 @@ function test_one_involution(frame)
 render();
 end 
 
-function total_update(tr)
+Base.@kwdef mutable struct MHStats
+    accepted::Int = 0
+    total::Int = 0
+end
+
+"""
+Stats for involutions, format is (accepted, total)
+"""
+Base.@kwdef mutable struct Stats
+    add_remove_sprite::MHStats = MHStats()
+    recolor::MHStats = MHStats()
+    resize::MHStats = MHStats()
+    reshape::MHStats = MHStats()
+    add_remove_object::MHStats = MHStats()
+    relayer::MHStats = MHStats()
+    shift::MHStats = MHStats()
+    resprite::MHStats = MHStats()
+end
+
+function total_update(tr, stats)
     #do one pass of making a heatmap
     
     heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
@@ -69,7 +88,8 @@ function total_update(tr)
 
     #add/remove sprite 
     tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
-
+    stats.add_remove_sprite.total += 1
+    stats.add_remove_sprite.accepted += accepted
 
     # #dd add/remove sprite 
     # #@show tr
@@ -82,15 +102,22 @@ function total_update(tr)
     for i=1:tr[:init => :num_sprite_types] #some objects need more attention. later don't make this just loop through, sample i as well
     
 
-    #recolor involution 
+        #recolor involution 
         tr, accepted = mh(tr, dd_get_random_new_color, (i,), color_involution)
+        # tr, accepted = mh(tr, select(:init => :init_sprites => i => :color))
+        stats.recolor.total += 1
+        stats.recolor.accepted += accepted
 
-    #resize involution 
+        #resize involution 
         tr, accepted = mh(tr, get_random_size, (i,), size_involution)
+        stats.resize.total += 1
+        stats.resize.accepted += accepted
 
-    #reshape involution 
+     #reshape involution 
         for _ in 1:10 #doing more of these 
             tr, accepted = mh(tr, get_random_hi_wi, (i,), mask_involution)
+            stats.reshape.total += 1
+            stats.reshape.accepted += accepted
         end 
     end 
 
@@ -98,17 +125,25 @@ function total_update(tr)
 
     #add/remove object involution 
     tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution)
+    stats.add_remove_object.total += 1
+    stats.add_remove_object.accepted += accepted
 
     #relayer order objects
     tr, accepted = mh(tr, get_layer_swap, (), layer_involution)
+    stats.relayer.total += 1
+    stats.relayer.accepted += accepted
 
     for i=1:tr[:init => :N]
         #shift objects involution 
 
         tr, accepted = mh(tr, dd_get_drift, (i, heatmap,), dd_shift_involution) 
+        stats.shift.total += 1
+        stats.shift.accepted += accepted
 
         #resprite object involution ok. 
-        tr, accepted = mh(tr, select((:init => :init_objs => i => :sprite_index))) 
+        tr, accepted = mh(tr, select((:init => :init_objs => i => :sprite_index)))
+        stats.resprite.total += 1
+        stats.resprite.accepted += accepted 
     end 
 
     tr
@@ -140,6 +175,8 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         table[i*2,1] = "Particle $i"
     end
 
+    stats = [Stats() for _ in 1:num_particles]
+
     elapsed=@elapsed for i in 1:steps
         if i % step_chunk == 1 || i == steps
             println("update: $i")
@@ -151,7 +188,7 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
             table = hcat(table, col)
         end
         for j in 1:num_particles
-            traces[j] = total_update(traces[j])
+            traces[j] = total_update(traces[j], stats[j])
             # N = traces[j][:init => :N]
             # M = traces[j][:init => :num_sprite_types]
             # sprite_area = sum([traces[j][:init => :init_sprites => k => :width] * traces[j][:init => :init_sprites => k => :height] for k in 1:M],init=0)
@@ -171,8 +208,7 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
 
     #TODO MAKE 2 other tables so this isn't uglyy 
 
-    othertable = fill("", num_particles + 1, 7)
-    
+    othertable = fill("", num_particles + 1, 8)
 
     tracenum = 0
     for tr in traces 
@@ -189,14 +225,25 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
         heatmap = render_heatmap(logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1))
         diff = html_img(img_diff(tr[:init => :observed_image], render_trace_frame(tr, 0)))
+        
+        show_stats = ""
+        for field in fieldnames(Stats)
+            show_stats != "" && (show_stats *= "<br>")
+            total = getfield(stats[tracenum], field).total
+            accepted = getfield(stats[tracenum], field).accepted
+            show_stats *= "$field: $accepted/$total"
+        end
 
-        othertable[tracenum + 1, :] = ["Particle $tracenum at step=$steps", html_img(render_trace_frame(tr, 0)), bboxes, objcoloring, spritecoloring, heatmap, diff]
+        othertable[tracenum + 1, :] = ["Particle $tracenum at step=$steps", html_img(render_trace_frame(tr, 0)), bboxes, objcoloring, spritecoloring, heatmap, diff, show_stats]
 
-        othertable[1, :] = ["", "Rendered", "Bounding Boxes", "Coloring by object", "Coloring by sprite", "logpdf heatmap", "(actual - rendered)"]
+        othertable[1, :] = ["", "Rendered", "Bounding Boxes", "Coloring by object", "Coloring by sprite", "logpdf heatmap", "(actual - rendered)", "Stats"]
 
         #heatmap 
 
     end 
+
+
+    # statstable = fill("", num_particles + 1, 7)
     
     html_body(html_table(othertable))
     html_body(html_table(table))

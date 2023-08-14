@@ -93,8 +93,6 @@ if add samples sprite id, sprite mask, sprite color, list of obj ids, list of po
         mask ~ bernoulli_2d(0.8, height, width) #change this
         color ~ rgb_dist()
         
-        
-        N = tr[:init => :N]
         num_objs ~ poisson_plus_1(0.5)
 
         #TODO make them not all add to the end for perfect reversability 

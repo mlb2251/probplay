@@ -180,13 +180,12 @@ const rgb_dist = RGBDist()
 (::RGBDist)() = random(RGBDist())
 
 
-function canvas(height=210, width=160)
-    zeros(Float64, 3, height, width)
-end
-
-
 function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
+    draw_region(canvas, objs, sprites, ymin, ymax, xmin, xmax)
+end
+
+function draw_region(canvas, objs, sprites, ymin, ymax, xmin, xmax)
     for obj::Object in objs
         sprite_index = obj.sprite_index
         sprite = sprites[sprite_index]
@@ -216,34 +215,8 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas 
 end 
 
-
-
-
-function draw(H, W, objs, sprites)
-
-    return draw_region(objs, sprites, 1, H, 1, W)
-
-    # canvas = zeros(Float64, 3, H, W)
-
-    # for obj::Object in objs 
-    #     sprite_index = obj.sprite_index
-    #     sprite = sprites[sprite_index]
-
-    #     sprite_height, sprite_width = size(sprite.mask)
-
-        
-    #     for i in 1:sprite_height, j in 1:sprite_width 
-    #         if sprite.mask[i,j]
-    #             offy = obj.pos.y+i-1
-    #             offx = obj.pos.x+j-1
-    #             if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
-    #                 @inbounds canvas[:, offy,offx] = sprite.color
-    #             end
-    #         end
-    #     end
-    # end
-    # canvas
-end
+draw(H, W, objs, sprites) = draw_region(objs, sprites, 1, H, 1, W)
+draw(canvas, objs, sprites) = draw_region(canvas, objs, sprites, 1, size(canvas,2), 1, size(canvas,3))
 
 
 

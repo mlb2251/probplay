@@ -380,8 +380,10 @@ show_forward_proposals :: Bool = false
         end
 
         scores = Float64[]
+        canvas = zeros(Float64, 3, H, W)
         for (i,state) in enumerate(states)
-            rendered = draw(H, W, state.objs, curr_env.sprites) #eventually only draw part 
+            fill!(canvas, 0.)
+            rendered = draw(canvas, state.objs, curr_env.sprites) #eventually only draw part 
             score = Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
             push!(scores, score)
         end

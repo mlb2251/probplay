@@ -525,7 +525,7 @@ end
                 # potential problem: if one of those 19 were way better than the chosen one, itll seem like 
                 # the fwd proposal did something super unlikely
                 {:dynamics => obj_id => j} ~  obj_dynamics(obj_id, curr_env, choicemap())
-                set_submap!(fwd_choices, :dynamics => obj_id => j, env.exec.constraints)
+                set_submap!(fwd_choices, :dynamics => obj_id => j, curr_env.exec.constraints)
             end
         end
 

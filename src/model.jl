@@ -255,7 +255,11 @@ unfold_step = Unfold(dynamics_and_render)
     pos ~ uniform_position(H, W) 
     env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
 
-    return Object(sprite_index, pos, [])
+    #velocity going here for now 
+    vel ~ normal(0, 1)
+    #make it a normal attr 
+
+    return Object(sprite_index, pos, [vel,])
 end
 
 @gen function make_type(i, H, W) 
@@ -280,6 +284,7 @@ make_sprites = Map(make_type)
 @gen function init_model(H,W,var)
     num_sprites ~ poisson_plus_1(4)
     env = new_env();
+    
 
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
 
@@ -288,7 +293,7 @@ make_sprites = Map(make_type)
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
 
         # random walk
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+        ###CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
         # stationary
         # CFunc(parse(SExpr,"(pass)")),
         # move const vel down right
@@ -296,13 +301,16 @@ make_sprites = Map(make_type)
         # move const vel down
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
 
-        #a little left
-        ##CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -0.5)))")),
-        #perfect left 
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -2.3)))")),
-         #move const vel right a little for frostbite
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 5)))")),
+        # #a little left
+        # ##CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -0.5)))")),
+        # #perfect left 
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -2.3)))")),
+        #  #move const vel right a little for frostbite
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 5)))")),
         
+
+        #goal get one const velocity func where velocity is a learned latent var pretty lit
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
     ]
 
     env.state = {:init_state} ~ init_state(H,W,num_sprites,env)

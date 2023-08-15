@@ -239,6 +239,17 @@ function build_init_obs(H,W, sprites, objs, observed_images)
     init_obs
 end
 
+# function variable_shift_randomness(t, v)
+#     shift ~ normal(0, v/10)#play with this number
+# end 
+
+# function shift_variable_involution(t, forward_choices, forward_retval, proposal_args)
+#     new_trace_choices = choicemap()
+#     backward_choices = choicemap()
+
+#     new_trace_choices[]
+
+
 """
 Runs a particle filter on a sequence of frames
 """
@@ -282,17 +293,22 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             ))        
 
         
-        #MH HERE?
-        @show length(state.traces)
         for i in 1:num_particles
             tr = state.traces[i]
             for obj_id in 1:length(objs)
                 
+                #@show tr
+                @show tr[:init => :init_state => :init_objs => obj_id => :vel]
                 tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
+                for _ in 1:1000
+                    tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :vel))
+                end 
+
+                
             
             end 
+            state.traces[i] = tr
         
-            state.traces[i] = tr 
         end 
 
         #render 
@@ -411,7 +427,7 @@ show_forward_proposals :: Bool = false
             # obj_step  = {:(j, obj_id,)} ~ uniform_discrete(1, length(curr_env.code_library))
             
             #curr_env.step_of_obj[obj_id] = obj_step	
-            @show curr_env.step_of_obj[obj_id]
+            #@show curr_env.step_of_obj[obj_id]
 
             {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
 
@@ -445,6 +461,7 @@ show_forward_proposals :: Bool = false
         #curr_env.step_of_obj = step_of_objs[idx]
 
         @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
+        
 
         if show_forward_proposals            
 

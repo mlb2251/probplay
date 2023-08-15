@@ -135,21 +135,6 @@ end
 const image_likelihood = ImageLikelihood()
 (::ImageLikelihood)(rendered_image, var) = random(ImageLikelihood(), rendered_image, var)
 
-struct RGBDist <: Gen.Distribution{Vector{Float64}} end
-
-function Gen.logpdf(::RGBDist, rgb)
-    0. # uniform distribution over unit cube has density 1
-end
-
-function Gen.random(::RGBDist)
-    rand(3)
-end
-
-const rgb_dist = RGBDist()
-
-(::RGBDist)() = random(RGBDist())
-
-
 function canvas(height=210, width=160)
     zeros(Float64, 3, height, width)
 end
@@ -288,6 +273,13 @@ unfold_step = Unfold(dynamics_and_render)
     pos ~ uniform_position(H, W) 
 
     return Object(sprite_index, pos)
+end
+
+@gen (static) function rgb_dist()
+    r ~ uniform(0,1)
+    g ~ uniform(0,1)
+    b ~ uniform(0,1)
+    return [r,g,b]
 end
 
 @gen (static) function make_type(i, H, W) 

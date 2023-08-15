@@ -71,7 +71,9 @@ function shiftallsprites(min_sprite, max_sprite, shift_func, new_trace_choices, 
 
     for i in min_sprite:max_sprite
         shiftonething(:mask, i)
-        shiftonething(:color, i)
+        shiftonething(:color => :r, i)
+        shiftonething(:color => :g, i)
+        shiftonething(:color => :b, i)
         shiftonething(:height, i)
         shiftonething(:width, i)
 
@@ -93,7 +95,7 @@ if add samples sprite id, sprite mask, sprite color, list of obj ids, list of po
         mask ~ bernoulli_2d(0.8, height, width) #change this
         color ~ rgb_dist()
         
-        num_objs ~ poisson_plus_1(0.5)
+        num_objs ~ poisson_plus_1(0.3)
 
         #TODO make them not all add to the end for perfect reversability 
         #sample position for each new object
@@ -262,13 +264,16 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
     new_trace_choices = choicemap()
     backward_choices = choicemap()
 
+    Gen.mode_stack[end] = if add_remove_random[:add_or_remove]; :add else :remove end
+
     if add_remove_random[:add_or_remove]
         #add the new sprite , when we add the ability to add a middle sprite, make sure to deal with the cascade 
         snp1num = tr[:init => :num_sprite_types] + 1
         new_trace_choices[:init => :num_sprite_types] = snp1num
 
         new_trace_choices[:init => :init_sprites => snp1num => :mask] = add_remove_random[:mask]
-        new_trace_choices[:init => :init_sprites => snp1num => :color] = add_remove_random[:color]
+        # new_trace_choices[:init => :init_sprites => snp1num => :color] = add_remove_random[:color]
+        set_submap!(new_trace_choices, :init => :init_sprites => snp1num => :color, get_submap(add_remove_random, :color))
         new_trace_choices[:init => :init_sprites => snp1num => :height] = add_remove_random[:height]
         new_trace_choices[:init => :init_sprites => snp1num => :width] = add_remove_random[:width]
 
@@ -326,7 +331,8 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
         old_mask = tr[:init => :init_sprites => sprite_index => :mask]
         backward_choices[:mask] = old_mask
         backward_choices[:height], backward_choices[:width] = size(old_mask)
-        backward_choices[:color] = tr[:init => :init_sprites => sprite_index => :color]
+        set_submap!(backward_choices, :color, get_submap(get_choices(tr), :init => :init_sprites => sprite_index => :color))
+        # backward_choices[:color] = tr[:init => :init_sprites => sprite_index => :color]
         backward_choices[:num_objs] = Nremoved
         #backward_choices[:positions] = positions
     end 
@@ -599,6 +605,21 @@ end
     bnew ~ beta_with_peak(bavg)
 end 
 
+# @gen function drift_random_color(tr, i, channel)
+#     """proposes a new color for a sprite based on the average observed color of that type sprite
+#     slow, probably removing"""
+#     prev_color = tr[:init => :init_sprites => i => :color][channel]
+
+#     next_color = 
+    
+
+#     #samples near the color 
+#     rnew ~ beta_with_peak(ravg)
+#     gnew ~ beta_with_peak(gavg)
+#     bnew ~ beta_with_peak(bavg)
+# end 
+
+
 
 
 function color_involution(tr, colors, forward_retval, proposal_args)
@@ -736,7 +757,8 @@ function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_ar
     N = tr[:init => :N]
     backward_choices[:add_or_remove] = !add_remove_stuff[:add_or_remove]
     
-    
+    # Gen.mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else Symbol(:remove,add_remove_stuff[:remove_obj_index]) end
+    Gen.mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else :remove end
 
     if add_remove_stuff[:add_or_remove]
         #add

@@ -71,7 +71,9 @@ function total_update(tr)
 
     #add/remove sprite 
     # orig_M = tr[:init => :num_sprite_types]
-    tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
+    for _ in 1:1
+        tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
+    end
     # if accepted
     #     @assert orig_M != tr[:init => :num_sprite_types]
     #     if orig_M > tr[:init => :num_sprite_types]
@@ -93,8 +95,10 @@ function total_update(tr)
     
 
         #recolor involution 
-        tr, accepted = mh(tr, dd_get_random_new_color, (i,), color_involution)
-        # tr, accepted = mh(tr, select(:init => :init_sprites => i => :color))
+        # tr, accepted = mh(tr, dd_get_random_new_color, (i,), color_involution)
+        tr, accepted = mh(tr, select(:init => :init_sprites => i => :color => :r))
+        tr, accepted = mh(tr, select(:init => :init_sprites => i => :color => :g))
+        tr, accepted = mh(tr, select(:init => :init_sprites => i => :color => :b))
 
         #resize involution 
         tr, accepted = mh(tr, get_random_size, (i,), size_involution)

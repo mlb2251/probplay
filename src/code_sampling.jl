@@ -8,7 +8,7 @@ abstract type Code end
 struct Leaf <: Code
     leafval::Float64
 end
-struct Plus <: Code
+struct Plus <: Code #is leaf true, leaf plus, children a b 
     a::Code
     b::Code
 end
@@ -18,23 +18,38 @@ end
 #skipping get_local, set_local, get_attr, set_attr
 #expr_types = [leaf, vec, +, normal_vec, normal, bernoulli]
 expr_types = [Leaf, Plus]
-@dist choose_expr_type() = expr_types[categorical([1/length(expr_types) for _ in expr_types])] #equally likely 
 
 
+function get_non_leaf_prob(depth, num_exprs, max_depth=3)
+    return (1/num_exprs) * (max_depth - depth) / max_depth #latter term ranges from 1 to 0
+end
 
-@gen function code_prior()
-    expr_type ~ choose_expr_type()
+
+#could use depth to skew towards leafs near the depth limit 
+@dist function choose_expr_type(depth) 
+    len = length(expr_types)
+    @show len
+    probs = [1 - get_non_leaf_prob(depth, len) * (len-1) ; [get_non_leaf_prob(depth, len) for _ in 1:(len-1)]]
+    @show probs
+    return expr_types[categorical(probs)] #equally likely 
+end
+
+
+@gen function code_prior(depth)
+    depthp1 = depth + 1
+    expr_type ~ choose_expr_type(depthp1)
     if expr_type == Leaf
         leafval ~ uniform(0, 1)
         return expr_type({:leafval} ~ uniform(0, 1))	
     elseif expr_type == Plus
-        return expr_type({:a} ~ code_prior(), {:b} ~ code_prior())
+        return expr_type({:a} ~ code_prior(depthp1), {:b} ~ code_prior(depthp1))
     end 
     
 end 
 
 for _ in 1:3
-    println(code_prior())
+    println("code sample")
+    println(code_prior(0))
 end 
 
 

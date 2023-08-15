@@ -205,8 +205,8 @@ end
 
 function get_choices_clean(tr)
     choices = Gen.get_choices(tr)
-    @show typeof(tr)
-    @show typeof(choices)
+    # @show typeof(tr)
+    # @show typeof(choices)
     choices
 end
 

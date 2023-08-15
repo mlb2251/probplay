@@ -269,6 +269,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             rejuv(state.traces[i])
         end
 
+            
+
 
         @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, SMCP3Update(
@@ -278,7 +280,21 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 (obs,),
                 false, # check are inverses
             ))        
+
         
+        #MH HERE?
+        @show length(state.traces)
+        for i in 1:num_particles
+            tr = state.traces[i]
+            for obj_id in 1:length(objs)
+                
+                tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
+            
+            end 
+        
+            state.traces[i] = tr 
+        end 
+
         #render 
         #html_body(html_img())
     end
@@ -336,7 +352,25 @@ end
 const SAMPLES_PER_OBJ = 40 # 1
 show_forward_proposals :: Bool = false
 
+#next abstract this
+#@gen function sample_from_scores(scores, list, )
+#     scores_logsumexp = logsumexp(scores)
+#     scores =  exp.(scores .- scores_logsumexp)
+#     idx = categorical(scores)
+#     return idx
+# end
+# #sample from scores 
+# scores_logsumexp = logsumexp(scores)
+# scores =  exp.(scores .- scores_logsumexp)
+
+# idx = {:idx => obj_id} ~ categorical(scores)
+
+# bwd_choices[:idx => obj_id] = idx
+# curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
+# curr_env.step_of_obj = step_of_objs[idx]
+
 @kernel function fwd_proposal_naive(prev_trace, obs)
+    
     (H,W,prev_T) = get_args(prev_trace)
     t = prev_T # `t` will be our newly added timestep
     observed_image = obs[(:steps => t => :observed_image)]
@@ -368,14 +402,25 @@ show_forward_proposals :: Bool = false
 
         curr_state = curr_env.state
         states = []
+        #step_of_objs = []
         constraints = []
         for j in 1:SAMPLES_PER_OBJ
-
             curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
+            
+            # #sample step of obj 
+            # obj_step  = {:(j, obj_id,)} ~ uniform_discrete(1, length(curr_env.code_library))
+            
+            #curr_env.step_of_obj[obj_id] = obj_step	
+            @show curr_env.step_of_obj[obj_id]
+
+            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
+
             {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
             set_submap!(bwd_choices, :dynamics => obj_id => j, curr_env.exec.constraints)
 
+
             push!(states, curr_env.state) #env.state changed
+            #push!(step_of_objs, curr_env.step_of_obj)
             push!(constraints, curr_env.exec.constraints)
         end
 
@@ -389,15 +434,17 @@ show_forward_proposals :: Bool = false
         end
 
 
-
         #sample from scores 
         scores_logsumexp = logsumexp(scores)
         scores =  exp.(scores .- scores_logsumexp)
 
         idx = {:idx => obj_id} ~ categorical(scores)
+        
         bwd_choices[:idx => obj_id] = idx
         curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
+        #curr_env.step_of_obj = step_of_objs[idx]
 
+        @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
 
         if show_forward_proposals            
 

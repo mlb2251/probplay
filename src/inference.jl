@@ -306,24 +306,25 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 
                 #@show tr
                # @show tr[:init => :init_state => :init_objs => obj_id => :vel]
-               @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
+                if obj_id == 3
+                    @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
+                end 
                 tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
 
                 #doing a shifting involution on each attribute 
                 for attr_id in 1:1 #just velocity for now 
                     attr_address = (:init => :init_state => :init_objs => obj_id => :attrs => attr_id => :attr)
-                    for _ in 1:1000
+                    for _ in 1:10
                         tr, accept = mh(tr, variable_shift_randomness, (attr_address,), variable_shift_involution)
                     end 
-                end 
-
-                
-            
+                end
             end 
             state.traces[i] = tr
-        
+            @show tr
         end 
+
+       
 
         #render 
         #html_body(html_img())
@@ -432,16 +433,10 @@ show_forward_proposals :: Bool = false
 
         curr_state = curr_env.state
         states = []
-        #step_of_objs = []
         constraints = []
         for j in 1:SAMPLES_PER_OBJ
             curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
-            
-            # #sample step of obj 
-            # obj_step  = {:(j, obj_id,)} ~ uniform_discrete(1, length(curr_env.code_library))
-            
-            #curr_env.step_of_obj[obj_id] = obj_step	
-            #@show curr_env.step_of_obj[obj_id]
+         
 
             {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
 
@@ -450,7 +445,6 @@ show_forward_proposals :: Bool = false
 
 
             push!(states, curr_env.state) #env.state changed
-            #push!(step_of_objs, curr_env.step_of_obj)
             push!(constraints, curr_env.exec.constraints)
         end
 
@@ -474,7 +468,7 @@ show_forward_proposals :: Bool = false
         curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
         #curr_env.step_of_obj = step_of_objs[idx]
 
-        @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
+        
         
 
         if show_forward_proposals            
@@ -505,6 +499,7 @@ show_forward_proposals :: Bool = false
         
     end
 
+    @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
 
     if show_forward_proposals
         res = draw(H, W, curr_env.state.objs, curr_env.sprites)

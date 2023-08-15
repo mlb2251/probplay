@@ -327,8 +327,11 @@ make_sprites = Map(make_type)
         
 
         #goal get one const velocity func where velocity is a learned latent var pretty lit
+        #add a list of attributes it needs
         CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
     ]
+
+    #env.code_lib_reqs = [[], [1]] #addr 1 needed for the velocity code version 
 
     env.state = {:init_state} ~ init_state(H,W,num_sprites,env)
 

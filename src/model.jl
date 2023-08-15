@@ -248,6 +248,14 @@ include("code_library.jl")
 end
 
 unfold_step = Unfold(dynamics_and_render)
+
+@gen function make_attr(i)
+    #can add more customization 
+    attr ~ normal(0, 1)
+    return attr 
+end 
+
+make_attrs = Map(make_attr)
  
 @gen function make_object(i, H, W, num_sprites, env)
     sprite_index ~ uniform_discrete(1, num_sprites) 
@@ -256,10 +264,19 @@ unfold_step = Unfold(dynamics_and_render)
     env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
 
     #velocity going here for now 
-    vel ~ normal(0, 1)
-    #make it a normal attr 
+    #vel ~ normal(0, 1)
 
-    return Object(sprite_index, pos, [vel,])
+
+    #make it a normal attr 
+    # attrs = [] 
+    # for i in 1:1
+    #     attr = {(:attr, i)} ~ make_attr()
+    #     push!(attrs, attr)
+    # end
+    attrs ~ make_attrs(collect(1:1))
+
+    #return Object(sprite_index, pos, [vel,])
+    return Object(sprite_index, pos, attrs)
 end
 
 @gen function make_type(i, H, W) 
@@ -293,7 +310,7 @@ make_sprites = Map(make_type)
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
 
         # random walk
-        ###CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
         # stationary
         # CFunc(parse(SExpr,"(pass)")),
         # move const vel down right

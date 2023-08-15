@@ -239,15 +239,22 @@ function build_init_obs(H,W, sprites, objs, observed_images)
     init_obs
 end
 
-# function variable_shift_randomness(t, v)
-#     shift ~ normal(0, v/10)#play with this number
-# end 
+#attributes shift a little instead of full mh resample. not data driven
+@gen function variable_shift_randomness(t, addr)
+    shift ~ normal(0, 0.1)#play with this number, relate it to v?
+end 
+function variable_shift_involution(t, forward_choices, forward_retval, proposal_args)
+    new_trace_choices = choicemap()
+    backward_choices = choicemap()
+    addr = proposal_args[1]
+    # addr = (:init => :init_state => :init_objs => 1 => :attrs => 1 => :attr)
+    # @show addr
+    new_trace_choices[addr] = t[addr] + forward_choices[:shift]
+    backward_choices[:shift] = -forward_choices[:shift]
 
-# function shift_variable_involution(t, forward_choices, forward_retval, proposal_args)
-#     new_trace_choices = choicemap()
-#     backward_choices = choicemap()
-
-#     new_trace_choices[]
+    new_trace, weight, = update(t, get_args(t), (NoChange(),), new_trace_choices)
+    (new_trace, backward_choices, weight)
+end
 
 
 """
@@ -298,10 +305,17 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             for obj_id in 1:length(objs)
                 
                 #@show tr
-                @show tr[:init => :init_state => :init_objs => obj_id => :vel]
+               # @show tr[:init => :init_state => :init_objs => obj_id => :vel]
+               @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
                 tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
-                for _ in 1:1000
-                    tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :vel))
+                
+
+                #doing a shifting involution on each attribute 
+                for attr_id in 1:1 #just velocity for now 
+                    attr_address = (:init => :init_state => :init_objs => obj_id => :attrs => attr_id => :attr)
+                    for _ in 1:1000
+                        tr, accept = mh(tr, variable_shift_randomness, (attr_address,), variable_shift_involution)
+                    end 
                 end 
 
                 

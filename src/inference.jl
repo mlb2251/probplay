@@ -168,6 +168,10 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
     # Gen.track_inf = Dict()
     # Gen.track_total = Dict()
     Gen.tracker = Dict()
+    # Gen.curr_trace = 0
+    Gen.thread_infos = []
+
+    println("Threads: ", Threads.nthreads())
 
     elapsed=@elapsed for i in 1:steps
         if i % step_chunk == 1 || i == steps
@@ -179,8 +183,8 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
             end
             table = hcat(table, col)
         end
-        for j in 1:num_particles
-            Gen.curr_trace = j
+        Threads.@threads :static for j in 1:num_particles
+            Gen.get_thread_info().curr_trace = j
             traces[j] = total_update(traces[j])
             # N = traces[j][:init => :N]
             # M = traces[j][:init => :num_sprite_types]
@@ -403,7 +407,9 @@ function build_init_obs(H,W, sprites, objs, first_frame)
 
         #EDIT THIS 
         init_obs[:init => :init_sprites => obj.sprite_index => :mask] = sprites[obj.sprite_index].mask # => means go into subtrace, here initializing subtraces, () are optional. => means pair!!
-        init_obs[:init => :init_sprites => obj.sprite_index => :color] = sprites[obj.sprite_index].color
+        init_obs[:init => :init_sprites => obj.sprite_index => :color => :r] = sprites[obj.sprite_index].color[1]
+        init_obs[:init => :init_sprites => obj.sprite_index => :color => :g] = sprites[obj.sprite_index].color[2]
+        init_obs[:init => :init_sprites => obj.sprite_index => :color => :b] = sprites[obj.sprite_index].color[3]
     end
     init_obs
 end

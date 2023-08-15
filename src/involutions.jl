@@ -46,27 +46,24 @@ function flatmatrixindex_from_position(pos, H, W)
     return (pos.x-1)*H + pos.y
 end
 
-function shiftallobjs(min_obj, max_obj, shift_func, new_trace_choices, tr)
+function shiftallobjs(min_obj, max_obj, shift_by, new_trace_choices, tr)
     """
     edits new traces to shift all object positions and sprite indicies down or up (depending on shift_func)
     useful for adding or removing an object at a middle object index 
     """
     for i in min_obj:max_obj
-        toshiftpos = tr[:init => :init_objs => i => :pos]
-        toshiftspriteindex = tr[:init => :init_objs => i => :sprite_index]
-
-        new_trace_choices[(:init => :init_objs => shift_func(i) => :pos)] = toshiftpos
-        new_trace_choices[(:init => :init_objs => shift_func(i) => :sprite_index)] = toshiftspriteindex
+        new_trace_choices[:init => :init_objs => i+shift_by => :pos] = tr[:init => :init_objs => i => :pos]
+        new_trace_choices[:init => :init_objs => i+shift_by => :sprite_index] = tr[:init => :init_objs => i => :sprite_index]
     end 
 end
 
 
-function shiftallsprites(min_sprite, max_sprite, shift_func, new_trace_choices, tr)
+function shiftallsprites(min_sprite, max_sprite, shift_by, new_trace_choices, tr)
     """
     edits trace to shift all sprite indicies down or up (depending on shift_func)
     """
     function shiftonething(thing, i)
-        new_trace_choices[(:init => :init_sprites => shift_func(i) => thing)] = tr[:init => :init_sprites => i => thing] 
+        new_trace_choices[(:init => :init_sprites => i + shift_by => thing)] = tr[:init => :init_sprites => i => thing] 
     end 
 
     for i in min_sprite:max_sprite
@@ -264,7 +261,7 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
     new_trace_choices = choicemap()
     backward_choices = choicemap()
 
-    Gen.mode_stack[end] = if add_remove_random[:add_or_remove]; :add else :remove end
+    Gen.get_thread_info().mode_stack[end] = if add_remove_random[:add_or_remove]; :add else :remove end
 
     if add_remove_random[:add_or_remove]
         #add the new sprite , when we add the ability to add a middle sprite, make sure to deal with the cascade 
@@ -309,7 +306,7 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
                 #push!(change_plan, 1)
                 Nremoved += 1 
             else
-                shiftallobjs(i, i, x -> x - Nremoved, new_trace_choices, tr)#just one obj actually 
+                shiftallobjs(i, i, -Nremoved, new_trace_choices, tr)#just one obj actually 
                 if si > sprite_index 
                     new_trace_choices[:init => :init_objs => i - Nremoved => :sprite_index] = si - 1
                 end 
@@ -323,7 +320,7 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
         #remove the sprite
         if sprite_index != tr[:init => :num_sprite_types] #idk if this is causing the error/neccesary
             #if not the last sprite, shift all the sprites 
-            shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+            shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], -1, new_trace_choices, tr)
         end
         
 
@@ -397,7 +394,7 @@ function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, 
                 oneposTEMP = pos 
                 Nremoved += 1 
             else
-                shiftallobjs(i, i, x -> x - Nremoved, new_trace_choices, tr)#just one obj actually 
+                shiftallobjs(i, i, -Nremoved, new_trace_choices, tr)#just one obj actually 
                 if si > sprite_index 
                     new_trace_choices[:init => :init_objs => i - Nremoved => :sprite_index] = si - 1
                 end 
@@ -411,9 +408,8 @@ function dd_add_remove_sprite_involution(tr, add_remove_random, forward_retval, 
         #remove the sprite
         if sprite_index != tr[:init => :num_sprite_types] #idk if this is causing the error/neccesary
             #if not the last sprite, shift all the sprites 
-            shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
+            shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], -1, new_trace_choices, tr)
         end
-        #shiftallsprites(sprite_index+1, tr[:init => :num_sprite_types], x -> x-1, new_trace_choices, tr)
         
 
         backward_choices[:add_or_remove] = true
@@ -498,7 +494,7 @@ function size_involution(tr, mask_stuff, forward_retval, proposal_args)
     neww = changedim(w, mask_stuff[:wchange], mask_stuff[:wgrow_or_shrink])
 
     backward_choices[:hchange], backward_choices[:wchange] = mask_stuff[:hchange], mask_stuff[:wchange]
-    backward_choices[:hgrow_or_shrink], backward_choices[:wgrow_or_shrink] = 1 - mask_stuff[:hgrow_or_shrink], 1 - mask_stuff[:wgrow_or_shrink]
+    backward_choices[:hgrow_or_shrink], backward_choices[:wgrow_or_shrink] = !mask_stuff[:hgrow_or_shrink], !mask_stuff[:wgrow_or_shrink]
 
 
     #need to not fill with all ones lmao TODO 
@@ -535,7 +531,7 @@ function mask_involution(tr, hi_wi, forward_retval, proposal_args)#what are last
     backward_choices[:hi] = hi
     backward_choices[:wi] = wi
 
-    mask = copy(tr[:init => :init_sprites => i => :mask]) #will this work? 
+    mask = copy(tr[:init => :init_sprites => i => :mask])
 
     #swap pixel at that index 
     #@show size(mask)
@@ -758,25 +754,21 @@ function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_ar
     backward_choices[:add_or_remove] = !add_remove_stuff[:add_or_remove]
     
     # Gen.mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else Symbol(:remove,add_remove_stuff[:remove_obj_index]) end
-    Gen.mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else :remove end
+    Gen.get_thread_info().mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else :remove end
 
     if add_remove_stuff[:add_or_remove]
         #add
-
-
         ind_to_add = add_remove_stuff[:add_obj_index]
 
         #shift all up 
         if ind_to_add < N+1
-            shiftallobjs(ind_to_add, N, i -> i+1, new_trace_choices, tr)
+            shiftallobjs(ind_to_add, N, 1, new_trace_choices, tr)
         end
                 
         new_trace_choices[(:init => :init_objs => ind_to_add => :pos)] = Position(add_remove_stuff[:ypos], add_remove_stuff[:xpos])
         new_trace_choices[(:init => :init_objs => ind_to_add => :sprite_index)] = add_remove_stuff[:sprite_index]
         backward_choices[:remove_obj_index] = ind_to_add
         new_trace_choices[(:init => :N)] = N + 1
-        
-
 
     else 
         #remove 
@@ -786,7 +778,6 @@ function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_ar
         # spriteind = tr[:init => :init_objs => remove_obj_index => :sprite_index]
         # mask = tr[:init => :init_sprites => spriteind => :mask]
         # render_matrix(mask)
-
        
         pos = tr[:init => :init_objs => remove_obj_index => :pos]
         backward_choices[:ypos], backward_choices[:xpos] = pos.y, pos.x
@@ -795,22 +786,17 @@ function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_ar
 
         #shift all objects above index down by one 
         if remove_obj_index < N
-            shiftallobjs(remove_obj_index+1, N, (x)->x-1, new_trace_choices, tr) 
+            shiftallobjs(remove_obj_index+1, N, -1, new_trace_choices, tr) 
         end 
 
-        #remove Nth HOW 
-        new_trace_choices[(:init => :init_objs => N)] = nothing 
         new_trace_choices[(:init => :N)] = N - 1
     end
-    #@show new_trace_choices
     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
-    #@show new_trace
     (new_trace, backward_choices, weight)
-
 end 
 
     
-    
+
     
 
 #LAYERING STUFF
@@ -827,21 +813,15 @@ function layer_involution(tr, layer_swap, forward_retval, proposal_args)
 
     l1 = layer_swap[:layer1]
     l2 = layer_swap[:layer2]
-    #@show l1, l2
-
 
     backward_choices[:layer1] = l1
     backward_choices[:layer2] = l2
 
-    sprite1ind = tr[:init => :init_objs => l1 => :sprite_index]
-    sprite2ind = tr[:init => :init_objs => l2 => :sprite_index]
-    pos1 = tr[:init => :init_objs => l1 => :pos]
-    pos2 = tr[:init => :init_objs => l2 => :pos]	
-
-    new_trace_choices[(:init => :init_objs => l1 => :sprite_index)] = sprite2ind
-    new_trace_choices[(:init => :init_objs => l2 => :sprite_index)] = sprite1ind
-    new_trace_choices[(:init => :init_objs => l1 => :pos)] = pos2
-    new_trace_choices[(:init => :init_objs => l2 => :pos)] = pos1
+    # swap the pos and sprite
+    new_trace_choices[(:init => :init_objs => l1 => :sprite_index)] = tr[:init => :init_objs => l2 => :sprite_index]
+    new_trace_choices[(:init => :init_objs => l2 => :sprite_index)] = tr[:init => :init_objs => l1 => :sprite_index]
+    new_trace_choices[(:init => :init_objs => l1 => :pos)] = tr[:init => :init_objs => l2 => :pos]	
+    new_trace_choices[(:init => :init_objs => l2 => :pos)] = tr[:init => :init_objs => l1 => :pos]
 
     new_trace, weight, = update(tr, get_args(tr), (NoChange(),), new_trace_choices)
     (new_trace, backward_choices, weight)

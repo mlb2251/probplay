@@ -31,13 +31,14 @@ BExpr ::=
 
 mutable struct SExpr
     is_leaf::Bool
-    leaf::Any
+    leaf::Any #not SExprs here, should require smth about non listey s expr?? 
     children::Vector{SExpr}
     parent::Union{Tuple{SExpr,Int}, Nothing} # parent and which index of the child it is
 end
 
 
 function sexpr_node(children::Vector{SExpr}; parent=nothing)
+    """outputs a node s expression"""
     expr = SExpr(false, nothing, children, parent)
     for (i,child) in enumerate(children)
         isnothing(child.parent) || error("arg already has parent")
@@ -47,6 +48,7 @@ function sexpr_node(children::Vector{SExpr}; parent=nothing)
 end
 
 function sexpr_leaf(leaf; parent=nothing)
+    """outputs a leaf s expression, like a number or something"""
     SExpr(true, leaf, Vector{SExpr}(), parent)
 end
 

@@ -1,6 +1,6 @@
 
 using Gen
-export exec, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
+export exec, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
 """
 
 Types: Float, Int, Bool
@@ -36,6 +36,13 @@ mutable struct SExpr
     parent::Union{Tuple{SExpr,Int}, Nothing} # parent and which index of the child it is
 end
 
+struct Primitive
+    name::Symbol
+    arity::Int64
+    #either a type of a list of types of length arity 
+    input_type::Union{Type, Vector{DataType}} 
+    output_type::Type
+end
 
 function sexpr_node(children::Vector{SExpr}; parent=nothing)
     """outputs a node s expression"""
@@ -73,9 +80,17 @@ Base.size(e::SExpr) = if e.is_leaf 1. else sum(size, e.children, init=0.) end
 
 num_nodes(e::SExpr) = 1 + sum(num_nodes, e.children, init=0)
 
+
+
+
 Base.show(io::IO, e::SExpr) = begin    
     if e.is_leaf
-        print(io, e.leaf)
+        if typeof(e.leaf) == Primitive
+            print(io, e.leaf.name)
+        else 
+            print(io, e.leaf)
+        end 
+        
         @assert isempty(e.children)
     else
         print(io, "(")

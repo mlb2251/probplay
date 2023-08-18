@@ -1,41 +1,68 @@
-function objs_from_trace(trace, t)
-    (H,W,T) = get_args(trace)
-    @assert t <= T
-    objs = Object[] #why grey text here?
-    for i in 1:trace[:init => :N]
-        if t == 0
-            pos = trace[:init => :init_objs => i => :pos]
-        else
-            pos = trace[:steps => t => :objs => i => :pos]
-        end
-        
-        sprite_index = trace[:init => :init_objs => i => :sprite_index]
-        #@show sprite_index
-        obj = Object(sprite_index, pos)
-        push!(objs, obj)
-    end
-    objs
+import DynamicForwardDiff: Dual
+import GenTraceKernelDSL: TraceToken
+
+
+# workaround for annoying bug where if you try to access the return value for trace[:init] followed by trace[:init => :init_state => :N] has_key will get confused
+# because itll think that :init is both a submap and a value and it'll crash.
+env_of_trace(trace::TraceToken) = env_of_trace(trace.trace)
+state_of_trace(trace::TraceToken, t) = state_of_trace(trace.trace, t)
+
+function env_of_trace(trace)
+    return trace[:init]
 end
 
-function sprites_from_trace(trace, t)
-    (H,W,T) = get_args(trace)
-    @assert t <= T
-    sprites = SpriteType[]
-    for i in 1:trace[:init => :num_sprite_types]
-
-        color = trace[:init => :init_sprites => i => :color] #?
-        
-        shape = trace[:init => :init_sprites => i => :shape]
-
-        sprite_type = SpriteType(shape, color)
-        push!(sprites, sprite_type)
+function state_of_trace(trace, t)
+    if t == 0
+        return trace[:init => :init_state]
+    else
+        return trace[:steps => t]
     end
-    sprites
 end
+
+
+# function objs_from_trace(trace, t)
+#     (H,W,T) = get_args(trace)
+#     @assert t <= T
+#     objs = Object[] #why grey text here?
+#     for i in 1:trace[:init => :init_state => :N]
+#         if t == 0
+#             pos = trace[:init => :init_state => :init_objs => i => :pos]
+#         else
+#             pos = trace[:steps => t => :objs => i => :pos]
+#         end
+        
+#         sprite_index = trace[:init => :init_state => :init_objs => i => :sprite_index]
+#         #@show sprite_index
+#         obj = Object(sprite_index, pos)
+#         push!(objs, obj)
+#     end
+#     objs
+# end
+
+# function sprites_from_trace(trace, t)
+#     (H,W,T) = get_args(trace)
+#     @assert t == 0 # we havent implemented sprites changing over time yet
+#     sprites = Sprite[]
+#     for i in 1:trace[:init => :num_sprites]
+
+#         color = trace[:init => :init_sprites => i => :color] #?
+        
+#         shape = trace[:init => :init_sprites => i => :shape]
+
+#         if color isa Vector{Dual{Nothing, Float64}}
+#             sprite = Sprite(shape, [color[1].value, color[2].value, color[3].value])
+#         else
+#             sprite = Sprite(shape, color)
+#         end
+
+#         push!(sprites, sprite)
+#     end
+#     sprites
+# end
 
 function render_trace_frame(trace, t)
     (H,W,T) = get_args(trace)
-    draw(H, W, objs_from_trace(trace,t), sprites_from_trace(trace,t))
+    draw(H, W, state_of_trace(trace,t).objs, env_of_trace(trace).sprites)
 end
 
 function render_trace(trace)
@@ -43,6 +70,12 @@ function render_trace(trace)
     stack([render_trace_frame(trace, t) for t in 0:T-1])
 end
 
+function img_diff(img1, img2)
+    @. (img1 - img2) / 2. + 0.5
+end
+function img_diff_sum(img1, img2)
+    sum(abs.(img_diff(img1, img2)))
+end
 
 
 
@@ -65,7 +98,7 @@ function color_labels(frames...; orig=nothing)
     max = maximum([maximum(frame) for frame in frames])
     res = []
     for frame in frames
-        colored = [RGB(HSV(px/max*360, .8, .7)) for px in frame]
+        colored = [RGB{Float64}(HSV(px/max*360, .8, .7)) for px in frame]
         colored[frame .== 0] .= RGB(0,0,0)
         orig !== nothing && (colored = vcat(colorview(RGB,orig), colored))
         push!(res,colored)

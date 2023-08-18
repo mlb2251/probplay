@@ -1,66 +1,134 @@
 using Gen
 using LinearAlgebra
 using Images
-using Distributions
-# using Plots
 using AutoHashEquals
 using Dates
+import Distributions
 
-@auto_hash_equals struct Position
-    y::Int
-    x::Int
+@auto_hash_equals struct Vec
+    y::Float64
+    x::Float64
 end
 
-struct SpriteType
+Vec(y::Int, x::Int) = Vec(Float64(y), Float64(x))
+
+
+Base.:+(v1::Vec, v2::Vec) = Vec(v1.y + v2.y, v1.x + v2.x)
+Base.:-(v1::Vec, v2::Vec) = Vec(v1.y - v2.y, v1.x - v2.x)
+Base.:*(a::Real, v::Vec) = Vec(a*v.y, a*v.x)
+Base.:*(v::Vec, a::Real) = Vec(a*v.y, a*v.x)
+
+Base.isapprox(v1::Vec, v2::Vec; kwargs...) = isapprox(v1.y, v2.y; kwargs...) && isapprox(v1.x, v2.x; kwargs...)
+
+pixel_vec(v::Vec) = (floor(Int, v.y), floor(Int, v.x))
+
+"""
+given a vector of vectors, return a (min_vec, max_vec) pair
+where min_vec is the vector of the minimum values of each component
+"""
+function min_max_vecs(vecs::Vector{Vec})
+    ( 
+        Vec(minimum(v -> v.y, vecs), minimum(v -> v.x, vecs)),
+        Vec(maximum(v -> v.y, vecs), maximum(v -> v.x, vecs))
+    )
+end
+
+"""
+Rounds a Vec to be within (1,H+1-EPSILON) x (1,W+1-EPSILON)
+"""
+function inbounds_vec(v,H,W)
+    Vec(min(max(1, v.y), H+1-EPSILON), min(max(1, v.x), W+1-EPSILON))
+end
+
+
+struct Sprite
     mask::Matrix{Bool}
     color::Vector{Float64}
 end
 
-struct Object
-    sprite_index :: Int  
-    pos :: Position
+set_mask(sprite::Sprite, mask) = Sprite(mask, sprite.color)
+set_color(sprite::Sprite, color) = Sprite(sprite.mask, color)
+
+
+mutable struct ObjRef
+    id::Int
 end
+
+struct TyRef
+    id::Int
+end
+
+mutable struct Object
+    # type :: Int
+    sprite_index :: Int
+    pos :: Vec
+    attrs :: Vector{Any}
+
+    Object(sprite_index, pos) = new(sprite_index, pos, [])
+    Object(sprite_index, pos, attrs) = new(sprite_index, pos, attrs)
+end
+
+Base.copy(obj::Object) = Object(obj.sprite_index, obj.pos, copy(obj.float_attrs))
+
+# Object(sprite_index, pos) = Object(sprite_index, pos, [], 0)
+
+set_sprite(obj::Object, sprite_index) = Object(sprite_index, obj.pos, obj.attrs)
+set_pos(obj::Object, pos) = Object(obj.sprite_index, pos, obj.attrs)
 
 include("images.jl")
 
 @dist labeled_cat(labels, probs) = labels[categorical(probs)]
 
-struct UniformPosition <: Gen.Distribution{Position} end
+
+const EPSILON = .001
+
+
+struct UniformPosition <: Gen.Distribution{Vec} end
+const uniform_position = UniformPosition()
 
 function Gen.random(::UniformPosition, height, width)
-    Position(rand(1:height), rand(1:width))
+    Vec(uniform(1., height+1-EPSILON), uniform(1., width+1-EPSILON))
 end
 
 function Gen.logpdf(::UniformPosition, pos, height, width)
-    if !(0 < pos.y <= height && 0 < pos.x <= width)
-        return -Inf
-    else
-        # uniform distribution over height*width positions
-        return -log(height*width)
-    end
+    Gen.logpdf(uniform, pos.y, 1., height+1-EPSILON) + Gen.logpdf(uniform, pos.x, 1., width+1-EPSILON)
 end
 
-const uniform_position = UniformPosition()
+
+
 
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
 
+struct UniformDriftVec <: Gen.Distribution{Vec} end
 
-struct UniformDriftPosition <: Gen.Distribution{Position} end
-
-function Gen.random(::UniformDriftPosition, pos, max_drift)
-    Position(pos.y + rand(-max_drift:max_drift),
-             pos.x + rand(-max_drift:max_drift))
+function Gen.random(::UniformDriftVec, pos, max_drift)
+    pos + Vec(rand(-max_drift:max_drift), rand(-max_drift:max_drift))
 end
 
-function Gen.logpdf(::UniformDriftPosition, pos_new, pos, max_drift)
+function Gen.logpdf(::UniformDriftVec, pos_new, pos, max_drift)
     # discrete uniform over square with side length 2*max_drift + 1
     return -2*log(2*max_drift + 1)
 end
 
-const uniform_drift_position = UniformDriftPosition()
+const uniform_drift_position = UniformDriftVec()
 
-(::UniformDriftPosition)(pos, max_drift) = random(UniformDriftPosition(), pos, max_drift)
+(::UniformDriftVec)(pos, max_drift) = random(UniformDriftVec(), pos, max_drift)
 
+"""
+normal distribution around a mu_vec with variance var
+"""
+struct NormalVec <: Gen.Distribution{Vec} end
+
+function Gen.random(::NormalVec, mu_vec::Vec, var)
+    Vec(normal(mu_vec.y,var), normal(mu_vec.x,var))
+end
+
+function Gen.logpdf(::NormalVec, v::Vec, mu_vec::Vec, var)
+    Gen.logpdf(normal, v.y, mu_vec.y, var) + Gen.logpdf(normal, v.x, mu_vec.x, var)
+end
+
+const normal_vec = NormalVec()
+(::NormalVec)(mu_vec, var) = random(NormalVec(), mu_vec, var)
 
 
 struct Bernoulli2D <: Gen.Distribution{Array} end
@@ -87,11 +155,9 @@ function Gen.logpdf(::ImageLikelihood, observed_image::Array{Float64,3}, rendere
     sum(i -> - (@inbounds abs2((observed_image[i] - rendered_image[i]) / var) + log(2π)) / 2 - log_var, eachindex(observed_image))
 end
 
-# @assert isapprox(Gen.logpdf(M.image_likelihood, vals, vals2, .1), Gen.logpdf(broadcasted_normal, vals - vals2, zeros(Float64,size(vals)), .1))
-
 
 function Gen.random(::ImageLikelihood, rendered_image, var)
-    noise = rand(Normal(0, var), size(rendered_image))
+    noise = rand(Distributions.Normal(0, var), size(rendered_image))
     # noise = mvnormal(zeros(size(rendered_image)), var * Maxxtrix(I, size(rendered_image)))
     rendered_image .+ noise
 end
@@ -114,123 +180,111 @@ const rgb_dist = RGBDist()
 (::RGBDist)() = random(RGBDist())
 
 
-function canvas(height=210, width=160)
-    zeros(Float64, 3, height, width)
-end
-
-
 function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
+    draw_region(canvas, objs, sprites, ymin, ymax, xmin, xmax)
+end
+
+function draw_region(canvas, objs, sprites, ymin, ymax, xmin, xmax)
     for obj::Object in objs
         sprite_index = obj.sprite_index
-        sprite_type = sprites[sprite_index]
+        sprite = sprites[sprite_index]
 
-        sprite_height, sprite_width = size(sprite_type.mask)
+        sprite_height, sprite_width = size(sprite.mask)
+
+        x = floor(Int, obj.pos.x)
+        y = floor(Int, obj.pos.y)
 
         # not at all in bounds
-        if obj.pos.y > ymax || obj.pos.x > xmax || obj.pos.y+sprite_height-1 < ymin || obj.pos.x+sprite_width-1 < xmin
+        if y > ymax || x > xmax || y+sprite_height-1 < ymin || x+sprite_width-1 < xmin
             continue
         end
         
         # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
-        starti = max(1, ymin-obj.pos.y+1)
-        startj = max(1, xmin-obj.pos.x+1)	
-        stopi = min(sprite_height, ymax-obj.pos.y+1) 
-        stopj = min(sprite_width, xmax-obj.pos.x+1)
+        starti = max(1, ymin-y+1)
+        startj = max(1, xmin-x+1)	
+        stopi = min(sprite_height, ymax-y+1) 
+        stopj = min(sprite_width, xmax-x+1)
 
-        for i in starti:stopi, j in startj:stopj #there could be a faster way 
-            if sprite_type.mask[i,j]
-                offy = obj.pos.y+i-1
-                offx = obj.pos.x+j-1
-                @inbounds canvas[:, offy-ymin+1,offx-xmin+1] = sprite_type.color
-            end
-        end
+        mask = @views sprite.mask[starti:stopi, startj:stopj]
+        mask = reshape(mask, 1, size(mask)...)
+
+        target = @views canvas[:, y+starti-ymin : y+stopi-ymin , x+startj-xmin : x+stopj-xmin]
+        target .= ifelse.(mask, sprite.color, target)
     end
     canvas 
 end 
 
+draw(H, W, objs, sprites) = draw_region(objs, sprites, 1, H, 1, W)
+draw(canvas, objs, sprites) = draw_region(canvas, objs, sprites, 1, size(canvas,2), 1, size(canvas,3))
 
 
 
-function draw(H, W, objs, sprites)
+include("code_library.jl")
 
-    return draw_region(objs, sprites, 1, H, 1, W)
 
-    # canvas = zeros(Float64, 3, H, W)
 
-    # for obj::Object in objs 
-    #     sprite_index = obj.sprite_index
-    #     sprite_type = sprites[sprite_index]
 
-    #     sprite_height, sprite_width = size(sprite_type.mask)
+# all_obj_dynamics = Map(obj_dynamics)
 
-        
-    #     for i in 1:sprite_height, j in 1:sprite_width 
-    #         if sprite_type.mask[i,j]
-    #             offy = obj.pos.y+i-1
-    #             offx = obj.pos.x+j-1
-    #             if 0 < offy <= size(canvas,2) && 0 < offx <= size(canvas,3)
-    #                 @inbounds canvas[:, offy,offx] = sprite_type.color
-    #             end
-    #         end
-    #     end
+
+# Base.copy(state::State) = State([copy], copy(state.globals))
+
+@gen function dynamics_and_render(t::Int, prev_state::State, env::Env, canvas_height, canvas_width, var)
+    env.state = deepcopy(prev_state)
+    for i in eachindex(env.state.objs)
+        # @show i
+        {:objs => i} ~ obj_dynamics(i, env, choicemap())
+    end
+    # for i in eachindex(env.state.objs)
+        # pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)
+        #sprite noise? 
+        # env.state.objs[i].pos = pos
     # end
-    # canvas
-end
 
-
-function sim(T)
-    (trace, _) = generate(model, (100, 100, T))
-    return trace
-end
-
-
-# module Model
-# using Gen
-# import ..Position, ..SpriteType, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
-
-@gen (static) function obj_dynamics(obj::Object)
-    pos ~ uniform_drift_position(obj.pos,2);
-    return Object(obj.sprite_index, pos)
-end
-
-all_obj_dynamics = Map(obj_dynamics)
-
-struct State
-    objs::Vector{Object}
-    sprites::Vector{SpriteType}
-end
-
-@gen (static) function dynamics_and_render(t::Int, prev_state::State, canvas_height, canvas_width, var)
-    objs ~ all_obj_dynamics(prev_state.objs)
-    sprites = prev_state.sprites 
-    rendered = draw(canvas_height, canvas_width, objs, sprites)
+    rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
     observed_image ~ image_likelihood(rendered, var)
-    return State(objs, sprites)
+    return env.state
 end
-
-
-# @gen (static) function d
-
 
 unfold_step = Unfold(dynamics_and_render)
 
+@gen function make_attr(i)
+    #can add more customization 
+    attr ~ normal(0, 1)
+    return attr 
+end 
 
+make_attrs = Map(make_attr)
  
-@gen (static) function make_object(i, H, W, num_sprite_types)    
-    sprite_index ~ uniform_discrete(1, num_sprite_types) 
-    #pos ~ uniform_drift_position(Position(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
+@gen function make_object(i, H, W, num_sprites, env)
+    sprite_index ~ uniform_discrete(1, num_sprites) 
+    #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
+    env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
 
-    return Object(sprite_index, pos)
+    #velocity going here for now 
+    #vel ~ normal(0, 1)
+
+
+    #make it a normal attr 
+    # attrs = [] 
+    # for i in 1:1
+    #     attr = {(:attr, i)} ~ make_attr()
+    #     push!(attrs, attr)
+    # end
+    attrs ~ make_attrs(collect(1:1))
+
+    #return Object(sprite_index, pos, [vel,])
+    return Object(sprite_index, pos, attrs)
 end
 
-@gen (static) function make_type(i, H, W) 
+@gen function make_type(i, H, W) 
     width ~ uniform_discrete(1,W)
     height ~ uniform_discrete(1,H)
     shape ~ bernoulli_2d(0.5, height, width)
     color ~ rgb_dist()
-    return SpriteType(shape, color)
+    return Sprite(shape, color)
 end
 
 make_objects = Map(make_object)
@@ -245,31 +299,69 @@ make_sprites = Map(make_type)
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
 @gen function init_model(H,W,var)
-    num_sprite_types ~ poisson_plus_1(4)
-    N ~ poisson(7)
-    sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprite_types), [H for _ in 1:num_sprite_types], [W for _ in 1:num_sprite_types]) 
-    objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprite_types for _ in 1:N])
+    num_sprites ~ poisson_plus_1(4)
+    env = new_env();
+    
 
-    #rendered = draw(H, W, objs, sprites)
-    rendered = draw_region(objs, sprites, 1, H, 1, W)
+    env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
+
+    env.code_library = [
+        # move with local latent velocity
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
+
+        # random walk
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+        # stationary
+        # CFunc(parse(SExpr,"(pass)")),
+        # move const vel down right
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))")),
+        # move const vel down
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
+
+        # #a little left
+        # ##CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -0.5)))")),
+        # #perfect left 
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -2.3)))")),
+        #  #move const vel right a little for frostbite
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 5)))")),
+        
+
+        #goal get one const velocity func where velocity is a learned latent var pretty lit
+        #add a list of attributes it needs
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
+    ]
+
+    #env.code_lib_reqs = [[], [1]] #addr 1 needed for the velocity code version 
+
+    env.state = {:init_state} ~ init_state(H,W,num_sprites,env)
+
+    rendered = draw(H, W, env.state.objs, env.sprites)
     {:observed_image} ~ image_likelihood(rendered, var)
 
-    State(objs, sprites) 
+    env
 end
+
+@gen function init_state(H,W,num_sprites,env)
+    N ~ poisson(7)
+    env.step_of_obj = fill(0,N) # will be set by make_objects
+    init_objs ~  make_objects(collect(1:N), fill(H,N), fill(W,N), fill(num_sprites,N), fill(env,N))
+    return State(init_objs, [])
+end
+
 
 # #testing
 # testinitmodel = init_model(10, 20, 0.1)
 # #@show testinitmodel
 
-
+#  (static)
 @gen (static) function model(H, W, T) 
 
     var = .1
-    init_state = {:init} ~ init_model(H,W,var)
+    env = {:init} ~ init_model(H,W,var)
     #@show init_state
-    state = {:steps} ~ unfold_step(T-1, init_state, H, W, var)
+    {:steps} ~ unfold_step(T-1, env.state, env, H, W, var)
 
-    return state
+    return env
 end
 
 # #testing

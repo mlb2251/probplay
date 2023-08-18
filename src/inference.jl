@@ -158,10 +158,18 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
 
     traces = [generate(model, (H, W, 1), init_obs)[1] for _ in 1:num_particles]
 
-    table = fill("", num_particles*2, 1)
+    render_table = fill("", num_particles*2, 1)
     for i in 1:num_particles
-        table[i*2,1] = "Particle $i"
+        render_table[i*2,1] = "Particle $i"
     end
+
+    detailed_table_header = ["" "Rendered" "Bounding Boxes" "Sprites" #= "Coloring by object" "Coloring by sprite" "logpdf heatmap" =# "(actual - rendered)" "Info" "Involutions"]
+
+
+    # one detailed table per particle
+    detailed_tables = [detailed_table_header for _ in 1:num_particles]
+
+
 
     all_stats = [Dict{Symbol, Gen.MHStats}() for _ in 1:num_particles]
 
@@ -171,12 +179,20 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
     elapsed=@elapsed for i in 1:steps
         if i % step_chunk == 1 || i == steps
             println("update: $i")
+
+            # update particle over time
             col = String[]
             for tr in traces
                 push!(col, html_img(draw(H, W, tr[:init => :init_objs], tr[:init => :init_sprites])))
                 push!(col, "step=$i<br>N=$(tr[:init => :N])<br>sprites=$(tr[:init => :num_sprite_types])")
             end
-            table = hcat(table, col)
+            render_table = hcat(render_table, col)
+
+            # update detailed tables
+            for (j,tr) in enumerate(traces)
+                detailed_tables[j] = vcat(detailed_tables[j], permutedims(detailed_trace_row(tr, "Particle $j @ step=$i"; stats=all_stats[j])))
+            end
+
         end
 
         Threads.@threads for j in 1:num_particles
@@ -191,55 +207,75 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
 
     #TODO MAKE 2 other tables so this isn't uglyy 
 
-    othertable = fill("", num_particles + 1, 6)
-
+    result_table = fill("", num_particles + 1, length(detailed_table_header))
+    result_table[1, :] = detailed_table_header
 
     for (i,tr) in enumerate(traces)
-
-        bboxes = html_img(draw_bboxes(render_trace_frame(tr, 0), tr[:init => :init_objs], tr[:init => :init_sprites], 1, H, 1, W))
-        # objcoloring = html_img(color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
-        # spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
-        # heatmap = render_heatmap(logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1))
-        diff = html_img(img_diff(tr[:init => :observed_image], render_trace_frame(tr, 0)))
-
-        colors = get_colors(length(tr[:init => :init_sprites]))
-
-        sprite_imgs = map(enumerate(tr[:init => :init_sprites])) do (i,sprite)
-            ystop,xstop = size(sprite.mask)
-            canvas = zeros(Float64, C, ystop, W) # make canvas at full screen width because we scale our rendered html images based on width
-            canvas[:, :, xstop + 1:end] .= 1. # set the righthand side of the image to all white
-            # fill in actual sprite
-            canvas[:, 1:ystop, 1:xstop] .= ifelse.(reshape(sprite.mask, 1, size(sprite.mask)...), sprite.color, [0.,0.,0.])
-
-            # add an alpha blended border
-            alpha = 0.5
-            canvas[:, 1:ystop, 1] .= alpha_blend.(colors[i], canvas[:, 1:ystop, 1], alpha)
-            xstop != 1 && (canvas[:, 1:ystop, xstop] .= alpha_blend.(colors[i], canvas[:, 1:ystop, xstop], alpha))
-            canvas[:, 1, 2:xstop-1] .= alpha_blend.(colors[i], canvas[:, 1, 2:xstop-1], alpha)
-            ystop != 1 && (canvas[:, ystop, 2:xstop-1] .= alpha_blend.(colors[i], canvas[:, ystop, 2:xstop-1], alpha))
-
-            img = html_img(canvas)
-            num_objs = sum([obj.sprite_index == i for obj in tr[:init => :init_objs]])
-            "$(num_objs)x$img"
-        end
-        
-        show_stats = ""
-        for key in sort(collect(keys(all_stats[i])))
-            show_stats != "" && (show_stats *= "<br>")
-            stats = all_stats[i][key]
-            show_stats *= "$(key): $(stats.accepted)/$(stats.total) [inf=$(stats.inf); nan=$(stats.nan)]"
-        end
-
-        othertable[i + 1, :] = ["Particle $i at step=$steps", html_img(render_trace_frame(tr, 0)), bboxes, join(sprite_imgs,"<br>"), #=objcoloring, spritecoloring, heatmap, =# diff, show_stats]
-        othertable[1, :] = ["", "Rendered", "Bounding Boxes", "Sprites", #= "Coloring by object", "Coloring by sprite", "logpdf heatmap", =# "(actual - rendered)", "Stats"]
-
+        result_table[i+1,:] = detailed_trace_row(tr, "Particle $i @ step=$steps"; stats=all_stats[i])
     end 
     
-    html_body(html_table(othertable))
-    html_body(html_table(table))
+    html_body("<h1>Results</h1>")
+    html_body(html_table(result_table))
+    html_body("<h1>Particles Over Time</h1>")
+    html_body(html_table(render_table))
     html_body(time_str)
+    html_body("<h1>Particles Over Time (Detailed)</h1>")
 
-end 
+    table_of_tables = permutedims(["<h2>Particle $i</h2>\n" * html_table(table) for (i,table) in enumerate(detailed_tables)])
+    html_body(html_table(table_of_tables; table_attrs="style=\"border: 0px;\"", tr_attrs="style=\"border: 0px;\"", td_attrs="style=\"border: 0px; vertical-align:top; padding-right:20px\""))
+
+
+end
+
+
+function detailed_trace_row(tr, rowname; stats=nothing)
+    (H,W,T) = get_args(tr)
+    bboxes = html_img(draw_bboxes(render_trace_frame(tr, 0), tr[:init => :init_objs], tr[:init => :init_sprites], 1, H, 1, W))
+    # objcoloring = html_img(color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
+    # spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
+    # heatmap = render_heatmap(logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1))
+    diff = html_img(img_diff(tr[:init => :observed_image], render_trace_frame(tr, 0)))
+
+    sprite_imgs = map(enumerate(tr[:init => :init_sprites])) do (i,sprite)
+        show_sprite(tr,i)
+    end
+    info = "score=$(round(get_score(tr),sigdigits=6))<br>N=$(tr[:init => :N])<br>sprites=$(tr[:init => :num_sprite_types])"
+
+    show_stats = ""
+    if stats !== nothing
+        for key in sort(collect(keys(stats)))
+            show_stats != "" && (show_stats *= "<br>")
+            substats = stats[key]
+            show_stats *= "$(key):&nbsp;$(substats.accepted)/$(substats.total)&nbsp;[inf=$(substats.inf);&nbsp;nan=$(substats.nan)]"
+        end
+    end
+    row = [rowname, html_img(render_trace_frame(tr, 0)), bboxes, join(sprite_imgs,"<br>"), #=objcoloring, spritecoloring, heatmap, =# diff, info, show_stats]
+    row
+end
+
+function show_sprite(tr,i)
+    (C,H,W) = size(tr[:init => :observed_image])
+    sprite = tr[:init => :init_sprites => i]
+    colors = get_colors(tr[:init => :num_sprite_types])
+    ystop,xstop = size(sprite.mask)
+    canvas = zeros(Float64, C, ystop, W) # make canvas at full screen width because we scale our rendered html images based on width
+    canvas[:, :, xstop + 1:end] .= 1. # set the righthand side of the image to all white
+    # fill in actual sprite
+    canvas[:, 1:ystop, 1:xstop] .= ifelse.(reshape(sprite.mask, 1, size(sprite.mask)...), sprite.color, [0.,0.,0.])
+
+    # add an alpha blended border
+    alpha = 0.5
+    canvas[:, 1:ystop, 1] .= alpha_blend.(colors[i], canvas[:, 1:ystop, 1], alpha)
+    xstop != 1 && (canvas[:, 1:ystop, xstop] .= alpha_blend.(colors[i], canvas[:, 1:ystop, xstop], alpha))
+    canvas[:, 1, 2:xstop-1] .= alpha_blend.(colors[i], canvas[:, 1, 2:xstop-1], alpha)
+    ystop != 1 && (canvas[:, ystop, 2:xstop-1] .= alpha_blend.(colors[i], canvas[:, ystop, 2:xstop-1], alpha))
+
+    img = html_img(canvas)
+    num_objs = sum([obj.sprite_index == i for obj in tr[:init => :init_objs]])
+    "$(num_objs)x$img"
+end
+
+
 
 function process_first_frame(frame, threshold=.05)
     (C, H, W) = size(frame)
@@ -442,7 +478,6 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
     html_body("<h2>Observations</h2>", html_gif(observed_images))
     types = map(i -> objs[i].sprite_index, cluster);
-    #@show cluster .- types 
     html_body("<h2>First Frame Processing</h2>",
     html_table(["Observation"                       "Objects"                       "Types";
              html_img(observed_images[:,:,:,1])  html_img(color_labels(cluster)[1])  html_img(color_labels(types)[1])

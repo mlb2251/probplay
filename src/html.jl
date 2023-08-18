@@ -98,13 +98,15 @@ function html_gif(gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px")
     res
 end
 
-function html_table(table::Matrix, attrs...)
-    attrs = join(string.(attrs), " ")
-    res = if isempty(attrs) "<table>" else "<table $attrs>" end
+function html_table(table::Matrix; table_attrs="", tr_attrs="", td_attrs="")
+    table_attrs = " $table_attrs"
+    tr_attrs = " $tr_attrs"
+    td_attrs = " $td_attrs"
+    res = "<table$table_attrs>"
     for row in eachrow(table)
-        res *= "\n\t<tr>"
+        res *= "\n\t<tr$tr_attrs>"
         for x in row
-            res *= "\n\t\t<td>$x</td>"
+            res *= "\n\t\t<td$td_attrs>$x</td>"
         end
         res *= "\n\t</tr>"
     end

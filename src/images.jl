@@ -144,7 +144,7 @@ end
 get N colors evenly distributed in terms of hue
 """
 function get_colors(N)
-    rgbs = [RGB(HSV(i/N*360, .8, .7)) for i in 1:N]
+    rgbs = [RGB(HSV(i/N*360, .8, .8)) for i in 1:N]
     return [[c.r, c.g, c.b] for c in rgbs]
 end
 

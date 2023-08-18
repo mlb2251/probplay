@@ -2,7 +2,6 @@ using Revise
 using Gen
 using GenParticleFilters
 
-
 function get_mask_diff(mask1, mask2, color1, color2)
     #doesn't use color yet
     # isapprox(color1, color2) && return 1
@@ -61,7 +60,7 @@ render();
 end 
 
 
-function total_update(tr)
+function total_update(tr, stats)
     #do one pass of making a heatmap
     
     heatmap = logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1)
@@ -72,7 +71,7 @@ function total_update(tr)
     #add/remove sprite 
     # orig_M = tr[:init => :num_sprite_types]
     for _ in 1:1
-        tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution)
+        tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution; stats=stats)
     end
     # if accepted
     #     @assert orig_M != tr[:init => :num_sprite_types]
@@ -101,11 +100,11 @@ function total_update(tr)
         tr, accepted = mh(tr, select(:init => :init_sprites => i => :color => :b))
 
         #resize involution 
-        tr, accepted = mh(tr, get_random_size, (i,), size_involution)
+        tr, accepted = mh(tr, get_random_size, (i,), size_involution; stats=stats)
 
      #reshape involution 
         for _ in 1:10 #doing more of these 
-            tr, accepted = mh(tr, get_random_hi_wi, (i,), mask_involution)
+            tr, accepted = mh(tr, get_random_hi_wi, (i,), mask_involution; stats=stats)
         end 
     end 
 
@@ -113,7 +112,7 @@ function total_update(tr)
 
     #add/remove object involution 
     # orig_N = tr[:init => :N]
-    tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution)
+    tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution; stats=stats)
     # if accepted
     #     @assert orig_N != tr[:init => :N]
     #     if orig_N > tr[:init => :N]
@@ -124,12 +123,12 @@ function total_update(tr)
     # end
 
     #relayer order objects
-    tr, accepted = mh(tr, get_layer_swap, (), layer_involution)
+    tr, accepted = mh(tr, get_layer_swap, (), layer_involution; stats=stats)
 
     for i=1:tr[:init => :N]
         #shift objects involution 
 
-        tr, accepted = mh(tr, dd_get_drift, (i, heatmap,), dd_shift_involution) 
+        tr, accepted = mh(tr, dd_get_drift, (i, heatmap,), dd_shift_involution; stats=stats) 
 
         #resprite object involution ok. 
         tr, accepted = mh(tr, select((:init => :init_objs => i => :sprite_index)))
@@ -164,14 +163,10 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
         table[i*2,1] = "Particle $i"
     end
 
-    # stats = [Stats() for _ in 1:num_particles]
-    # Gen.track_inf = Dict()
-    # Gen.track_total = Dict()
-    Gen.tracker = Dict()
-    # Gen.curr_trace = 0
-    Gen.thread_infos = []
+    all_stats = [Dict{Symbol, Gen.MHStats}() for _ in 1:num_particles]
 
     println("Threads: ", Threads.nthreads())
+    @show IMG_VAR
 
     elapsed=@elapsed for i in 1:steps
         if i % step_chunk == 1 || i == steps
@@ -183,18 +178,9 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
             end
             table = hcat(table, col)
         end
-        Threads.@threads :static for j in 1:num_particles
-            Gen.get_thread_info().curr_trace = j
-            traces[j] = total_update(traces[j])
-            # N = traces[j][:init => :N]
-            # M = traces[j][:init => :num_sprite_types]
-            # sprite_area = sum([traces[j][:init => :init_sprites => k => :width] * traces[j][:init => :init_sprites => k => :height] for k in 1:M],init=0)
-            # @show N
-            # @show M
-            # @show sprite_area
 
-            # @show length(traces[j][:init => :init_objs])
-            # @show length(traces[j][:init => :init_sprites])
+        Threads.@threads for j in 1:num_particles
+            traces[j] = total_update(traces[j], all_stats[j])
         end
     end
 
@@ -205,53 +191,53 @@ function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=100
 
     #TODO MAKE 2 other tables so this isn't uglyy 
 
-    othertable = fill("", num_particles + 1, 8)
+    othertable = fill("", num_particles + 1, 6)
 
-    tracenum = 0
 
-    for tr in traces 
-        tracenum += 1 
-        # @show tr[:init => :init_objs]
-        # @show tr[:init => :init_sprites]
-        # @show H, W
-        #@show obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W)
-        #@show color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))
-        
+    for (i,tr) in enumerate(traces)
+
         bboxes = html_img(draw_bboxes(render_trace_frame(tr, 0), tr[:init => :init_objs], tr[:init => :init_sprites], 1, H, 1, W))
-
-        objcoloring = html_img(color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
-        spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
-        heatmap = render_heatmap(logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1))
+        # objcoloring = html_img(color_labels(obj_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
+        # spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_objs], tr[:init => :init_sprites], H, W))[1])
+        # heatmap = render_heatmap(logpdfmap(ImageLikelihood(), tr[:init => :observed_image], render_trace_frame(tr, 0), 0.1))
         diff = html_img(img_diff(tr[:init => :observed_image], render_trace_frame(tr, 0)))
+
+        colors = get_colors(length(tr[:init => :init_sprites]))
+
+        sprite_imgs = map(enumerate(tr[:init => :init_sprites])) do (i,sprite)
+            ystop,xstop = size(sprite.mask)
+            canvas = zeros(Float64, C, ystop, W) # make canvas at full screen width because we scale our rendered html images based on width
+            canvas[:, :, xstop + 1:end] .= 1. # set the righthand side of the image to all white
+            # fill in actual sprite
+            canvas[:, 1:ystop, 1:xstop] .= ifelse.(reshape(sprite.mask, 1, size(sprite.mask)...), sprite.color, [0.,0.,0.])
+
+            # add an alpha blended border
+            alpha = 0.5
+            canvas[:, 1:ystop, 1] .= alpha_blend.(colors[i], canvas[:, 1:ystop, 1], alpha)
+            xstop != 1 && (canvas[:, 1:ystop, xstop] .= alpha_blend.(colors[i], canvas[:, 1:ystop, xstop], alpha))
+            canvas[:, 1, 2:xstop-1] .= alpha_blend.(colors[i], canvas[:, 1, 2:xstop-1], alpha)
+            ystop != 1 && (canvas[:, ystop, 2:xstop-1] .= alpha_blend.(colors[i], canvas[:, ystop, 2:xstop-1], alpha))
+
+            img = html_img(canvas)
+            num_objs = sum([obj.sprite_index == i for obj in tr[:init => :init_objs]])
+            "$(num_objs)x$img"
+        end
         
         show_stats = ""
-        for key in sort(collect(keys(Gen.tracker)))
-            key[1] != tracenum && continue
+        for key in sort(collect(keys(all_stats[i])))
             show_stats != "" && (show_stats *= "<br>")
-            stats = Gen.tracker[key]
-            show_stats *= "$(key[2]): $(stats.accepted)/$(stats.total) [inf=$(stats.inf); nan=$(stats.nan)]"
+            stats = all_stats[i][key]
+            show_stats *= "$(key): $(stats.accepted)/$(stats.total) [inf=$(stats.inf); nan=$(stats.nan)]"
         end
 
-        othertable[tracenum + 1, :] = ["Particle $tracenum at step=$steps", html_img(render_trace_frame(tr, 0)), bboxes, objcoloring, spritecoloring, heatmap, diff, show_stats]
-
-        othertable[1, :] = ["", "Rendered", "Bounding Boxes", "Coloring by object", "Coloring by sprite", "logpdf heatmap", "(actual - rendered)", "Stats"]
-
-        #heatmap 
+        othertable[i + 1, :] = ["Particle $i at step=$steps", html_img(render_trace_frame(tr, 0)), bboxes, join(sprite_imgs,"<br>"), #=objcoloring, spritecoloring, heatmap, =# diff, show_stats]
+        othertable[1, :] = ["", "Rendered", "Bounding Boxes", "Sprites", #= "Coloring by object", "Coloring by sprite", "logpdf heatmap", =# "(actual - rendered)", "Stats"]
 
     end 
-
-
-    # statstable = fill("", num_particles + 1, 7)
     
     html_body(html_table(othertable))
     html_body(html_table(table))
     html_body(time_str)
-
-    # for (k,total) in Gen.track_total
-    #     infs = Gen.track_inf[k]
-    #     html_body("<br>-inf for $k: $infs/$total")
-    # end
-
 
 end 
 
@@ -540,7 +526,7 @@ of the current position
 
             drawn_moved_obj = draw_region(objects_one_moved, prev_sprites, relevant_box_min_y, relevant_box_max_y, relevant_box_min_x, relevant_box_max_x) 
             #is it likely
-            score = Gen.logpdf(image_likelihood, observed_image[:, relevant_box_min_y:relevant_box_max_y, relevant_box_min_x:relevant_box_max_x], drawn_moved_obj, 0.1)#can I hardcode that
+            score = Gen.logpdf(image_likelihood, observed_image[:, relevant_box_min_y:relevant_box_max_y, relevant_box_min_x:relevant_box_max_x], drawn_moved_obj, IMG_VAR) # can I hardcode that
 
             push!(scores, score)
         end 

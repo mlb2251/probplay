@@ -261,7 +261,7 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
     new_trace_choices = choicemap()
     backward_choices = choicemap()
 
-    Gen.get_thread_info().mode_stack[end] = if add_remove_random[:add_or_remove]; :add else :remove end
+    # Gen.get_thread_info().mode_stack[end] = if add_remove_random[:add_or_remove]; :add else :remove end
 
     if add_remove_random[:add_or_remove]
         #add the new sprite , when we add the ability to add a middle sprite, make sure to deal with the cascade 
@@ -482,16 +482,17 @@ function size_involution(tr, mask_stuff, forward_retval, proposal_args)
     new_trace_choices = choicemap()
     backward_choices = choicemap()	
 
-    function changedim(old, change, grow_or_shrink)
-        if grow_or_shrink == 1
-            return old + change
-        else
-            return old - change
-        end
+    newh = if mask_stuff[:hgrow_or_shrink]
+        h + mask_stuff[:hchange]
+    else
+        h - mask_stuff[:hchange]
     end
 
-    newh = changedim(h, mask_stuff[:hchange], mask_stuff[:hgrow_or_shrink])	
-    neww = changedim(w, mask_stuff[:wchange], mask_stuff[:wgrow_or_shrink])
+    neww = if mask_stuff[:wgrow_or_shrink]
+        w + mask_stuff[:wchange]
+    else
+        w - mask_stuff[:wchange]
+    end
 
     backward_choices[:hchange], backward_choices[:wchange] = mask_stuff[:hchange], mask_stuff[:wchange]
     backward_choices[:hgrow_or_shrink], backward_choices[:wgrow_or_shrink] = !mask_stuff[:hgrow_or_shrink], !mask_stuff[:wgrow_or_shrink]
@@ -753,8 +754,7 @@ function add_remove_involution(tr, add_remove_stuff, forward_retval, proposal_ar
     N = tr[:init => :N]
     backward_choices[:add_or_remove] = !add_remove_stuff[:add_or_remove]
     
-    # Gen.mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else Symbol(:remove,add_remove_stuff[:remove_obj_index]) end
-    Gen.get_thread_info().mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else :remove end
+    # Gen.get_thread_info().mode_stack[end] = if add_remove_stuff[:add_or_remove]; :add else :remove end
 
     if add_remove_stuff[:add_or_remove]
         #add

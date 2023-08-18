@@ -174,6 +174,10 @@ function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas 
 end
 
+function alpha_blend(front, back, alpha)
+    front .* alpha .+ back .* (1-alpha)
+end
+
 function draw_bboxes(canvas, objs, sprites, ymin, ymax, xmin, xmax)
 
     colors = get_colors(length(sprites))
@@ -190,11 +194,13 @@ function draw_bboxes(canvas, objs, sprites, ymin, ymax, xmin, xmax)
         starti, startj, stopi, stopj = get_bounds(obj, sprite_type, ymin, ymax, xmin, xmax)
         # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
         target = @views canvas[:, obj.pos.y+starti-ymin : obj.pos.y+stopi-ymin , obj.pos.x+startj-xmin : obj.pos.x+stopj-xmin]
+
+        alpha = 0.5
         # add box
-        target[:, 1, :] .= colors[sprite_index]
-        target[:, end, :] .= colors[sprite_index]
-        target[:, :, 1] .= colors[sprite_index]
-        target[:, :, end] .= colors[sprite_index]
+        target[:, 1, :] .= alpha_blend.(colors[sprite_index], target[:, 1, :], alpha)
+        target[:, end, :] .= alpha_blend.(colors[sprite_index], target[:, end, :], alpha)
+        target[:, 2:end-1, 1] .= alpha_blend.(colors[sprite_index], target[:, 2:end-1, 1], alpha)
+        target[:, 2:end-1, end] .= alpha_blend.(colors[sprite_index], target[:, 2:end-1, end], alpha)
     end
     canvas 
 end
@@ -229,12 +235,6 @@ function draw(H, W, objs, sprites)
 end
 
 
-function sim(T)
-    (trace, _) = generate(model, (100, 100, T))
-    return trace
-end
-
-
 # module Model
 # using Gen
 # import ..Position, ..Sprite, ..Object, ..draw, ..image_likelihood, ..bernoulli_2d, ..rgb_dist, ..uniform_position, ..uniform_drift_position
@@ -259,13 +259,7 @@ end
     return State(objs, sprites)
 end
 
-
-# @gen (static) function d
-
-
 unfold_step = Unfold(dynamics_and_render)
-
-
  
 @gen (static) function make_object(i, H, W, num_sprite_types)    
     sprite_index ~ uniform_discrete(1, num_sprite_types) 
@@ -294,12 +288,6 @@ end
 make_objects = Map(make_object)
 make_sprites = Map(make_type)
 
-# #testing
-# testobjs = make_objects(collect(1:5), [10 for _ in 1:5], [20 for _ in 1:5])
-# #@show testobjs
-# testsprites = make_sprites(collect(1:4), [10 for _ in 1:4], [20 for _ in 1:4])
-# #@show testsprites
-
 @dist poisson_plus_1(lambda) = (poisson(lambda) + 1)
 
 @gen (static) function init_model(H,W,var)
@@ -308,21 +296,17 @@ make_sprites = Map(make_type)
     sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprite_types), [H for _ in 1:num_sprite_types], [W for _ in 1:num_sprite_types]) 
     objs = {:init_objs} ~  make_objects(collect(1:N), [H for _ in 1:N], [W for _ in 1:N], [num_sprite_types for _ in 1:N])
 
-    #rendered = draw(H, W, objs, sprites)
     rendered = draw_region(objs, sprites, 1, H, 1, W)
     {:observed_image} ~ image_likelihood(rendered, var)
 
     return State(objs, sprites) 
 end
 
-# #testing
-# testinitmodel = init_model(10, 20, 0.1)
-# #@show testinitmodel
-
+const IMG_VAR = 0.1
 
 @gen (static) function model(H, W, T) 
 
-    var = .1
+    var = IMG_VAR
     init_state = {:init} ~ init_model(H,W,var)
     #@show init_state
     state = {:steps} ~ unfold_step(T-1, init_state, H, W, var)

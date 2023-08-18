@@ -78,6 +78,64 @@ function img_diff_sum(img1, img2)
 end
 
 
+function render_heatmap(heatmap)
+    (H, W) = size(heatmap)
+
+
+    max = maximum(heatmap)
+    min = minimum(heatmap)
+    #@show min, max
+    #@show heatmap
+
+    #@show heatmap[10, :]
+    normalized_heatmap = (heatmap .- min) ./ (max - min)
+    #@show normalized_heatmap[10, :]
+
+    #spread_heatmap = log.(normalized_heatmap .+ 1)
+    #heatmap to power of 10
+    spread_heatmap = normalized_heatmap .^ 50
+    #spread_heatmap = e .^ normalized_heatmap
+    final_heatmap = spread_heatmap
+
+    
+    render_matrix(final_heatmap, 1)
+
+end 
+
+function get_other_colors(color)
+    if color == 1
+        return [2,3]
+    elseif color == 2
+        return [1,3]
+    elseif color == 3
+        return [1,2]
+    end
+end
+
+
+function render_matrix(m, color=2, render=false)
+    #getting between 0 and 1
+    m = (m .- minimum(m)) ./ (maximum(m) - minimum(m))
+    H, W = size(m)
+    img = zeros(3, H, W)
+    for i in 1:H
+        for j in 1:W
+
+            img[color, i, j] = 1
+            other_colors = get_other_colors(color)
+
+            img[other_colors[1], i, j] = m[i,j]
+            img[other_colors[2], i, j] = m[i,j]
+        end
+    end
+    if render
+        html_body(html_img(img))
+        render()
+    else
+        return html_img(img)
+    end 
+end 
+
 
 
 
@@ -95,6 +153,7 @@ RGB color for each integer. If the original CHW frame orig is provided, it will
 be concatenated onto to the result.
 """
 function color_labels(frames...; orig=nothing)
+    #@show frames
     max = maximum([maximum(frame) for frame in frames])
     res = []
     for frame in frames
@@ -105,6 +164,68 @@ function color_labels(frames...; orig=nothing)
     end
     res
 end
+
+"""
+get N colors evenly distributed in terms of hue
+"""
+function get_colors(N)
+    rgbs = [RGB(HSV(i/N*360, .8, .8)) for i in 1:N]
+    return [[c.r, c.g, c.b] for c in rgbs]
+end
+
+function obj_frame(objs, sprites, H, W)
+    """
+    fills a frame of each pixel which object it belongs to
+    """
+    frame = zeros(Int, H, W)
+    objnum = 0 
+    for obj in objs
+        objnum += 1 
+        sprite = sprites[obj.sprite_index]
+        # @show size(sprite.mask)
+        # print("did w emake it here")
+        for i in 1:size(sprite.mask)[1]
+            for j in 1:size(sprite.mask)[2]
+                #@show i,j
+                if sprite.mask[i,j] == 1
+                    itofill = i+obj.pos.y-1
+                    jtofill = j+obj.pos.x-1
+                    if 0 < itofill <= H && 0 < jtofill <= W
+                        frame[i+obj.pos.y-1, j+obj.pos.x-1] = objnum#be careful for off by one
+                    end
+                    
+                end 
+            end
+        end
+    end	
+    frame 
+end 
+
+function sprite_frame(objs, sprites, H, W)
+    """
+    fills a frame of each pixel which sprite ind it belongs to
+    """
+    frame = zeros(Int, H, W)
+    objnum = 0 
+    for obj in objs
+        objnum += 1 
+        sprite = sprites[obj.sprite_index]
+        for i in 1:size(sprite.mask)[1]
+            for j in 1:size(sprite.mask)[2]
+                #@show i,j
+                if sprite.mask[i,j] == 1
+                    itofill = i+obj.pos.y-1
+                    jtofill = j+obj.pos.x-1
+                    if 0 < itofill <= H && 0 < jtofill <= W
+                        frame[i+obj.pos.y-1, j+obj.pos.x-1] = obj.sprite_index#be careful for off by one
+                    end
+                    
+                end 
+            end
+        end
+    end	
+    frame 
+end 
 
 function games()
     [x for x in readdir("out/gameplay") if occursin("v5",x)]

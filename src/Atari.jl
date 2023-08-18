@@ -4,6 +4,7 @@ export html_gif, html_img, html_new, render_trace, model, particle_filter, load_
 include("model.jl")
 include("html.jl")
 include("sam.jl")
-include("inference.jl");
-
+include("inference.jl"); 
+include("involutions.jl");
+include("distributions.jl");
 end # module Atari

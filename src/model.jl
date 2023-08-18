@@ -100,6 +100,11 @@ end
 (::UniformPosition)(h, w) = random(UniformPosition(), h, w)
 
 struct UniformDriftVec <: Gen.Distribution{Vec} end
+@gen (static) function get_position(i, H, W)
+    pos ~ uniform_position(H, W)
+    return pos
+end
+allpositions = Map(get_position) #works with this not uniform pos 
 
 function Gen.random(::UniformDriftVec, pos, max_drift)
     pos + Vec(rand(-max_drift:max_drift), rand(-max_drift:max_drift))
@@ -155,6 +160,32 @@ function Gen.logpdf(::ImageLikelihood, observed_image::Array{Float64,3}, rendere
     sum(i -> - (@inbounds abs2((observed_image[i] - rendered_image[i]) / var) + log(2π)) / 2 - log_var, eachindex(observed_image))
 end
 
+function logpdfmap(::ImageLikelihood, observed_image::Array{Float64,3}, rendered_image::Array{Float64,3}, var)
+    # map of logpdf (heatmap) over each pixel, how correct it is
+    log_var = log(var)
+
+    C, H, W = size(observed_image)
+
+    heatmap = zeros(Float64, H, W)
+    #@show size(heatmap)
+    #@show observed_image[:, 10, :]
+    #@show rendered_image[:, 10, :]
+    #@show size(observed_image), size(rendered_image)
+
+    for hi in 1:H
+        for wi in 1:W
+            for ci in 1:3
+                heatmap[hi, wi] += -(@inbounds abs2((observed_image[ci, hi, wi] - rendered_image[ci, hi, wi]) / var) + log(2π)) / 2 - log_var
+                #@show heatmap[hi, wi]
+            end
+        end
+    end
+    #@show heatmap[10, :]
+    #@show heatmap
+    heatmap
+end 
+
+# @assert isapprox(Gen.logpdf(M.image_likelihood, vals, vals2, .1), Gen.logpdf(broadcasted_normal, vals - vals2, zeros(Float64,size(vals)), .1))
 
 function Gen.random(::ImageLikelihood, rendered_image, var)
     noise = rand(Distributions.Normal(0, var), size(rendered_image))
@@ -165,20 +196,38 @@ end
 const image_likelihood = ImageLikelihood()
 (::ImageLikelihood)(rendered_image, var) = random(ImageLikelihood(), rendered_image, var)
 
-struct RGBDist <: Gen.Distribution{Vector{Float64}} end
-
-function Gen.logpdf(::RGBDist, rgb)
-    0. # uniform distribution over unit cube has density 1
+function canvas(height=210, width=160)
+    zeros(Float64, 3, height, width)
 end
 
-function Gen.random(::RGBDist)
-    rand(3)
-end
+function get_bounds(sprite, x, y, ymin, ymax, xmin, xmax)
+    sprite_height, sprite_width = size(sprite.mask)
+    starti = max(1, ymin-y+1)
+    startj = max(1, xmin-x+1)	
+    stopi = min(sprite_height, ymax-y+1) 
+    stopj = min(sprite_width, xmax-x+1)
+    return starti, startj, stopi, stopj
 
-const rgb_dist = RGBDist()
+end 
 
-(::RGBDist)() = random(RGBDist())
+# function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
+#     canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
+#     for obj::Object in objs
+#         sprite_index = obj.sprite_index
+#         sprite_type = sprites[sprite_index]::Sprite
+#         sprite_height, sprite_width = size(sprite_type.mask)
 
+#         # not at all in bounds
+#         if obj.pos.y > ymax || obj.pos.x > xmax || obj.pos.y+sprite_height-1 < ymin || obj.pos.x+sprite_width-1 < xmin
+#             continue
+#         end
+        
+#         #extract this to use in involutions
+#         starti, startj, stopi, stopj = get_bounds(obj, sprite_type, ymin, ymax, xmin, xmax)
+#         # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
+        
+#         mask = @views sprite_type.mask[starti:stopi, startj:stopj]
+#         mask = reshape(mask, 1, size(mask)...)
 
 function draw_region(objs, sprites, ymin, ymax, xmin, xmax)
     canvas = zeros(Float64, 3, ymax-ymin+1, xmax-xmin+1)
@@ -188,9 +237,8 @@ end
 function draw_region(canvas, objs, sprites, ymin, ymax, xmin, xmax)
     for obj::Object in objs
         sprite_index = obj.sprite_index
-        sprite = sprites[sprite_index]
-
-        sprite_height, sprite_width = size(sprite.mask)
+        sprite = sprites[sprite_index]::Sprite
+        sprite_height,sprite_width = size(sprite.mask)
 
         x = floor(Int, obj.pos.x)
         y = floor(Int, obj.pos.y)
@@ -200,11 +248,7 @@ function draw_region(canvas, objs, sprites, ymin, ymax, xmin, xmax)
             continue
         end
         
-        # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
-        starti = max(1, ymin-y+1)
-        startj = max(1, xmin-x+1)	
-        stopi = min(sprite_height, ymax-y+1) 
-        stopj = min(sprite_width, xmax-x+1)
+        starti, startj, stopi, stopj = get_bounds(sprite, x, y, ymin, ymax, xmin, xmax)
 
         mask = @views sprite.mask[starti:stopi, startj:stopj]
         mask = reshape(mask, 1, size(mask)...)
@@ -213,10 +257,46 @@ function draw_region(canvas, objs, sprites, ymin, ymax, xmin, xmax)
         target .= ifelse.(mask, sprite.color, target)
     end
     canvas 
-end 
+end
 
 draw(H, W, objs, sprites) = draw_region(objs, sprites, 1, H, 1, W)
 draw(canvas, objs, sprites) = draw_region(canvas, objs, sprites, 1, size(canvas,2), 1, size(canvas,3))
+
+
+function alpha_blend(front, back, alpha)
+    front .* alpha .+ back .* (1-alpha)
+end
+
+function draw_bboxes(canvas, objs, sprites, ymin, ymax, xmin, xmax)
+
+    colors = get_colors(length(sprites))
+    for obj::Object in objs
+        sprite_index = obj.sprite_index
+        sprite = sprites[sprite_index]::Sprite
+        sprite_height,sprite_width = size(sprite.mask)
+        
+        x = floor(Int, obj.pos.x)
+        y = floor(Int, obj.pos.y)
+
+        # not at all in bounds
+        if y > ymax || x > xmax || y+sprite_height-1 < ymin || x+sprite_width-1 < xmin
+            continue
+        end
+        
+        starti, startj, stopi, stopj = get_bounds(sprite, x, y, ymin, ymax, xmin, xmax)
+        # starts where the object starts in the section, 1 if starts mid section and later if starts before the section 
+        target = @views canvas[:, y+starti-ymin : y+stopi-ymin , x+startj-xmin : x+stopj-xmin]
+        
+        alpha = 0.5
+        # add box
+        target[:, 1, :] .= alpha_blend.(colors[sprite_index], target[:, 1, :], alpha)
+        target[:, end, :] .= alpha_blend.(colors[sprite_index], target[:, end, :], alpha)
+        target[:, 2:end-1, 1] .= alpha_blend.(colors[sprite_index], target[:, 2:end-1, 1], alpha)
+        target[:, 2:end-1, end] .= alpha_blend.(colors[sprite_index], target[:, 2:end-1, end], alpha)
+    end
+    canvas 
+end
+
 
 
 
@@ -279,22 +359,25 @@ make_attrs = Map(make_attr)
     return Object(sprite_index, pos, attrs)
 end
 
+@gen #=(static)=# function rgb_dist()
+    r ~ uniform(0,1)
+    g ~ uniform(0,1)
+    b ~ uniform(0,1)
+    return [r,g,b]
+end
+
 @gen function make_type(i, H, W) 
     width ~ uniform_discrete(1,W)
     height ~ uniform_discrete(1,H)
-    shape ~ bernoulli_2d(0.5, height, width)
+    mask ~ bernoulli_2d(0.8, height, width)
     color ~ rgb_dist()
-    return Sprite(shape, color)
+    return Sprite(mask, color)
 end
 
 make_objects = Map(make_object)
 make_sprites = Map(make_type)
 
-# #testing
-# testobjs = make_objects(collect(1:5), [10 for _ in 1:5], [20 for _ in 1:5])
-# #@show testobjs
-# testsprites = make_sprites(collect(1:4), [10 for _ in 1:4], [20 for _ in 1:4])
-# #@show testsprites
+@dist poisson_plus_1(lambda) = (poisson(lambda) + 1)
 
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
@@ -352,11 +435,12 @@ end
 # #testing
 # testinitmodel = init_model(10, 20, 0.1)
 # #@show testinitmodel
+const IMG_VAR = 0.1
 
-#  (static)
-@gen (static) function model(H, W, T) 
+#  #=(static)=#
+@gen #=(static)=# function model(H, W, T) 
 
-    var = .1
+    var = IMG_VAR
     env = {:init} ~ init_model(H,W,var)
     #@show init_state
     {:steps} ~ unfold_step(T-1, env.state, env, H, W, var)

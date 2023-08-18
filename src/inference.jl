@@ -306,9 +306,9 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 
                 #@show tr
                # @show tr[:init => :init_state => :init_objs => obj_id => :vel]
-                if obj_id == 3
-                    @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
-                end 
+                # if obj_id == 3
+                #     @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
+                # end 
                 tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
 
@@ -321,7 +321,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 end
             end 
             state.traces[i] = tr
-            @show tr
+            # @show tr
         end 
 
        
@@ -499,7 +499,7 @@ show_forward_proposals :: Bool = false
         
     end
 
-    @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
+    # @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
 
     if show_forward_proposals
         res = draw(H, W, curr_env.state.objs, curr_env.sprites)

@@ -359,8 +359,11 @@ end
         @assert 0 < id <= length(env.types)
         TypeRef(id)
     elseif head === :vec
+        @show e
         y ~ exec(e.children[2], env, :y)
         x ~ exec(e.children[3], env, :x)
+        @show y,x
+        @show Vec(y,x)
         Vec(y,x)
     elseif head === :+
         a ~ exec(e.children[2], env, :a)

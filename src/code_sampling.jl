@@ -25,91 +25,120 @@ funcs = [
     Primitive(:normal, 2, [Float64, Float64], Float64),
     #bernoulli 
 ]
-# #arities = [2, 2, 2]
-# func_probs = [1/length(funcs) for _ in funcs]
-# #@dist choose_func_ind() = categorical(func_probs)
-# @dist choose_func(output_type) = funcs[categorical(func_probs)]
+
+leafs = [
+    LeafType(Float64, Gen.normal, [0, 1]),
+    LeafType(Int64, Gen.uniform_discrete, [0, 10]),
+]
 
 
 #SAMPLING FUNCTIONS DISTRIBUTION 
-struct Func_with_output <: Gen.Distribution{Primitive} end 
-const func_with_output = Func_with_output()
-(::Func_with_output)(output_type) = random(func_with_output, output_type)
+struct Get_with_output <: Gen.Distribution{Union{Primitive, LeafType}} end 
 
-function Gen.random(::Func_with_output, output_type)
-    possible_funcs = Primitive[]
-    if output_type === nothing
-        possible_funcs = funcs
-    else 
-        for func in funcs
-            if func.output_type == output_type
-                push!(possible_funcs, func)
-            end 
-        end
+function Gen.random(::Get_with_output, output_type, must_be_leaf)
+    """samples random function or leaftype with requirements"""
+    possible_things = []
+
+    #adding possible leafs 
+    for leaf in leafs
+        if (output_type === nothing || leaf.type == output_type)
+            push!(possible_things, leaf)
+        end 
     end
-    if length(possible_funcs) == 0
+
+    #adding funcs if not must_be_leaf
+    if !must_be_leaf
+        for func in funcs
+            if (output_type === nothing || func.output_type == output_type)
+                push!(possible_things, func)
+            end 
+        end 
+    end
+
+    if length(possible_things) == 0
         return error("No functions with output type $output_type")
     end 
 
-    return possible_funcs[uniform_discrete(1, length(possible_funcs))]
+    return possible_things[uniform_discrete(1, length(possible_things))]
     #possible_funcs[categorical([1/length(possible_funcs) for _ in 1:length(possible_funcs)])]#could weight this
 end 
 
-function get_num_funcs_with_output(output)
-    num_funcs = 0
-    for func in funcs
-        if func.output_type == output
-            num_funcs += 1
+function get_num_things_with_output(output, must_be_leaf)
+    """helper for log pdf
+    counts number of funcs and leaftypes that have the requirements
+    might be redundant with above function wasting time """
+    num_things = 0
+
+    #counting possible leafs
+    for leaf in leafs
+        if (output === nothing || leaf.type == output)
+            num_things += 1
         end 
-    end 
-    return num_funcs
+    end
+
+    #counting possible funcs
+    if !must_be_leaf
+        for func in funcs
+            if (output === nothing || func.output_type == output)
+                num_things += 1
+            end 
+        end 
+    end
+
+
+    return num_things
 end
 
-function Gen.logpdf(::Func_with_output, func, output_type)
-    if output_type === nothing
-        return log(1/length(funcs))
-    else
-        if func.output_type != output_type
-            return 0.0
-        else
-            return log(1/get_num_funcs_with_output(output_type))#could weight 
-        end 
-    end 
+function Gen.logpdf(::Get_with_output, thing, output_type, must_be_leaf)
+    """likeliness"""
+    if func.output_type != output_type
+        return -Inf
+    elseif typeof(thing) == Primitive && must_be_leaf
+        return -Inf
+    else 
+        return log(1/get_num_things_with_output(output_type, must_be_leaf))
+    end
+
 end
+
+const get_with_output = Get_with_output()
+(::Get_with_output)(output_type, must_be_leaf) = random(Get_with_output(), output_type, must_be_leaf)
+
+
 
 
 #CODE SAMPLING 
 @gen function code_prior(depth, output_type=nothing, parent=nothing)
     depthp1 = depth + 1
-    if depthp1 > 3 || output_type == Int64
-        is_leaf = true
-    else
-        is_leaf ~ choose_is_leaf()
+    if depthp1 > 3 
+        must_be_leaf = true
+    else 
+        must_be_leaf = false
     end
 
-    if is_leaf
-        leaf ~ uniform_discrete(0, 2) #can do better here
-        #ENFORCE OUTPUT TYPE 
-        
-        return sexpr_leaf(leaf; parent) #might pass parent or not
-    else
-        #NOTE parent pointer will be dealt with in sexpr_node(...)
-        func ~ func_with_output(output_type)
+    thing ~ get_with_output(output_type, must_be_leaf)
+
+    if typeof(thing) == LeafType
+        leaf ~ thing.distribution(thing.dist_args...)
+        return sexpr_leaf(leaf; parent)
+    else #is type primitive 
+        func = thing
         num_children = func.arity
         #vector of SExprs
         child_vec = SExpr[]
         #doing the first symbol (the function symbol)
         sexpr = sexpr_leaf(func)
         push!(child_vec, sexpr)
-
         #arguments 
         for child_ind in 1:num_children
             sexpr = {(:sexpr, child_ind)} ~ code_prior(depthp1, func.input_type[child_ind]) 
             push!(child_vec, sexpr)
         end 
         return sexpr_node(child_vec; parent)
+
     end 
 end 
+    
 
 
 

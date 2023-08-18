@@ -1,6 +1,6 @@
 
 using Gen
-export exec, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
+export exec, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
 """
 
 Types: Float, Int, Bool
@@ -43,6 +43,12 @@ struct Primitive
     input_type::Union{Type, Vector{DataType}} 
     output_type::Type
 end
+
+struct LeafType
+    type::Type
+    distribution::Any #fix this, but Distribution breaks it 
+    dist_args::Vector{Any}
+end 
 
 function sexpr_node(children::Vector{SExpr}; parent=nothing)
     """outputs a node s expression"""

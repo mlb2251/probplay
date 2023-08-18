@@ -1,24 +1,26 @@
 using Gen 
 import Distributions
-#export code_prior
+export code_prior
 #inspired by Gen Tutorial: https://www.gen.dev/tutorials/rj/tutorial
 
 
-is_leaf_states = [true, false]
-is_leaf_probs = [0.5, 0.5]
-@dist choose_is_leaf() = is_leaf_states[categorical(is_leaf_probs)]
+# is_leaf_states = [true, false]
+# is_leaf_probs = [0.5, 0.5]
+# @dist choose_is_leaf() = is_leaf_states[categorical(is_leaf_probs)]
 
-#funcs = [+, Symbol("normal"), Symbol("vec")]#not sure if strings here is teh best 
+symbols = [Symbol("pos")]
+@dist choose_symbol() = symbols[categorical([1/length(symbols) for i in 1:length(symbols)])]
+
 funcs = [
-    Primitive(:spawn, 3, [TyRef, Sprite, Vec], Nothing),#boolean is placeholder for idk
+    #spawn Primitive(:spawn, 3, [TyRef, Sprite, Vec], Nothing),#boolean is placeholder for idk
     #despawn todo
     #ty todo what even is this 
-    Primitive(:vec, 2, [Float64, Float64], Float64), 
+    Primitive(:vec, 2, [Float64, Float64], Vec), 
     Primitive(:+ , 2, [Float64, Float64], Float64), 
-    #get_local
+    Primitive(:get_local, 1, [Int64], Object),
     #set_local
-    Primitive(:get_attr, 2, [Int64, Int64], Float64),#not sure about that one 
-    #set_attr
+    Primitive(:get_attr, 2, [Object, Symbol], Float64), #todo make more general
+    Primitive(:set_attr, 3, [Object, Symbol, Vec], Yay), #todo make more general 
     #isnull why would that ever happen 
     #null why ever 
     #normal vec 
@@ -27,8 +29,10 @@ funcs = [
 ]
 
 leafs = [
-    LeafType(Float64, Gen.normal, [0, 1]),
-    LeafType(Int64, Gen.uniform_discrete, [0, 10]),
+    #LeafType(Float64, Gen.normal, [0, 1]),
+    LeafType(Float64, Gen.poisson, [1]), #todo make more general
+    LeafType(Int64, Gen.uniform_discrete, [1, 1]),
+    LeafType(Symbol, choose_symbol, []),
 ]
 
 
@@ -56,7 +60,11 @@ function Gen.random(::Get_with_output, output_type, must_be_leaf)
     end
 
     if length(possible_things) == 0
-        return error("No functions with output type $output_type")
+        if must_be_leaf
+            return error("No leafs with type $output_type")
+        else
+            return error("No functions with output type $output_type")
+        end 
     end 
 
     return possible_things[uniform_discrete(1, length(possible_things))]
@@ -91,9 +99,10 @@ end
 
 function Gen.logpdf(::Get_with_output, thing, output_type, must_be_leaf)
     """likeliness"""
-    if func.output_type != output_type
+
+    if typeof(thing) == LeafType && thing.type != output_type
         return -Inf
-    elseif typeof(thing) == Primitive && must_be_leaf
+    elseif typeof(thing) == Primitive && (must_be_leaf || thing.output_type != output_type)
         return -Inf
     else 
         return log(1/get_num_things_with_output(output_type, must_be_leaf))
@@ -109,8 +118,9 @@ const get_with_output = Get_with_output()
 
 #CODE SAMPLING 
 @gen function code_prior(depth, output_type=nothing, parent=nothing)
+    """samples code recursively!"""
     depthp1 = depth + 1
-    if depthp1 > 3 
+    if depthp1 > 5
         must_be_leaf = true
     else 
         must_be_leaf = false
@@ -141,12 +151,11 @@ end
     
 
 
-
-
 function run_cp(n=1)
     for _ in 1:n
         try
-            println(code_prior(0))
+            code = code_prior(0)
+            println(code)
         catch e
             println(e)
         end

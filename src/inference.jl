@@ -309,8 +309,12 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 if obj_id == 3
                     @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
                 end 
-                tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
+
+                # #uncomment this 
+                # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
+                tr, accept = mh(tr, select(:init => :sampled_code))
+                #tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
 
                 #doing a shifting involution on each attribute 
                 for attr_id in 1:1 #just velocity for now 
@@ -321,9 +325,9 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 end
             end 
             state.traces[i] = tr
-            @show tr
+           
         end 
-
+        @show state.traces[1]
        
 
         #render 

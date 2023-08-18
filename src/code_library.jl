@@ -40,7 +40,7 @@ struct Primitive
     name::Symbol
     arity::Int64
     #either a type of a list of types of length arity 
-    input_type::Union{Type, Vector{DataType}} 
+    input_type::Union{Vector{DataType}} 
     output_type::Type
 end
 
@@ -87,6 +87,30 @@ Base.size(e::SExpr) = if e.is_leaf 1. else sum(size, e.children, init=0.) end
 num_nodes(e::SExpr) = 1 + sum(num_nodes, e.children, init=0)
 
 
+
+Base.string(e::SExpr) = begin
+    string_toret = ""
+    if e.is_leaf
+        if typeof(e.leaf) == Primitive
+            string_toret = string_toret * string(e.leaf.name)
+        else 
+            string_toret = string_toret * string(e.leaf)
+        end 
+        
+        @assert isempty(e.children)
+    else
+        string_toret = string_toret * "("
+        
+        for child in e.children
+            #@show child, typeof(child)
+            string_toret = string_toret * string(child)
+            string_toret = string_toret * " "
+        end
+        string_toret = string_toret * ")"
+        # print(io, "(", join(e.children, " "), ")")
+    end
+    return string_toret
+end
 
 
 Base.show(io::IO, e::SExpr) = begin    

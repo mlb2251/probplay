@@ -4,6 +4,7 @@ export html_gif, code_prior, html_img, html_new, render_trace, model, particle_f
 include("model.jl")
 include("html.jl")
 include("sam.jl")
+include("involutions.jl")
 include("inference.jl");
 include("code_sampling.jl")
 

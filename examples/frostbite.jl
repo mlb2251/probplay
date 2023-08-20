@@ -193,8 +193,8 @@ function particle_small()
     print("TESTjfkaldsjakljfkla;dsjfkl;sjfkl;s")
 end
 
-function particle_tiny(T=4)
-    @time particle_filter(1, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=20)[:,:,:,1:T], 2);
+function particle_tiny(T=4, particles=1)
+    @time particle_filter(particles, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=20)[:,:,:,1:T], 2);
 end
 
 function gen_tiny()

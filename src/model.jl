@@ -363,14 +363,14 @@ make_attrs = Map(make_attr)
     return Object(sprite_index, pos, attrs)
 end
 
-@gen #=(static)=# function rgb_dist()
+@gen (static) function rgb_dist()
     r ~ uniform(0,1)
     g ~ uniform(0,1)
     b ~ uniform(0,1)
     return [r,g,b]
 end
 
-@gen function make_type(i, H, W) 
+@gen (static) function make_type(i, H, W) 
     width ~ uniform_discrete(1,W)
     height ~ uniform_discrete(1,H)
     mask ~ bernoulli_2d(0.8, height, width)
@@ -448,7 +448,7 @@ end
 const IMG_VAR = 0.1
 
 #  #=(static)=#
-@gen #=(static)=# function model(H, W, T) 
+@gen (static) function model(H, W, T) 
 
     var = IMG_VAR
     env = {:init} ~ init_model(H,W,var)

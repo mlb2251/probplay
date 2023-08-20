@@ -72,7 +72,7 @@ function total_update(tr, stats)
     #add/remove sprite 
     # orig_M = tr[:init => :num_sprites]
     for _ in 1:1
-        tr, accepted = mh(tr, add_remove_sprite_random, (), add_remove_sprite_involution; stats=stats)
+        tr, accepted = Gen.mh_tracked(tr, add_remove_sprite_random, (), add_remove_sprite_involution; stats=stats)
     end
     # if accepted
     #     @assert orig_M != tr[:init => :num_sprites]
@@ -101,11 +101,11 @@ function total_update(tr, stats)
         tr, accepted = mh(tr, select(:init => :init_sprites => i => :color => :b))
 
         #resize involution 
-        tr, accepted = mh(tr, get_random_size, (i,), size_involution; stats=stats)
+        tr, accepted = Gen.mh_tracked(tr, get_random_size, (i,), size_involution; stats=stats)
 
      #reshape involution 
         for _ in 1:10 #doing more of these 
-            tr, accepted = mh(tr, get_random_hi_wi, (i,), mask_involution; stats=stats)
+            tr, accepted = Gen.mh_tracked(tr, get_random_hi_wi, (i,), mask_involution; stats=stats)
         end 
     end 
 
@@ -113,7 +113,7 @@ function total_update(tr, stats)
 
     #add/remove object involution 
     # orig_N = tr[:init => :init_state => :N]
-    tr, accepted = mh(tr, get_add_remove_object, (), add_remove_involution; stats=stats)
+    tr, accepted = Gen.mh_tracked(tr, get_add_remove_object, (), add_remove_involution; stats=stats)
     # if accepted
     #     @assert orig_N != tr[:init => :init_state => :N]
     #     if orig_N > tr[:init => :init_state => :N]
@@ -124,12 +124,12 @@ function total_update(tr, stats)
     # end
 
     #relayer order objects
-    tr, accepted = mh(tr, get_layer_swap, (), layer_involution; stats=stats)
+    tr, accepted = Gen.mh_tracked(tr, get_layer_swap, (), layer_involution; stats=stats)
 
     for i=1:tr[:init => :init_state => :N]
         #shift objects involution 
 
-        tr, accepted = mh(tr, dd_get_drift, (i, heatmap,), dd_shift_involution; stats=stats) 
+        tr, accepted = Gen.mh_tracked(tr, dd_get_drift, (i, heatmap,), dd_shift_involution; stats=stats) 
 
         #resprite object involution ok. 
         tr, accepted = mh(tr, select((:init => :init_state => :init_objs => i => :sprite_index)))
@@ -139,25 +139,26 @@ function total_update(tr, stats)
 end 
 
 
-function process_first_frame_v2(frame, threshold=.05; num_particles=8, steps=1000, step_chunk=50)
+function mh_first_frame(traces; steps=1000, step_chunk=50)
     #run update detect a bunch TODO 
     #@show num_particles, steps, step_chunk
-    (C, H, W) = size(frame)
+    (H,W,T) = get_args(traces[1])
+    num_particles = length(traces)
 
     #something like this but edit
-    init_obs = choicemap(
-        (:init => :observed_image, frame),
+    # init_obs = choicemap(
+        # (:init => :observed_image, frame),
         
         #have perfect build init obs here for everything else and one by one delete 
         #(:init => :init_state => :N, length(objs)),
         #(:init => :num_sprites, length(sprites)),
-    )
+    # )
 
     # (cluster, objs, sprites) = process_first_frame(frame)
     # init_obs = build_init_obs(H,W, sprites, objs, frame)
 
 
-    traces = [generate(model, (H, W, 1), init_obs)[1] for _ in 1:num_particles]
+    # traces = [generate(model, (H, W, 1), init_obs)[1] for _ in 1:num_particles]
 
     render_table = fill("", num_particles*2, 1)
     for i in 1:num_particles
@@ -508,15 +509,19 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
 
     # construct initial observations
     (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
-
     init_obs = build_init_obs(H,W, sprites, objs, observed_images[:,:,:,1])
+
+    init_obs = choicemap((:init => :observed_image, observed_images[:,:,:,1]))
 
     #new version 
 
-    # init_obs = process_first_frame_v2(observed_images[:,:,:,1])
+    # init_obs = process_first_frame_v2(observed_images[:,:,:,1]; num_particles=num_particles, steps=1000, step_chunk=50)
 
 
     state = pf_initialize(model, (H,W,1), init_obs, num_particles)
+
+    mh_first_frame(state.traces; steps=600)
+
 
     # @show get_choices(state.traces[1])
 
@@ -550,7 +555,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         
         for i in 1:num_particles
             tr = state.traces[i]
-            for obj_id in 1:length(objs)
+            for obj_id in 1:length(env_of_trace(tr).state.objs)
                 
                 #@show tr
                # @show tr[:init => :init_state => :init_objs => obj_id => :vel]

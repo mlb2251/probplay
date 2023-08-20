@@ -392,11 +392,13 @@ make_sprites = Map(make_type)
 
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
 
-    sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
-    @show sampled_code 
+    # sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
+    # @show sampled_code 
 
     env.code_library = [
-        CFunc(parse(SExpr, string(sampled_code))),
+        # CFunc(parse(SExpr, string(sampled_code))),
+
+
         # move with local latent velocity
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
 
@@ -419,7 +421,7 @@ make_sprites = Map(make_type)
 
         #goal get one const velocity func where velocity is a learned latent var pretty lit
         #add a list of attributes it needs
-        ###CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
     ]
 
     #env.code_lib_reqs = [[], [1]] #addr 1 needed for the velocity code version 

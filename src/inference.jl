@@ -554,20 +554,20 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 
                 #@show tr
                # @show tr[:init => :init_state => :init_objs => obj_id => :vel]
-                if obj_id == 3
-                    @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
-                end 
+                # if obj_id == 3
+                #     @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
+                # end 
 
                 # #uncomment this 
-                # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
+                tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
-                tr, accept = mh(tr, select(:init => :sampled_code))
+                # tr, accept = mh(tr, select(:init => :sampled_code))
                 #tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
 
                 #doing a shifting involution on each attribute 
                 for attr_id in 1:1 #just velocity for now 
                     attr_address = (:init => :init_state => :init_objs => obj_id => :attrs => attr_id => :attr)
-                    for _ in 1:10
+                    for _ in 1:100
                         tr, accept = mh(tr, variable_shift_randomness, (attr_address,), variable_shift_involution)
                     end 
                 end
@@ -575,7 +575,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             state.traces[i] = tr
            
         end 
-        @show state.traces[1]
+        # @show state.traces[1]
        
 
         #render 

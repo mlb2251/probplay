@@ -42,9 +42,6 @@ function inbounds_vec(v,H,W)
     Vec(min(max(1, v.y), H+1-EPSILON), min(max(1, v.x), W+1-EPSILON))
 end
 
-struct Yay
-end 
-
 struct Sprite
     mask::Matrix{Bool}
     color::Vector{Float64}
@@ -302,18 +299,37 @@ make_sprites = Map(make_type)
 
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
+
+
 @gen function init_model(H,W,var)
     num_sprites ~ poisson_plus_1(4)
     env = new_env();
     
-
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
+    sampled_code = nothing 
+    cfunc = nothing
+    for codetry in 1:10
+        #@show codetry
+        try
+            sampled_code = {(:sampled_code, codetry)} ~ code_prior(0, Yay) #idk what to do here 
+            cfunc = CFunc(parse(SExpr, string(sampled_code)))
+            #@show sampled_code 
+            break 
+        catch e
+            @show "code sampling failed on try $(codetry) with error $(e)"
+            
+        end
+    end 
 
-    sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
-    @show sampled_code 
+
+    if cfunc == nothing 
+        error("code sampling failed")
+    end
+    @show sampled_code
+    @show cfunc
 
     env.code_library = [
-        CFunc(parse(SExpr, string(sampled_code))),
+        cfunc,
         # move with local latent velocity
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
 

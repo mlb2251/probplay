@@ -1,6 +1,6 @@
 
 using Gen
-export exec, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
+export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
 """
 
 Types: Float, Int, Bool
@@ -49,6 +49,10 @@ struct LeafType
     distribution::Any #fix this, but Distribution breaks it 
     dist_args::Vector{Any}
 end 
+
+struct Yay
+end 
+
 
 function sexpr_node(children::Vector{SExpr}; parent=nothing)
     """outputs a node s expression"""
@@ -359,11 +363,11 @@ end
         @assert 0 < id <= length(env.types)
         TypeRef(id)
     elseif head === :vec
-        @show e
+        #@show e
         y ~ exec(e.children[2], env, :y)
         x ~ exec(e.children[3], env, :x)
-        @show y,x
-        @show Vec(y,x)
+        #@show y,x
+        #@show Vec(y,x)
         Vec(y,x)
     elseif head === :+
         a ~ exec(e.children[2], env, :a)

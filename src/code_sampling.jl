@@ -1,6 +1,6 @@
 using Gen 
 import Distributions
-export code_prior
+export code_prior, run_cp
 #inspired by Gen Tutorial: https://www.gen.dev/tutorials/rj/tutorial
 
 
@@ -17,9 +17,11 @@ funcs = [
     #ty todo what even is this 
     Primitive(:vec, 2, [Float64, Float64], Vec), 
     Primitive(:+ , 2, [Float64, Float64], Float64), 
+    Primitive(:+ , 2, [Vec, Vec], Float64),
     Primitive(:get_local, 1, [Int64], Object),
     #set_local
-    Primitive(:get_attr, 2, [Object, Symbol], Float64), #todo make more general
+    Primitive(:get_attr, 2, [Object, Symbol], Vec), #todo make more general
+    Primitive(:get_attr, 2, [Object, Int64], Float64), #todo make more general
     Primitive(:set_attr, 3, [Object, Symbol, Vec], Yay), #todo make more general 
     #isnull why would that ever happen 
     #null why ever 
@@ -58,6 +60,8 @@ function Gen.random(::Get_with_output, output_type, must_be_leaf)
             end 
         end 
     end
+
+    #@show possible_things
 
     if length(possible_things) == 0
         if must_be_leaf
@@ -151,15 +155,19 @@ end
     
 
 
-function run_cp(n=1)
+function run_cp(n=1, failable=false)
     for _ in 1:n
-        try
-            code = code_prior(0)
+        if failable
+            code = code_prior(0, Yay)
             println(code)
-        catch e
-            println(e)
+        else 
+            try
+                code = code_prior(0, Yay)
+                println(code)
+            catch e
+                println(e)
+            end
         end
-        #println(func_with_output(Float64))
     end 
 end 
 

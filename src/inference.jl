@@ -306,9 +306,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 
                 #@show tr
                # @show tr[:init => :init_state => :init_objs => obj_id => :vel]
-                if obj_id == 3
-                    @show tr[:init => :init_state => :init_objs => obj_id => :attrs]
-                end 
+                
 
                 # #uncomment this 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
@@ -327,7 +325,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             state.traces[i] = tr
            
         end 
-        @show state.traces[1]
+        #@show state.traces[1]
        
 
         #render 

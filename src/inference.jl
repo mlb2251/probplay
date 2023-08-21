@@ -504,26 +504,21 @@ end
 """
 Runs a particle filter on a sequence of frames
 """
-function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int)
+function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int; mh_steps_init=800, mh_steps=200)
     C,H,W,T = size(observed_images)
 
     # construct initial observations
-    (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
-    init_obs = build_init_obs(H,W, sprites, objs, observed_images[:,:,:,1])
+    # (cluster, objs, sprites) = process_first_frame(observed_images[:,:,:,1])
+    # init_obs = build_init_obs(H,W, sprites, objs, observed_images[:,:,:,1])
+
+    html_body("<script>tMax = $T;</script>")
+    html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
+    html_body("<h2>Observations</h2>", html_gif(observed_images))
 
     init_obs = choicemap((:init => :observed_image, observed_images[:,:,:,1]))
-
-    #new version 
-
-    # init_obs = process_first_frame_v2(observed_images[:,:,:,1]; num_particles=num_particles, steps=1000, step_chunk=50)
-
-
     state = pf_initialize(model, (H,W,1), init_obs, num_particles)
 
-    mh_first_frame(state.traces; steps=600)
-
-
-    # @show get_choices(state.traces[1])
+    mh_first_frame(state.traces; steps=mh_steps_init)
 
     # steps
     elapsed=@elapsed for t in 1:T-1
@@ -531,18 +526,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         # @show state.log_weights, weights
         # maybe_resample!(state, ess_threshold=num_particles/2, verbose=true)
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t+1]))
-        # @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
-        #     obs, fwd_proposal, (obs,))
 
-        # Rejuvenation
-        # todo currently not getting "credit" for these rejuv steps
-        for i in 1:num_particles
-            rejuv(state.traces[i])
-        end
-
-            
-
-
+        # take SMCP3 step
         @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, SMCP3Update(
                 fwd_proposal_naive,
@@ -578,13 +563,29 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 end
             end 
             state.traces[i] = tr
-           
-        end 
-        # @show state.traces[1]
-       
+        end
 
-        #render 
-        #html_body(html_img())
+        html_body("<h2>Reconstructed Images</h2>")
+        table = fill("", 3, length(state.traces))
+        for (i,trace) in enumerate(state.traces)
+            table[1,i] = "Particle $i ($(round(state.log_weights[i],sigdigits=4)))"
+            rendered = render_trace(trace)
+            table[2,i] = html_gif(rendered);
+            table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]));
+        end
+
+        mh_first_frame(state.traces; steps=mh_steps)
+
+        html_body("<h2>Reconstructed Images</h2>")
+        table = fill("", 3, length(state.traces))
+        for (i,trace) in enumerate(state.traces)
+            table[1,i] = "Particle $i ($(round(state.log_weights[i],sigdigits=4)))"
+            rendered = render_trace(trace)
+            table[2,i] = html_gif(rendered);
+            table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]));
+        end
+
+        html_body(html_table(table))
     end
 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
@@ -597,37 +598,22 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     time_str = "particle filter runtime: $(round(elapsed,sigdigits=3))s; $(secs_per_step)s/frame; $fps fps ($num_particles particles))"
     println(time_str)
 
-    html_body("<script>tMax = $T;</script>")
-    html_body("<p>C: $C, H: $H, W: $W, T: $T</p>")
-    html_body("<h2>Observations</h2>", html_gif(observed_images))
+    # types = map(i -> objs[i].sprite_index, cluster);
+    # html_body("<h2>First Frame Processing</h2>",
+    # html_table(["Observation"                       "Objects"                       "Types";
+    #          html_img(observed_images[:,:,:,1])  html_img(color_labels(cluster)[1])  html_img(color_labels(types)[1])
+    # ]))
 
 
-
-
-    types = map(i -> objs[i].sprite_index, cluster);
-    html_body("<h2>First Frame Processing</h2>",
-    html_table(["Observation"                       "Objects"                       "Types";
-             html_img(observed_images[:,:,:,1])  html_img(color_labels(cluster)[1])  html_img(color_labels(types)[1])
-    ]))
-    html_body("<h2>Reconstructed Images</h2>")
-
-    table = fill("", 3, length(state.traces))
-    for (i,trace) in enumerate(state.traces)
-        table[1,i] = "Particle $i ($(round(weights[i],sigdigits=4)))"
-        rendered = render_trace(trace)
-        table[2,i] = html_gif(rendered);
-        table[3,i] = html_gif(img_diff(rendered, observed_images));
-    end
-
-    html_body(html_table(table))
+    
     html_body(time_str)
     
     return sample_unweighted_traces(state, num_samples)
 end
 
-function rejuv(trace)
-    return trace, 0.
-end
+# function rejuv(trace)
+#     return trace, 0.
+# end
 
 @inline function get_pos(trace, obj_id, t)
     if t == 0

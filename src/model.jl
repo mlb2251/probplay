@@ -308,25 +308,36 @@ make_sprites = Map(make_type)
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
     sampled_code = nothing 
     cfunc = nothing
-    for codetry in 1:10
-        #@show codetry
-        try
-            sampled_code = {(:sampled_code, codetry)} ~ code_prior(0, Yay) #idk what to do here 
-            cfunc = CFunc(parse(SExpr, string(sampled_code)))
-            #@show sampled_code 
-            break 
-        catch e
-            @show "code sampling failed on try $(codetry) with error $(e)"
-            
-        end
-    end 
 
 
-    if cfunc == nothing 
-        error("code sampling failed")
+
+    try 
+        sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
+        cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
+    catch e
+        @show "code sampling failed with error $(e)"
+        cfunc = CFunc(nothing, false)
     end
-    @show sampled_code
-    @show cfunc
+
+    # for codetry in 1:10
+    #     #@show codetry
+    #     try
+    #         sampled_code = {(:sampled_code, codetry)} ~ code_prior(0, Yay) #idk what to do here 
+    #         cfunc = CFunc(parse(SExpr, string(sampled_code)))
+    #         #@show sampled_code 
+    #         break 
+    #     catch e
+    #         @show "code sampling failed on try $(codetry) with error $(e)"
+            
+    #     end
+    # end 
+    # if cfunc == nothing 
+    #     error("code sampling failed")
+    # end
+    # @show sampled_code
+    # @show cfunc
+
+
 
     env.code_library = [
         cfunc,

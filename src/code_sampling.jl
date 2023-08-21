@@ -34,7 +34,7 @@ leafs = [
 
     LeafType(Float64, Gen.normal, [0, 2]),
     LeafType(Float64, Gen.poisson, [1]), #todo make more general
-    LeafType(Int64, Gen.uniform_discrete, [1, 1]),
+    LeafType(Int64, Gen.uniform_discrete, [1, 2]),
     LeafType(Symbol, choose_symbol, []),
 ]
 

@@ -235,7 +235,8 @@ end
 end
 
 mutable struct CFunc
-    body::SExpr
+    body::Union{SExpr, Nothing}
+    runs::Bool
 end
 
 mutable struct Ty
@@ -272,20 +273,38 @@ new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choic
 
 
 @gen function call_func(func::CFunc, args::Vector{Any}, env::Env, with_constraints::ChoiceMap)
+    if !func.runs
+        return nothing 
+    end 
+    
     save_locals = env.locals
     env.locals = args
     empty!(env.exec.path)
     env.exec.constraints = with_constraints
     env.exec.has_constraints = !isempty(with_constraints)
-    res ~ exec(func.body, env, :res);
+    try
+        res ~ exec(func.body, env, :res);
+    catch e
+        #@show "CAUGHTEM"
+        #@show e 
+        func.runs = false
+        return nothing 
+    end 
     env.locals = save_locals
     return res
+    
 end
 
 @gen function obj_dynamics(obj_id::Int, env::Env, with_constraints::ChoiceMap)
     fn = env.code_library[env.step_of_obj[obj_id]]
     args = Any[env.state.objs[obj_id]]
-    step ~ call_func(fn, args, env, with_constraints);
+    if fn.runs
+        try
+            step ~ call_func(fn, args, env, with_constraints);
+        catch e
+            fn.runs = false
+        end 
+    end 
     return nothing
 end
 
@@ -303,6 +322,9 @@ end
     res = if exec.has_constraints
         get_value(exec.constraints, path)
     else
+        if !fn.runs
+            return nothing
+        end
         retval ~ fn(args...)
         @assert !has_value(exec.constraints, path) || error("sampled same address twice")
         set_value!(exec.constraints, path, retval)

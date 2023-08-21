@@ -311,9 +311,14 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 # #uncomment this 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
-                tr, accept = mh(tr, select(:init => :sampled_code))
+                tr, accept = mh(tr, select(:init => :sampled_code)) #why isn't it changing OH the codetry second tuple breaks it 
                 if accept
                     println("accepted")
+                    try
+                        println(tr[:init => :sampled_code])
+                    catch
+                        println("no code")
+                    end
                 end
                 #tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
 

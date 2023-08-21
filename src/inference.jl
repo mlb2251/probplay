@@ -312,6 +312,9 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
                 tr, accept = mh(tr, select(:init => :sampled_code))
+                if accept
+                    println("accepted")
+                end
                 #tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
 
                 #doing a shifting involution on each attribute 

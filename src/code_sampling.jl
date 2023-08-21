@@ -17,7 +17,7 @@ funcs = [
     #ty todo what even is this 
     Primitive(:vec, 2, [Float64, Float64], Vec), 
     Primitive(:+ , 2, [Float64, Float64], Float64), 
-    Primitive(:+ , 2, [Vec, Vec], Float64),
+    Primitive(:+ , 2, [Vec, Vec], Vec),
     Primitive(:get_local, 1, [Int64], Object),
     #set_local
     Primitive(:get_attr, 2, [Object, Symbol], Vec), #todo make more general
@@ -26,12 +26,13 @@ funcs = [
     #isnull why would that ever happen 
     #null why ever 
     #normal vec 
-    Primitive(:normal, 2, [Float64, Float64], Float64),
+    #Primitive(:normal, 2, [Float64, Float64], Float64),
     #bernoulli 
 ]
 
 leafs = [
-    #LeafType(Float64, Gen.normal, [0, 1]),
+
+    LeafType(Float64, Gen.normal, [0, 2]),
     LeafType(Float64, Gen.poisson, [1]), #todo make more general
     LeafType(Int64, Gen.uniform_discrete, [1, 1]),
     LeafType(Symbol, choose_symbol, []),
@@ -124,7 +125,7 @@ const get_with_output = Get_with_output()
 @gen function code_prior(depth, output_type=nothing, parent=nothing)
     """samples code recursively!"""
     depthp1 = depth + 1
-    if depthp1 > 5
+    if depthp1 > 10
         must_be_leaf = true
     else 
         must_be_leaf = false

@@ -15,6 +15,7 @@ funcs = [
     #spawn Primitive(:spawn, 3, [TyRef, Sprite, Vec], Nothing),#boolean is placeholder for idk
     #despawn todo
     #ty todo what even is this 
+    Primitive(:pass, 0, [], Yay),
     Primitive(:vec, 2, [Float64, Float64], Vec), 
     Primitive(:+ , 2, [Float64, Float64], Float64), 
     Primitive(:+ , 2, [Vec, Vec], Vec),

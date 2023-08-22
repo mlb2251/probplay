@@ -311,16 +311,16 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 # #uncomment this 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
-                tr, accept = mh(tr, select(:init => :sampled_code)) #why isn't it changing OH the codetry second tuple breaks it 
-                if accept
-                    println("accepted")
-                    try
-                        println(tr[:init => :sampled_code])
-                    catch
-                        println("no code")
-                    end
-                end
+                for _ in 1:50
+                    tr, accept = mh(tr, select(:init => :(sampled_code, obj_id)))
+                    
+                end 
+
+
+                #SAMPLING WHICH STEP OF OBJ 
                 #tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
+
+
 
                 #doing a shifting involution on each attribute 
                 for attr_id in 1:1 #just velocity for now 
@@ -339,6 +339,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         #render 
         #html_body(html_img())
     end
+
 
     (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
     weights = exp.(log_normalized_weights)
@@ -370,10 +371,20 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         rendered = render_trace(trace)
         table[2,i] = html_gif(rendered);
         table[3,i] = html_gif(img_diff(rendered, observed_images));
+
+        for obj_id in 1:4
+            html_body(trace[:init => (:sampled_code, obj_id)], "<br>")
+
+        end
     end
 
     html_body(html_table(table))
     html_body(time_str)
+    # #showing final code 
+    # for obj_id in 1:4
+    #     html_body(state_traces[T][:init => :(sampled_code, obj_id)])
+    # end 
+
     
     return sample_unweighted_traces(state, num_samples)
 end

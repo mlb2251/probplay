@@ -262,7 +262,10 @@ make_attrs = Map(make_attr)
     sprite_index ~ uniform_discrete(1, num_sprites) 
     #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
-    env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
+
+    #swapping for unique step of obj for testing 
+    #env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
+    env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(i, i)
 
     #velocity going here for now 
     #vel ~ normal(0, 1)
@@ -307,17 +310,31 @@ make_sprites = Map(make_type)
     
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
     sampled_code = nothing 
-    cfunc = nothing
 
+    # #JUST ONE FUNC FOR ALL OBJECTS 
+    # cfunc = nothing
+    # try 
+    #     sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
+    #     cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
+    # catch e
+    #     @show "code sampling failed with error $(e)"
+    #     cfunc = CFunc(nothing, false)
+    # end
 
+    #4 TOTAL CODES ONE FOR EACH OBJECT 
+    cfuncs = [] 
 
-    try 
-        sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
-        cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
-    catch e
-        @show "code sampling failed with error $(e)"
-        cfunc = CFunc(nothing, false)
-    end
+    for obj_id in 1:4
+        try 
+            sampled_code = {(:sampled_code, obj_id)} ~ code_prior(0, Yay) 
+            cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
+            push!(cfuncs, cfunc)
+        catch e 
+            @show "code sampling failed with error $(e)"
+            cfunc = CFunc(nothing, false)
+            push!(cfuncs, cfunc)
+        end
+    end 
 
     # for codetry in 1:10
     #     #@show codetry
@@ -340,7 +357,11 @@ make_sprites = Map(make_type)
 
 
     env.code_library = [
-        cfunc,
+        cfuncs[1],
+        cfuncs[2],
+        cfuncs[3],
+        cfuncs[4],
+
         # move with local latent velocity
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
 

@@ -139,7 +139,7 @@ function total_update(tr, stats)
 end 
 
 
-function mh_first_frame(traces; steps=1000, step_chunk=50)
+function mh_first_frame(traces; steps=1000, step_chunk=50, final_T=nothing)
     #run update detect a bunch TODO 
     #@show num_particles, steps, step_chunk
     (H,W,T) = get_args(traces[1])
@@ -193,7 +193,7 @@ function mh_first_frame(traces; steps=1000, step_chunk=50)
 
             # update detailed tables
             for (j,tr) in enumerate(traces)
-                detailed_tables[j] = vcat(detailed_tables[j], permutedims(detailed_trace_row(tr, "Particle $j @ step=$i"; stats=all_stats[j])))
+                detailed_tables[j] = vcat(detailed_tables[j], permutedims(detailed_trace_row(tr, "Particle $j @ step=$i"; stats=all_stats[j], final_T=final_T)))
             end
 
         end
@@ -214,7 +214,7 @@ function mh_first_frame(traces; steps=1000, step_chunk=50)
     result_table[1, :] = detailed_table_header
 
     for (i,tr) in enumerate(traces)
-        result_table[i+1,:] = detailed_trace_row(tr, "Particle $i @ step=$steps"; stats=all_stats[i])
+        result_table[i+1,:] = detailed_trace_row(tr, "Particle $i @ step=$steps"; stats=all_stats[i], final_T=final_T)
     end 
     
     html_body("<h1>Results</h1>")
@@ -227,15 +227,20 @@ function mh_first_frame(traces; steps=1000, step_chunk=50)
     table_of_tables = permutedims(["<h2>Particle $i</h2>\n" * html_table(table) for (i,table) in enumerate(detailed_tables)])
     html_body(html_table(table_of_tables; table_attrs="style=\"border: 0px;\"", tr_attrs="style=\"border: 0px;\"", td_attrs="style=\"border: 0px; vertical-align:top; padding-right:20px\""))
 
-
+ 
 end
 
 
-function detailed_trace_row(tr, rowname; stats=nothing)
+
+
+function detailed_trace_row(tr, rowname; stats=nothing, final_T=nothing)
+
     (H,W,T) = get_args(tr)
     env = env_of_trace(tr)
     sprites = env.sprites
     objs = env.state.objs
+    # rendered = html_img(render_trace_frame(tr, 0))
+    rendered = html_gif(render_trace(tr); pad_to=final_T)
     bboxes = html_img(draw_bboxes(render_trace_frame(tr, 0), objs, sprites, 1, H, 1, W))
     # objcoloring = html_img(color_labels(obj_frame(tr[:init => :init_state => :init_objs], tr[:init => :init_sprites], H, W))[1])
     # spritecoloring = html_img(color_labels(sprite_frame(tr[:init => :init_state => :init_objs], tr[:init => :init_sprites], H, W))[1])
@@ -255,7 +260,7 @@ function detailed_trace_row(tr, rowname; stats=nothing)
             show_stats *= "$(key):&nbsp;$(substats.accepted)/$(substats.total)&nbsp;[inf=$(substats.inf);&nbsp;nan=$(substats.nan)]"
         end
     end
-    row = [rowname, html_img(render_trace_frame(tr, 0)), bboxes, join(sprite_imgs,"<br>"), #=objcoloring, spritecoloring, heatmap, =# diff, info, show_stats]
+    row = [rowname, rendered, bboxes, join(sprite_imgs,"<br>"), #=objcoloring, spritecoloring, heatmap, =# diff, info, show_stats]
     row
 end
 
@@ -504,7 +509,7 @@ end
 """
 Runs a particle filter on a sequence of frames
 """
-function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int; mh_steps_init=800, mh_steps=200)
+function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int; mh_steps_init=800, mh_steps=100)
     C,H,W,T = size(observed_images)
 
     # construct initial observations
@@ -518,7 +523,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     init_obs = choicemap((:init => :observed_image, observed_images[:,:,:,1]))
     state = pf_initialize(model, (H,W,1), init_obs, num_particles)
 
-    mh_first_frame(state.traces; steps=mh_steps_init)
+    mh_first_frame(state.traces; steps=mh_steps_init, final_T=T)
 
     # steps
     elapsed=@elapsed for t in 1:T-1
@@ -570,19 +575,19 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         for (i,trace) in enumerate(state.traces)
             table[1,i] = "Particle $i ($(round(state.log_weights[i],sigdigits=4)))"
             rendered = render_trace(trace)
-            table[2,i] = html_gif(rendered);
-            table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]));
+            table[2,i] = html_gif(rendered, pad_to=T);
+            table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
         end
 
-        mh_first_frame(state.traces; steps=mh_steps)
+        mh_first_frame(state.traces; steps=mh_steps, final_T=T)
 
         html_body("<h2>Reconstructed Images</h2>")
         table = fill("", 3, length(state.traces))
         for (i,trace) in enumerate(state.traces)
             table[1,i] = "Particle $i ($(round(state.log_weights[i],sigdigits=4)))"
             rendered = render_trace(trace)
-            table[2,i] = html_gif(rendered);
-            table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]));
+            table[2,i] = html_gif(rendered, pad_to=T);
+            table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
         end
 
         html_body(html_table(table))

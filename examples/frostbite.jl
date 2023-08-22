@@ -170,8 +170,8 @@ function sam_everything()
     end
 end
 
-function particle_large_birds()
-    @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:20], 8);
+function particle_large_birds(T=20)
+    @time particle_filter(5, crop(load_frames("atari-benchmarks/frostbite_1"), top=120, bottom=25, left=20,tstart=200, tskip=4)[:,:,:,1:T], 8);
 end
 
 function particle_full_frostbite()
@@ -193,8 +193,8 @@ function particle_small()
     print("TESTjfkaldsjakljfkla;dsjfkl;sjfkl;s")
 end
 
-function particle_tiny(;T=4, particles=1)
-    @time particle_filter(particles, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=20)[:,:,:,1:T], 2);
+function particle_tiny(;T=4, particles=1, mh_steps_init=800, mh_steps=200)
+    @time particle_filter(particles, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=20)[:,:,:,1:T], 2; mh_steps_init=mh_steps_init, mh_steps=mh_steps);
 end
 
 function gen_tiny()

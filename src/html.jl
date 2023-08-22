@@ -67,10 +67,15 @@ end
 
 html_gif(gif::Array{Float64,4}, attrs...; kwargs...) = html_gif(Array(colorview(RGB,gif)), attrs...; kwargs...)
 
-function html_gif(gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px")
+function html_gif(gif::Array{RGB{Float64},3}, attrs...; fps=3, width="200px", pad_to=nothing)
+    if pad_to !== nothing && pad_to > size(gif,3)
+        # add blank frames to end of gif
+        gif = cat(gif, fill(RGB(0.,0.,0.), size(gif,1), size(gif,2), pad_to-size(gif,3)), dims=3)
+    end
 
     # add progress bar along the bottom
     H,W,T = size(gif)
+
     bar_size = 4
     gif = cat(gif, fill(RGB(0.5,0.,0.), bar_size, W, T), dims=1)
     for t in 1:T

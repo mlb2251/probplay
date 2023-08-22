@@ -42,9 +42,6 @@ function inbounds_vec(v,H,W)
     Vec(min(max(1, v.y), H+1-EPSILON), min(max(1, v.x), W+1-EPSILON))
 end
 
-struct Yay
-end 
-
 struct Sprite
     mask::Matrix{Bool}
     color::Vector{Float64}
@@ -345,7 +342,10 @@ make_attrs = Map(make_attr)
     sprite_index ~ uniform_discrete(1, num_sprites) 
     #pos ~ uniform_drift_position(Vec(0,0), 2) #never samping from this? why was using this not wrong?? 0.2? figure this out                                                                                      
     pos ~ uniform_position(H, W) 
-    env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
+
+    #swapping for unique step of obj for testing 
+    #env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(1, length(env.code_library))
+    env.step_of_obj[i] = {:step_of_obj} ~ uniform_discrete(i, i)
 
     #velocity going here for now 
     #vel ~ normal(0, 1)
@@ -385,19 +385,66 @@ make_sprites = Map(make_type)
 
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
+
+
 @gen function init_model(H,W,var)
     num_sprites ~ poisson_plus_1(4)
     env = new_env();
     
-
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
+    sampled_code = nothing 
 
-    # sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
-    # @show sampled_code 
+    # #JUST ONE FUNC FOR ALL OBJECTS 
+    # cfunc = nothing
+    # try 
+    #     sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
+    #     cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
+    # catch e
+    #     @show "code sampling failed with error $(e)"
+    #     cfunc = CFunc(nothing, false)
+    # end
 
-    env.code_library = [
-        # CFunc(parse(SExpr, string(sampled_code))),
+    env.state = {:init_state} ~ init_state(H,W,num_sprites,env)
 
+
+    #4 TOTAL CODES ONE FOR EACH OBJECT 
+    cfuncs = [] 
+
+    for obj_id in 1:length(env.state.objs)
+        try 
+            sampled_code = {(:sampled_code, obj_id)} ~ code_prior(0, Yay) 
+            cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
+            push!(cfuncs, cfunc)
+        catch e 
+            @show "code sampling failed with error $(e)"
+            cfunc = CFunc(nothing, false)
+            push!(cfuncs, cfunc)
+        end
+    end 
+
+    # for codetry in 1:10
+    #     #@show codetry
+    #     try
+    #         sampled_code = {(:sampled_code, codetry)} ~ code_prior(0, Yay) #idk what to do here 
+    #         cfunc = CFunc(parse(SExpr, string(sampled_code)))
+    #         #@show sampled_code 
+    #         break 
+    #     catch e
+    #         @show "code sampling failed on try $(codetry) with error $(e)"
+            
+    #     end
+    # end 
+    # if cfunc == nothing 
+    #     error("code sampling failed")
+    # end
+    # @show sampled_code
+    # @show cfunc
+
+    env.code_library = cfuncs #+ [
+        # cfuncs[1],
+        # cfuncs[2],
+        # cfuncs[3],
+        # cfuncs[4],
 
         # move with local latent velocity
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
@@ -421,12 +468,10 @@ make_sprites = Map(make_type)
 
         #goal get one const velocity func where velocity is a learned latent var pretty lit
         #add a list of attributes it needs
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
-    ]
+        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
+    #]
 
     #env.code_lib_reqs = [[], [1]] #addr 1 needed for the velocity code version 
-
-    env.state = {:init_state} ~ init_state(H,W,num_sprites,env)
 
     rendered = draw(H, W, env.state.objs, env.sprites)
     {:observed_image} ~ image_likelihood(rendered, var)

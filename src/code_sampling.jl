@@ -1,6 +1,6 @@
 using Gen 
 import Distributions
-export code_prior
+export code_prior, run_cp
 #inspired by Gen Tutorial: https://www.gen.dev/tutorials/rj/tutorial
 
 
@@ -15,22 +15,26 @@ funcs = [
     #spawn Primitive(:spawn, 3, [TyRef, Sprite, Vec], Nothing),#boolean is placeholder for idk
     #despawn todo
     #ty todo what even is this 
+    Primitive(:pass, 0, [], Yay),
     Primitive(:vec, 2, [Float64, Float64], Vec), 
     Primitive(:+ , 2, [Float64, Float64], Float64), 
+    Primitive(:+ , 2, [Vec, Vec], Vec),
     Primitive(:get_local, 1, [Int64], Object),
     #set_local
-    Primitive(:get_attr, 2, [Object, Symbol], Float64), #todo make more general
+    Primitive(:get_attr, 2, [Object, Symbol], Vec), #todo make more general
+    Primitive(:get_attr, 2, [Object, Int64], Float64), #todo make more general
     Primitive(:set_attr, 3, [Object, Symbol, Vec], Yay), #todo make more general 
     #isnull why would that ever happen 
     #null why ever 
     #normal vec 
-    Primitive(:normal, 2, [Float64, Float64], Float64),
+    #Primitive(:normal, 2, [Float64, Float64], Float64),
     #bernoulli 
 ]
 
 leafs = [
-    #LeafType(Float64, Gen.normal, [0, 1]),
-    LeafType(Float64, Gen.poisson, [1]), #todo make more general
+
+    LeafType(Float64, Gen.normal, [-1.9, 2]),
+    #LeafType(Float64, Gen.poisson, [1]), #todo make more general
     LeafType(Int64, Gen.uniform_discrete, [1, 1]),
     LeafType(Symbol, choose_symbol, []),
 ]
@@ -58,6 +62,8 @@ function Gen.random(::Get_with_output, output_type, must_be_leaf)
             end 
         end 
     end
+
+    #@show possible_things
 
     if length(possible_things) == 0
         if must_be_leaf
@@ -120,7 +126,7 @@ const get_with_output = Get_with_output()
 @gen function code_prior(depth, output_type=nothing, parent=nothing)
     """samples code recursively!"""
     depthp1 = depth + 1
-    if depthp1 > 5
+    if depthp1 > 10
         must_be_leaf = true
     else 
         must_be_leaf = false
@@ -151,15 +157,19 @@ end
     
 
 
-function run_cp(n=1)
+function run_cp(n=1, failable=false)
     for _ in 1:n
-        try
-            code = code_prior(0)
+        if failable
+            code = code_prior(0, Yay)
             println(code)
-        catch e
-            println(e)
+        else 
+            try
+                code = code_prior(0, Yay)
+                println(code)
+            catch e
+                println(e)
+            end
         end
-        #println(func_with_output(Float64))
     end 
 end 
 

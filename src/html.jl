@@ -159,7 +159,7 @@ function html_render(;open=true, publish::Union{Bool,Nothing}=nothing, styles="c
 
         <footer>
         <h4>Command to publish</h4>
-        <code>julia> using Atari; Atari.html_publish("$full_path")</code>
+        <code>julia> using Atari; Atari.html_publish(raw"$full_path")</code>
         </footer>
     </html>
     """
@@ -189,7 +189,18 @@ function html_publish(path)
         println("Not on CSAIL network: attempting rsync")
         publish_dir = get_secret("publish_dir")
         publish_ssh = get_secret("publish_ssh")
-        Base.run(`rsync -avz $path $publish_ssh:$publish_dir/`)
+        if Sys.iswindows() || detectwsl()
+            # path = raw"$(path)"
+            # println(path)
+            path = replace(path, "\\" => "/")
+            path = replace(path, "//wsl.localhost/Ubuntu" => "")
+            Base.run(`wsl.exe rsync -avz $path $publish_ssh:$publish_dir/`)
+        else 
+            Base.run(`rsync -avz $path $publish_ssh:$publish_dir/`)
+        end
+
+        println("See results at: $publish_site")
+
         open_in_default_browser(publish_site)
     end
 end
@@ -214,10 +225,15 @@ function open_in_default_browser(url::AbstractString)::Bool
         if Sys.isapple()
             Base.run(`open $url`)
             return true
-        elseif Sys.iswindows() || detectwsl()
+        elseif Sys.iswindows() || detectwsl() 
             # Base.run(`cmd.exe /s /c start "" /b $url`)
-            url = "file://wsl.localhost/Ubuntu/home/jssteele/probabilistic-atari/$url"
+            if !("http" in url)
+                url = "file://wsl.localhost/Ubuntu/home/jssteele/probabilistic-atari/$url"
+            end
             Base.run(`cmd.exe /s /c start chrome $url`)
+
+
+
             return true
         elseif Sys.islinux()'
             browser = "xdg-open"

@@ -558,7 +558,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 # #uncomment this 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
-                for _ in 1:5
+                for _ in 1:50
                     tr, accept = mh(tr, select(:init => :(sampled_code, obj_id)))
                     
                 end 

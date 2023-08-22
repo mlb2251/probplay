@@ -123,7 +123,7 @@ const get_with_output = Get_with_output()
 
 
 #CODE SAMPLING 
-@gen function code_prior(depth, output_type=nothing, parent=nothing)
+@gen function code_prior(depth, output_type)
     """samples code recursively!"""
     depthp1 = depth + 1
     if depthp1 > 10
@@ -136,7 +136,7 @@ const get_with_output = Get_with_output()
 
     if typeof(thing) == LeafType
         leaf ~ thing.distribution(thing.dist_args...)
-        return sexpr_leaf(leaf; parent)
+        return sexpr_leaf(leaf)
     else #is type primitive 
         func = thing
         num_children = func.arity
@@ -150,7 +150,7 @@ const get_with_output = Get_with_output()
             sexpr = {(:sexpr, child_ind)} ~ code_prior(depthp1, func.input_type[child_ind]) 
             push!(child_vec, sexpr)
         end 
-        return sexpr_node(child_vec; parent)
+        return sexpr_node(child_vec)
 
     end 
 end 

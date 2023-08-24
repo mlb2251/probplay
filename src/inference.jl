@@ -509,7 +509,7 @@ end
 """
 Runs a particle filter on a sequence of frames
 """
-function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int; mh_steps_init=800, mh_steps=100, floodfill=true, perception_mh=false)
+function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, num_samples::Int; mh_steps_init=800, mh_steps=10, floodfill=true, perception_mh=false)
     C,H,W,T = size(observed_images)
 
     # construct initial observations
@@ -558,10 +558,20 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 # #uncomment this 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
-                for _ in 1:50
-                    tr, accept = mh(tr, select(:init => :(sampled_code, obj_id)))
+                for _ in 1:500
+                    tr, accept = mh(tr, select(:init => (:sampled_code, obj_id)))
+                    if accept #ALWAYS ACCEPTED O NO
+                        #observed image 
+                        observed_image = tr[:steps => t => :observed_image]
+                        #rendered 
+                        rendered = render_trace_frame(tr, t)
+                        #println(Gen.logpdf(image_likelihood, observed_image, rendered, 0.1), Gen.get_submap(get_choices(tr), (:init => (:sampled_code, obj_id))))
+                        
+                    end 
+
                     
                 end 
+                
 
 
                 #SAMPLING WHICH STEP OF OBJ 
@@ -590,6 +600,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             table[2,i] = html_gif(rendered, pad_to=T);
             table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
             for obj_id in 1:length(env_of_trace(trace).state.objs)
+                
                 html_body(trace[:init => (:sampled_code, obj_id)], "<br>")
             end    
         end

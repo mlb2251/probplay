@@ -413,6 +413,8 @@ make_sprites = Map(make_type)
     for obj_id in 1:length(env.state.objs)
         try 
             sampled_code = {(:sampled_code, obj_id)} ~ code_prior(0, Yay) 
+            if obj_id == 3
+            end 
             cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
             push!(cfuncs, cfunc)
         catch e 

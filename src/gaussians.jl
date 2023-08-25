@@ -98,7 +98,10 @@ end
 
 function test()
     fresh()
-    H,W = 200,100
+    H,W = 100,100
+
+    for _ in 1:4
+
     gaussians = [
         # Gauss2D(Vec(60.5,50), 10, 20, 1., 1, 1, 1, 1),
         # Gauss2D(Vec(60.5,50), 10, 20, 1., 1, 1, 1, 1),
@@ -107,11 +110,28 @@ function test()
         # Gauss2D(Vec(170.5,30), 30, 3, 0., 1, 1, 1, 1),
         # Gauss2D(Vec(140.5,60), 3, 3, 1., .5, 1, 1, 1),
         # Gauss2D(Vec(140.5,60), 1000, 1000, 1., 1., .7, 0., 0.4)
-        rand_gaussian(H,W) for _ in 1:60
+        rand_gaussian(H,W) for _ in 1:100
     ]
-    canvas = zeros(Float64, 3, H, W)
-    draw_region(canvas, gaussians, 1, H, 1, W)
-    html_body(html_img(canvas, width="400px"))
+
+        canvas = zeros(Float64, 3, H*10, W*10)
+        draw_region(canvas, gaussians, 1, H, 1, W)
+        html_body(html_img(canvas, width="400px"))    
+    end
+
+
+
+    # for scale in 1:5
+    #     canvas = zeros(Float64, 3, div(H,scale), div(W,scale))
+    #     draw_region(canvas, gaussians, 1, H, 1, W)
+    #     html_body(html_img(canvas, width="400px"))    
+    # end
+
+    # for scale in 1:5
+    #     canvas = zeros(Float64, 3, H*scale, W*scale)
+    #     draw_region(canvas, gaussians, 1, H, 1, W)
+    #     html_body(html_img(canvas, width="400px"))    
+    # end
+
     render()
 end
 
@@ -138,12 +158,17 @@ end
 
 
 function draw_region(canvas, gaussians, ymin, ymax, xmin, xmax)
-    for py in ymin:ymax
-        for px in xmin:xmax
+    C,H,W = size(canvas)
+
+    for y in 1:H
+        for x in 1:W
+            py = (y-1)/(H-1) * (ymax-ymin) + ymin
+            px = (x-1)/(W-1) * (xmax-xmin) + xmin
             r,g,b = draw_pixel(gaussians, px, py)
-            canvas[:,py,px] += [r,g,b]
+            canvas[:,y,x] += [r,g,b]
         end
     end
+
     canvas 
 end
 

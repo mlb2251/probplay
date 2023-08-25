@@ -23,7 +23,7 @@ end
 
 function test3()
     fresh()
-    H,W = 50,50
+    H,W = 15,15
 
     targets = [rand_gaussian(H,W) for _ in 1:10]
 
@@ -31,12 +31,12 @@ function test3()
     target = draw_region(canvas, targets, 1, H, 1, W)
     html_body(html_img(canvas, width="400px"))
 
-    gaussians = [rand_gaussian(H,W) for _ in 1:10]
+    gaussians = [rand_gaussian(H,W) for _ in 1:20]
     # @show Functors.functor(z)
 
-    lr = .0001
+    lr = .001
 
-    for i in 1:3
+    for i in 1:50
         @show i
         canvas = zeros(Float64, 3, H, W)
         draw_region(canvas, gaussians, 1, H, 1, W)

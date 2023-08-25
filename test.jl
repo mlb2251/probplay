@@ -13,4 +13,12 @@ end
 
 
 
-println(typeof(String(sexpr_leaf(5))))
+
+test = [3, 4, 5]
+testy = [test, test]
+
+function hi()
+    testy[begin:end,1]
+end 
+
+hi()

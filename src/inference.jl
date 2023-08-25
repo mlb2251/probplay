@@ -547,36 +547,65 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             ))        
 
         
-        for i in 1:num_particles
-            tr = state.traces[i]
-            for obj_id in 1:length(env_of_trace(tr).state.objs)
-                
-                #@show tr
-               # @show tr[:init => :init_state => :init_objs => obj_id => :vel]
-                
 
-                # #uncomment this 
+
+        for i in 1:num_particles
+
+            #COMEBACK 
+            tr = state.traces[i]
+            # @show tr 
+            #positions is a vector across times across objects giving their positions 
+            positions = Array{Vec}(undef, t, length(env_of_trace(tr).state.objs))
+            for time in 1:t
+                stateobjs = tr[:steps => t].objs
+                for obj_id in 1:length(stateobjs)
+                    positions[time, obj_id] = stateobjs[obj_id].pos
+                end
+            end 
+            #@show positions  
+
+
+            for obj_id in 1:length(env_of_trace(tr).state.objs)
+
+                # #uncomment this, mh choosing which step function 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
                 
-                for _ in 1:500
-                    tr, accept = mh(tr, select(:init => (:sampled_code, obj_id)))
-                    if accept #ALWAYS ACCEPTED O NO
-                        #observed image 
-                        observed_image = tr[:steps => t => :observed_image]
-                        #rendered 
-                        rendered = render_trace_frame(tr, t)
-                        #println(Gen.logpdf(image_likelihood, observed_image, rendered, 0.1), Gen.get_submap(get_choices(tr), (:init => (:sampled_code, obj_id))))
-                        
-                    end 
 
+                #mh comparing projected position from resampled step function to smc percieved positions 
+                obj_positions = positions[:, obj_id]#across all time steps ==
+                @show obj_positions
+                projected_position_vec = [] 
+
+                for sample in 1:3
+                    #i can just put all of this in the fwd proposal 
+                    #possible_sample = {(:possible_sample, obj_id, sample)} ~ code_prior(0, Yay)
+                    #shoot this isn't a gen func 
+
+                    #@show possible_sample 
+                    #turn sampled code into positions (can just do one run or many )
+
+                    #add projected postitions into projected position vec 
                     
                 end 
+
+                #sample projected position vec according to similarity to obj positions, adding across all positions at t to t+1 
+
+                #have and set the sampled code 
+
+
+
+
+                #mh based on rendering of resampled step function
+                for _ in 1:500
+                    tr, accept = mh(tr, select(:init => :cfuncs => obj_id => :sampled_code))
+                    if accept 
+                        # observed_image = tr[:steps => t => :observed_image]
+                        # rendered = render_trace_frame(tr, t)
+                        #println(Gen.logpdf(image_likelihood, observed_image, rendered, 0.1), Gen.get_submap(get_choices(tr), (:init => (:sampled_code, obj_id))))
+                        
+                    end  
+                end 
                 
-
-
-                #SAMPLING WHICH STEP OF OBJ 
-                #tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
-
 
 
                 #doing a shifting involution on each attribute 
@@ -586,6 +615,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                         tr, accept = mh(tr, variable_shift_randomness, (attr_address,), variable_shift_involution)
                     end 
                 end
+
             end 
             state.traces[i] = tr
            
@@ -601,7 +631,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
             for obj_id in 1:length(env_of_trace(trace).state.objs)
                 
-                html_body(trace[:init => (:sampled_code, obj_id)], "<br>")
+                html_body(trace[:init => :cfuncs => obj_id => :sampled_code], "<br>")
             end    
         end
 
@@ -615,7 +645,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             table[2,i] = html_gif(rendered, pad_to=T);
             table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
             for obj_id in 1:length(env_of_trace(trace).state.objs)
-                html_body(trace[:init => (:sampled_code, obj_id)], "<br>")
+                html_body(trace[:init => :cfuncs => obj_id => :sampled_code], "<br>")
             end  
         end
 
@@ -741,7 +771,6 @@ show_forward_proposals :: Bool = false
 
             {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
 
-            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
             set_submap!(bwd_choices, :dynamics => obj_id => j, curr_env.exec.constraints)
 
 
@@ -758,6 +787,8 @@ show_forward_proposals :: Bool = false
             push!(scores, score)
         end
 
+        
+        
 
         #sample from scores 
         scores_logsumexp = logsumexp(scores)
@@ -769,8 +800,6 @@ show_forward_proposals :: Bool = false
         curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
         #curr_env.step_of_obj = step_of_objs[idx]
 
-        
-        
 
         if show_forward_proposals            
 
@@ -779,7 +808,7 @@ show_forward_proposals :: Bool = false
             table = fill("", 4, SAMPLES_PER_OBJ)
 
             for (i,state) in enumerate(states)
-                rendered = draw(H, W, state.objs, curr_env.sprites) 
+                rendered = draw(H, W, state.objs, curr_env.sprites) #positions in here 
                 score = scores[i] #Gen.logpdf(image_likelihood, observed_image, rendered, 0.1) 
                 table[1,i] = html_img(rendered)
                 table[2,i] = html_img(img_diff(observed_image, rendered))
@@ -796,9 +825,33 @@ show_forward_proposals :: Bool = false
 
         end
 
+
         set_submap!(trace_updates,:steps => t => :objs => obj_id => :step, constraints[idx])
         
+
+
+
+        #NOW TO DO RESAMPLE THE STEP FUNCITON GIVEN THE POSITIONS 
+
+        
+        #TODO given these positions, sample function that maps from pairs of positions for synthesis problem 
+        #need a distribution, maybe use all the positions from the samples above
+        #intuition will alternate between picking better function and better positions 
+        # @show positions 
+
+
+        # obj_positions = [] 
+        # for time in 1:t 
+        #     @show trace_updates
+
+        # end 
+
+
+
+
     end
+
+
 
     # @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
 

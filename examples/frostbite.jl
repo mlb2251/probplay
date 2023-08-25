@@ -246,25 +246,6 @@ function first_frame(;particles=8, steps=1000, step_chunk=50, which=:big)
     Atari.process_first_frame_v2(frame; num_particles=particles, steps=steps, step_chunk=step_chunk)
 end
 
-function runjoke(;particles=2, steps=400, step_chunk=100)
-    #@show particles, steps, step_chunk
-    fresh(); 
-    joke(particles=particles, steps=steps, step_chunk=step_chunk)
-
-    
-    render();
-end
-
-function joke(;particles=8, steps=100, step_chunk=30)
-    frame = crop(load_frames("joke"),  tskip=4)[:,:,:,1]
-
-    (C,H,W) = size(frame)
-
-    html_body("<h1>Observations</h1>", html_img(frame))
-    
-    Atari.process_first_frame_v2(frame; num_particles=particles, steps=steps, step_chunk=step_chunk)
-end
-
 
 function test_involution()
     frame = crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=4)[:,:,:,1]
@@ -275,3 +256,8 @@ function test_involution()
     html_body("<h1>Observations</h1>", html_img(frame))
     Atari.test_one_involution(frame)
 end 
+
+
+function particle_positions(;T=4, particles=1, mh_steps_init=100, mh_steps=50)
+    @time position_particle_filter(particles, crop(load_frames("atari-benchmarks/frostbite_1"), top=145, bottom=45, left=90, tskip=20)[:,:,:,1:T], 2; mh_steps_init=mh_steps_init, mh_steps=mh_steps);
+end

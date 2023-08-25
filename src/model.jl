@@ -385,6 +385,22 @@ make_sprites = Map(make_type)
 
 @dist poisson_plus_1(lambda) = poisson(lambda) + 1
 
+@gen function sample_cfunc(obj_id)
+    sampled_code = nothing 
+
+    try 
+        sampled_code ~ code_prior(0, Yay) 
+        cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
+        return cfunc
+        
+    catch e 
+        #TEMP, UNCOMMENT TO SEE ERRORS @show "code sampling failed with error $(e)"
+        cfunc = CFunc(nothing, false)
+        return cfunc
+    end
+end
+
+sample_cfuncs = Map(sample_cfunc)
 
 
 @gen function init_model(H,W,var)
@@ -392,55 +408,29 @@ make_sprites = Map(make_type)
     env = new_env();
     
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
-    sampled_code = nothing 
-
-    # #JUST ONE FUNC FOR ALL OBJECTS 
-    # cfunc = nothing
-    # try 
-    #     sampled_code = {:sampled_code} ~ code_prior(0, Yay) #idk what to do here 
-    #     cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
-    # catch e
-    #     @show "code sampling failed with error $(e)"
-    #     cfunc = CFunc(nothing, false)
-    # end
+    
 
     env.state = {:init_state} ~ init_state(H,W,num_sprites,env)
 
+    # #4 TOTAL CODES ONE FOR EACH OBJECT 
+    # cfuncs = [] 
 
-    #4 TOTAL CODES ONE FOR EACH OBJECT 
-    cfuncs = [] 
-
-    for obj_id in 1:length(env.state.objs)
-        try 
-            sampled_code = {(:sampled_code, obj_id)} ~ code_prior(0, Yay) 
-            if obj_id == 3
-            end 
-            cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
-            push!(cfuncs, cfunc)
-        catch e 
-            @show "code sampling failed with error $(e)"
-            cfunc = CFunc(nothing, false)
-            push!(cfuncs, cfunc)
-        end
-    end 
-
-    # for codetry in 1:10
-    #     #@show codetry
-    #     try
-    #         sampled_code = {(:sampled_code, codetry)} ~ code_prior(0, Yay) #idk what to do here 
-    #         cfunc = CFunc(parse(SExpr, string(sampled_code)))
-    #         #@show sampled_code 
-    #         break 
-    #     catch e
-    #         @show "code sampling failed on try $(codetry) with error $(e)"
-            
+    # for obj_id in 1:length(env.state.objs)
+    #     try 
+    #         sampled_code = {(:sampled_code, obj_id)} ~ code_prior(0, Yay) 
+    #         if obj_id == 3
+    #         end 
+    #         cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
+    #         push!(cfuncs, cfunc)
+    #     catch e 
+    #         #TEMP, UNCOMMENT TO SEE ERRORS @show "code sampling failed with error $(e)"
+    #         cfunc = CFunc(nothing, false)
+    #         push!(cfuncs, cfunc)
     #     end
     # end 
-    # if cfunc == nothing 
-    #     error("code sampling failed")
-    # end
-    # @show sampled_code
-    # @show cfunc
+
+    cfuncs ~ sample_cfuncs(collect(1:length(env.state.objs)))
+
 
     env.code_library = cfuncs #+ [
         # cfuncs[1],

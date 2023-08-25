@@ -228,7 +228,6 @@ function open_in_default_browser(url::AbstractString)::Bool
         elseif Sys.iswindows() || detectwsl() 
             if !occursin("http", url)
                 url = "file://wsl.localhost/Ubuntu/home/jssteele/probabilistic-atari/$url"
-                @show "hihi"
             end
             Base.run(`cmd.exe /s /c start chrome $url`)
             

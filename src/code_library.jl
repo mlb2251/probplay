@@ -40,7 +40,7 @@ struct Primitive
     name::Symbol
     arity::Int64
     #either a type of a list of types of length arity 
-    input_type::Union{Vector{DataType}} 
+    input_type::Vector{DataType} #Replace these with functions, or maybe that's overkill, usually just checking type, but could check positive etc
     output_type::Type
 end
 
@@ -301,6 +301,7 @@ end
     if fn.runs
         try
             step ~ call_func(fn, args, env, with_constraints);
+            @show step 
         catch e
             fn.runs = false
         end 

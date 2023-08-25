@@ -73,12 +73,34 @@ end
     #only on the 3rd object lol
     obj_id = 3 
 
-    code_options = [] 
+    cfunc_options = []
 
     for j in 1:SAMPLES_PER_OBJ
-        possible_code = {:code => obj_id => j} ~ code_prior(0, Yay)
-        push!(code_options, possible_code)
-        @show possible_code
+        env = deepcopy(curr_env)
+        cfunc = {:cfunc} ~ sample_cfunc(obj_id)
+        cfunc = get_retval(cfunc.trace) #weird code feature to do this, cfunc not actually returned above 
+        push!(cfunc_options, cfunc) #not sure bezt way to do this, maybe put j in the trace 
+        step_of_obj = env.step_of_obj[obj_id]
+        env.code_library[step_of_obj] = cfunc 
+        
+        #running the function once to see what positions it creates 
+        poss_dyn_from_cfunc ~ obj_dynamics(obj_id, env, choicemap())
+        #oh noooo the states arent stored anywhere where do i get all the positions
+
+        #:step
+        @show env.state.objs[obj_id].pos 
+
+        #what about different times though 
+
+
+        
+        # env.state 
+        # @show poss_dyn_from_cfunc
+        #@show poss_dyn_from_cfunc
+
+
+
+
 
         #just one run of the code to get postiitons hmm 
 

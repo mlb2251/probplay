@@ -637,17 +637,17 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
 
         perception_mh && mh_first_frame(state.traces; steps=mh_steps, final_T=T)
 
-        html_body("<h2>Reconstructed Images</h2>")
-        table = fill("", 3, length(state.traces))
-        for (i,trace) in enumerate(state.traces)
-            table[1,i] = "Particle $i ($(round(state.log_weights[i],sigdigits=4)))"
-            rendered = render_trace(trace)
-            table[2,i] = html_gif(rendered, pad_to=T);
-            table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
-            for obj_id in 1:length(env_of_trace(trace).state.objs)
-                html_body(trace[:init => :cfuncs => obj_id => :sampled_code], "<br>")
-            end  
-        end
+        # html_body("<h2>Reconstructed Images</h2>")
+        # table = fill("", 3, length(state.traces))
+        # for (i,trace) in enumerate(state.traces)
+        #     table[1,i] = "Particle $i ($(round(state.log_weights[i],sigdigits=4)))"
+        #     rendered = render_trace(trace)
+        #     table[2,i] = html_gif(rendered, pad_to=T);
+        #     table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
+        #     for obj_id in 1:length(env_of_trace(trace).state.objs)
+        #         html_body(trace[:init => :cfuncs => obj_id => :sampled_code], "<br>")
+        #     end  
+        # end
 
         html_body(html_table(table))
     end

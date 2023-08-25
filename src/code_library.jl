@@ -248,7 +248,7 @@ end
 #     fns::Vector{CFunc}
 # end
 
-mutable struct State
+mutable struct State #stuff that changes across time 
     objs::Vector{Object}
     globals::Vector{Any}
 end
@@ -259,7 +259,7 @@ mutable struct ExecInfo
     has_constraints::Bool
 end
 
-mutable struct Env
+mutable struct Env #stuff that doesn't change accross time
     locals::Vector{Any}
     state::State
     step_of_obj::Vector{Int} # which step function for each object
@@ -272,7 +272,7 @@ end
 new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
 
 
-@gen function call_func(func::CFunc, args::Vector{Any}, env::Env, with_constraints::ChoiceMap)
+@gen function call_func(func::CFunc, args::Vector{Any}, env::Env, state:: State, with_constraints::ChoiceMap)
     if !func.runs
         return nothing 
     end 
@@ -283,7 +283,7 @@ new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choic
     env.exec.constraints = with_constraints
     env.exec.has_constraints = !isempty(with_constraints)
     try
-        res ~ exec(func.body, env, :res);
+        res ~ exec(func.body, env, state, :res);
     catch e
         #@show "CAUGHTEM"
         #@show e 
@@ -295,12 +295,12 @@ new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choic
     
 end
 
-@gen function obj_dynamics(obj_id::Int, env::Env, with_constraints::ChoiceMap)
+@gen function obj_dynamics(obj_id::Int, env::Env, state::State, with_constraints::ChoiceMap)
     fn = env.code_library[env.step_of_obj[obj_id]]
     args = Any[env.state.objs[obj_id]]
     if fn.runs
         try
-            step ~ call_func(fn, args, env, with_constraints);
+            step ~ call_func(fn, args, env, state, with_constraints);
             @show step 
         catch e
             fn.runs = false
@@ -337,7 +337,7 @@ end
 end
 
 
-@gen function exec(e::SExpr, env::Env, addr)
+@gen function exec(e::SExpr, env::Env, state::State, addr)
     if e.is_leaf
         return e.leaf
     end
@@ -351,13 +351,13 @@ end
     ret = if head === :pass
         nothing
     elseif head === :spawn
-        ty ~ exec(e.children[2], env, :ty)
+        ty ~ exec(e.children[2], env, state, :ty)
         ty::TyRef
-        sprite ~ exec(e.children[3], env, :sprite)
-        pos ~ exec(e.children[4], env, :pos)
+        sprite ~ exec(e.children[3], env, state, :sprite)
+        pos ~ exec(e.children[4], env, state, :pos)
         attrs = []
         for (i,attr_ty) in enumerate(env.types[ty.id].attrs)
-            attr = {(:attrs, i)} ~ exec(e.children[4+i], env, (:attrs,i))
+            attr = {(:attrs, i)} ~ exec(e.children[4+i], env, state, (:attrs,i))
             attr::attr_ty # type assert
             push!(attrs, attr)
         end
@@ -366,7 +366,7 @@ end
         push!(env.state.objs, obj)
         ObjRef(length(env.state.objs))
     elseif head === :despawn
-        obj ~ exec(e.children[2], env, :obj)
+        obj ~ exec(e.children[2], env, state, :obj)
         obj::ObjRef
         obj.id = 0
         # find every objref to this and set it to null

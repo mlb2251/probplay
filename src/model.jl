@@ -311,11 +311,11 @@ include("code_library.jl")
 
 # Base.copy(state::State) = State([copy], copy(state.globals))
 
-@gen function dynamics_and_render(t::Int, prev_state::State, env::Env, canvas_height, canvas_width, var)
+@gen function dynamics_and_render(t::Int, prev_state::State, env::Env, state::State, canvas_height, canvas_width, var)
     env.state = deepcopy(prev_state)
     for i in eachindex(env.state.objs)
         # @show i
-        {:objs => i} ~ obj_dynamics(i, env, choicemap())
+        {:objs => i} ~ obj_dynamics(i, env, state, choicemap())
     end
     # for i in eachindex(env.state.objs)
         # pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)
@@ -323,9 +323,9 @@ include("code_library.jl")
         # env.state.objs[i].pos = pos
     # end
 
-    rendered = draw(canvas_height, canvas_width, env.state.objs, env.sprites)
+    rendered = draw(canvas_height, canvas_width, state.objs, env.sprites)
     observed_image ~ image_likelihood(rendered, var)
-    return env.state
+    return state
 end
 
 unfold_step = Unfold(dynamics_and_render)
@@ -390,13 +390,11 @@ make_sprites = Map(make_type)
 
     try 
         sampled_code ~ code_prior(0, Yay) 
-        cfunc = CFunc(parse(SExpr, string(sampled_code)), true)
-        return cfunc
+        return CFunc(parse(SExpr, string(sampled_code)), true)
         
     catch e 
         #TEMP, UNCOMMENT TO SEE ERRORS @show "code sampling failed with error $(e)"
-        cfunc = CFunc(nothing, false)
-        return cfunc
+        return CFunc(nothing, false)
     end
 end
 

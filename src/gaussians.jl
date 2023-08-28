@@ -257,12 +257,12 @@ function loop_bench_cuda()
     device!(1)
     GC.gc(true)
     CUDA.memory_status()
-    H,W = 100,100
+    H,W = 200,200
     ITERS = 400
-    N_GAUSS = 100
+    N_GAUSS = 200
     total = 0.
 
-    # 0.567769s at 100x100 with 100 gauss and 400 iters
+    # 0.280410 at 100x100 with 100 gauss and 400 iters
     println("GPU")
     @time for i in 1:ITERS
         # canvas = Array{Float64}(undef, (3, H, W))
@@ -279,12 +279,12 @@ function loop_bench_cuda()
         end
     end
 
-    # 26s at 100x100 with 100 gauss and 400 iters
+    # 6.783885s at 100x100 with 100 gauss and 400 iters
     println("CPU")
     @time for i in 1:ITERS
         canvas = Array{Float64}(undef, (3, H, W))
         gaussians = [
-            rand_igaussian(H,W) for _ in 1:N_GAUSS
+            rand_igaussian2(H,W) for _ in 1:N_GAUSS
         ]
         draw_region(canvas, gaussians, 1, H, 1, W);
         total += maximum(canvas)
@@ -359,11 +359,10 @@ end
 
 function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N)
 
-    C,H,W = size(canvas)
+    _,H,W = size(canvas)
 
     ix = (blockIdx().x-1) * blockDim().x + threadIdx().x
     iy = (blockIdx().y-1) * blockDim().y + threadIdx().y
-
     stride_x = gridDim().x * blockDim().x
     stride_y = gridDim().y * blockDim().y
 

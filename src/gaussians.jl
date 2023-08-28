@@ -37,6 +37,18 @@ struct IGauss2D
     b :: Float64
 end
 
+struct IGauss2D2
+    pos :: Vec
+    scale_y::Float64
+    scale_x::Float64
+    cos_angle::Float64
+    sin_angle::Float64
+    opacity::Float64
+    r :: Float64
+    g :: Float64
+    b :: Float64
+end
+
 
 function test_zygote()
     fresh()
@@ -126,6 +138,26 @@ function rand_igaussian(H,W)
     )
 end
 
+function rand_igaussian2(H,W)
+    xrot = rand()*2 - 1
+    yrot = rand()*2 - 1
+    norm = sqrt(xrot^2 + yrot^2)
+    xrot /= norm
+    yrot /= norm
+    @assert isapprox(1, xrot^2 + yrot^2)
+    IGauss2D2(
+        Vec(rand()*H, rand()*W),
+        rand()*5,
+        rand()*5,
+        xrot,
+        yrot,
+        rand(),
+        rand(),
+        rand(),
+        rand()
+    )
+end
+
 function test()
     fresh()
     H,W = 100,100
@@ -192,13 +224,30 @@ function test_cuda()
     device!(3)
     canvas_cu = CuArray(canvas)
     gaussians = [
-        rand_igaussian(H,W) for _ in 1:100
+        rand_igaussian2(H,W) for _ in 1:100
     ]
-    @time draw_region(canvas_cu, gaussians, 1, H, 1, W)
+
+    # CUDA.@sync begin
+    #     canvas_cu = CuArray{Float64}(undef, (3, H, W))
+    #     gaussians_cu = CuArray(gaussians)
+    #     draw_region_kernel(canvas_cu, gaussians_cu, 1, H, 1, W);
+    #     canvas = Array(canvas_cu)
+    # end
+
+    # ~ 1.3ms for 100x100 with 100 gauss
+    @time CUDA.@sync begin
+        canvas_cu = CuArray{Float64}(undef, (3, H, W))
+        gaussians_cu = CuArray(gaussians)
+        draw_region_kernel(canvas_cu, gaussians_cu, 1, H, 1, W);
+        canvas = Array(canvas_cu)
+    end
+
+
+    # @time draw_region(canvas_cu, gaussians, 1, H, 1, W)
     # @time 
-    fresh()
-    html_body(html_img(Array(canvas_cu), width="400px"))
-    render(;publish=true)
+    # fresh()
+    # html_body(html_img(Array(canvas_cu), width="400px"))
+    # render(;publish=true)
 
     nothing
 end
@@ -221,7 +270,7 @@ function loop_bench_cuda()
         CUDA.@sync begin
             canvas_cu = CuArray{Float64}(undef, (3, H, W))
             gaussians = [
-                rand_igaussian(H,W) for _ in 1:N_GAUSS
+                rand_igaussian2(H,W) for _ in 1:N_GAUSS
             ]
             gaussians_cu = CuArray(gaussians)
             draw_region_kernel(canvas_cu, gaussians_cu, 1, H, 1, W);
@@ -258,10 +307,10 @@ function bench_cuda()
     CUDA.memory_status()
 
     @time canvas_cu = CuArray(canvas)
-    gaussians = [rand_igaussian(H,W) for _ in 1:100]
+    gaussians = [rand_igaussian2(H,W) for _ in 1:100]
     gaussians_cu = CuArray(gaussians)
 
-    # 188.077 ms @ 200x200 with 100 gaussians
+    # 64.286 @ 200x200 with 100 gaussians
     println("\ncpu")
     t=@benchmark draw_region($(canvas), $(gaussians), 1, $(H), 1, $(W))
     show(stdout, "text/plain", t)
@@ -274,7 +323,7 @@ function bench_cuda()
     GC.gc(true)
     CUDA.memory_status()
 
-    # 1.820 ms @ 200x200
+    # 930.345 μs @ 200x200
     println("\ngpu kernel")
     t=@benchmark draw_region_kernel($(canvas_cu), $(gaussians_cu), 1, $(H), 1, $(W));
     show(stdout, "text/plain", t)
@@ -303,12 +352,12 @@ function draw_region_kernel(canvas, gaussians, ymin, ymax, xmin, xmax)
     threads_y = 16
     blocks_y = cld(H, threads_y)
     CUDA.@sync begin
-        @cuda threads=(threads_x,threads_y) blocks=(blocks_x,blocks_y) draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax)
+        @cuda threads=(threads_x,threads_y) blocks=(blocks_x,blocks_y) draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, length(gaussians))
     end
 end
 
 
-function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax)
+function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N)
 
     C,H,W = size(canvas)
 
@@ -328,16 +377,17 @@ function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax)
             r = 0.
             g = 0.
             b = 0.
-            for gauss in gaussians
+            for g in 1:N
+                gauss = gaussians[g]
                 # get position relative to gaussian
                 x2 = px-gauss.pos.x
                 y2 = py-gauss.pos.y
 
                 # now rotate
-                x = x2*cos(gauss.angle) - y2*sin(gauss.angle)
-                y = x2*sin(gauss.angle) + y2*cos(gauss.angle)
+                x = x2*gauss.cos_angle - y2*gauss.sin_angle
+                y = x2*gauss.sin_angle + y2*gauss.cos_angle
                 
-                density = exp(-(x^2/gauss.scale_x^2 + y^2/gauss.scale_y^2) / 2) / (2pi * gauss.scale_x * gauss.scale_y) * density_per_unit_area
+                density = exp(-((x/gauss.scale_x)^2 + (y/gauss.scale_y)^2) / 2) / (2pi * gauss.scale_x * gauss.scale_y) * density_per_unit_area
         
                 alpha = gauss.opacity * density
                 alpha = clamp(alpha, 0., .999)
@@ -346,11 +396,11 @@ function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax)
                 g += T * alpha * gauss.g
                 b += T * alpha * gauss.b
                 T *= 1. - alpha
-                T < 0.01 && break
+                T < 0.01 && break # doesnt really impact perf in gpu case
             end
-            canvas[1,cy,cx] = clamp(r, 0., 1.)
-            canvas[2,cy,cx] = clamp(g, 0., 1.)
-            canvas[3,cy,cx] = clamp(b, 0., 1.)
+            @inbounds canvas[1,cy,cx] = clamp(r, 0., 1.)
+            @inbounds canvas[2,cy,cx] = clamp(g, 0., 1.)
+            @inbounds canvas[3,cy,cx] = clamp(b, 0., 1.)
         end
     end
 
@@ -391,8 +441,10 @@ function draw_pixel(canvas, gaussians, cx, cy, px, py)
         x2 = px-gauss.pos.x
         y2 = py-gauss.pos.y
         # now rotate
-        x = x2*cos(gauss.angle) - y2*sin(gauss.angle)
-        y = x2*sin(gauss.angle) + y2*cos(gauss.angle)
+        # x = x2*cos(gauss.angle) - y2*sin(gauss.angle)
+        # y = x2*sin(gauss.angle) + y2*cos(gauss.angle)
+        x = x2*gauss.cos_angle - y2*gauss.sin_angle
+        y = x2*gauss.sin_angle + y2*gauss.cos_angle
 
         # density_x = exp( - x^2 / (g.scale_x^2 * 2) ) / (sqrt(2pi) * g.scale_x)
         # density_y = exp( - y^2 / (g.scale_y^2 * 2) ) / (sqrt(2pi) * g.scale_y)
@@ -400,7 +452,7 @@ function draw_pixel(canvas, gaussians, cx, cy, px, py)
         # density = exp(-(x^2/g.scale_x^2 + y^2/g.scale_y^2)/2) / (2pi * g.scale_x * g.scale_y)
 
         # unnormalized density, so x=0 y=0 yields 1 meaning gaussians dont get spread out as they expand. Equivalent to scaled gaussian.
-        density = exp(-(x^2/gauss.scale_x^2 + y^2/gauss.scale_y^2) / 2) / (2pi * gauss.scale_x * gauss.scale_y) * density_per_unit_area
+        density = exp(-((x/gauss.scale_x)^2 + (y/gauss.scale_y)^2) / 2) / (2pi * gauss.scale_x * gauss.scale_y) * density_per_unit_area
 
         # density = exp(-(x^2/g.scale_x + y^2/g.scale_y))
         alpha = gauss.opacity * density
@@ -412,13 +464,10 @@ function draw_pixel(canvas, gaussians, cx, cy, px, py)
         T *= 1. - alpha
         T < 0.01 && break
     end
-    r = clamp(r, 0., 1.)
-    g = clamp(g, 0., 1.)
-    b = clamp(b, 0., 1.)
 
-    canvas[1,cy,cx] = r
-    canvas[2,cy,cx] = g
-    canvas[3,cy,cx] = b
+    @inbounds canvas[1,cy,cx] = clamp(r, 0., 1.)
+    @inbounds canvas[2,cy,cx] = clamp(g, 0., 1.)
+    @inbounds canvas[3,cy,cx] = clamp(b, 0., 1.)
     return
 end
 

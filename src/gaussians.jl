@@ -1,6 +1,12 @@
 
+
+module Gaussians
+
 using Zygote
 using Functors
+using CUDA
+using ReverseDiff
+using BenchmarkTools
 
 include("html.jl")
 
@@ -20,8 +26,19 @@ mutable struct Gauss2D
     b :: Float64
 end
 
+struct IGauss2D
+    pos :: Vec
+    scale_y::Float64
+    scale_x::Float64
+    angle::Float64
+    opacity::Float64
+    r :: Float64
+    g :: Float64
+    b :: Float64
+end
 
-function test3()
+
+function test_zygote()
     fresh()
     H,W = 15,15
 
@@ -43,7 +60,7 @@ function test3()
         html_body(html_img(canvas, width="400px"))
     
 
-        g = gradient(gaussians) do gaussians
+        g = Zygote.gradient(gaussians) do gaussians
             # draw_region(canvas, [z], 1, H, 1, W)
             loss = 0.
             for py in 1:H
@@ -85,6 +102,19 @@ end
 
 function rand_gaussian(H,W)
     Gauss2D(
+        Vec(rand()*H, rand()*W),
+        rand()*5,
+        rand()*5,
+        rand()*2pi,
+        rand(),
+        rand(),
+        rand(),
+        rand()
+    )
+end
+
+function rand_igaussian(H,W)
+    IGauss2D(
         Vec(rand()*H, rand()*W),
         rand()*5,
         rand()*5,
@@ -156,6 +186,23 @@ function test2()
     render()
 end
 
+function test_cuda()
+    H,W = 100,100
+    canvas = zeros(Float64, 3, H, W)
+    device!(7)
+    canvas_cu = CuArray(canvas)
+    gaussians = [
+        rand_igaussian(H,W) for _ in 1:100
+    ]
+    @time draw_region(canvas_cu, gaussians, 1, H, 1, W)
+    # @time 
+    fresh()
+    html_body(html_img(Array(canvas_cu), width="400px"))
+    render(;publish=true)
+
+    nothing
+end
+
 
 function draw_region(canvas, gaussians, ymin, ymax, xmin, xmax)
     C,H,W = size(canvas)
@@ -165,7 +212,10 @@ function draw_region(canvas, gaussians, ymin, ymax, xmin, xmax)
             py = (y-1)/(H-1) * (ymax-ymin) + ymin
             px = (x-1)/(W-1) * (xmax-xmin) + xmin
             r,g,b = draw_pixel(gaussians, px, py)
-            canvas[:,y,x] += [r,g,b]
+            # canvas[:,y,x] += [r,g,b]
+            canvas[1,y,x] = r
+            canvas[2,y,x] = g
+            canvas[3,y,x] = b
         end
     end
 
@@ -197,6 +247,7 @@ function draw_pixel(gaussians, px, py)
         # density = exp(-(x^2/g.scale_x + y^2/g.scale_y))
         alpha = gauss.opacity * density
         alpha = clamp(alpha, 0., .999)
+        
         r += T * alpha * gauss.r
         g += T * alpha * gauss.g
         b += T * alpha * gauss.b
@@ -207,4 +258,110 @@ function draw_pixel(gaussians, px, py)
     g = clamp(g, 0., 1.)
     b = clamp(b, 0., 1.)
     return (r,g,b)
+end
+
+
+
+
+
+
+
+
+
+export test
+
+
+# function test()
+#     CUDA.versioninfo();
+#     @show CUDA.device();
+#     a = 1
+# end
+
+
+
+# 1.468 ms
+function logpdf(observed_image, rendered_image, var)
+    # precomputing log(var) and assuming mu=0 both give speedups here
+    log_var = log(var)
+    sum(i -> - (@inbounds abs2((observed_image[i] - rendered_image[i]) / var) + log(2π)) / 2 - log_var, eachindex(observed_image))
+end
+
+# 9.985 ms; cu = 385.682 μs
+function logpdf2(observed_image, rendered_image, var)
+    # precomputing log(var) and assuming mu=0 both give speedups here
+    log_var = log(var)
+    sum( @. - (abs2((observed_image - rendered_image) / var) + log(2π)) / 2 - log_var)
+end
+
+# 26.353 ms; cu = 521.248 μs
+function logpdf3(observed_image, rendered_image, var)
+    sum( @. - (abs2((observed_image - rendered_image) / var) + log(2π)) / 2 - log(var))
+end
+
+# 454.811 μs
+function logpdf_unreduced(observed_image, rendered_image, var)
+    @. - (abs2((observed_image - rendered_image) / var) + log(2π)) / 2 - log(var)
+end
+
+
+# 442.703 μs
+function logpdf_unreduced_prealloc(target, observed_image, rendered_image, var)
+    @. target .= - (abs2((observed_image - rendered_image) / var) + log(2π)) / 2 - log(var)
+end
+
+function kernel(target, xs, ys, var)
+    # index = threadIdx().x
+    # stride = blockDim().x
+    index = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    stride = gridDim().x * blockDim().x
+    for i = index:stride:length(target)
+        @inbounds target[i] = - (abs2((xs[i] - ys[i]) / var) + log(2π)) / 2 - log(var)
+    end
+    return nothing
+end
+
+# 364.323 μs without sum and 422.796 μs with sum
+function bench2!(target, xs, ys, var)
+    # compile kernel but don't launch it
+    kern = @cuda launch=false kernel(target, xs, ys, var)
+    config = launch_configuration(kern.fun)
+    threads = min(length(target), config.threads)
+    blocks = cld(length(target), threads)
+    # numblocks = ceil(Int, length(target)/256)
+
+    CUDA.@sync begin
+        kern(target, xs, ys, var; threads, blocks)
+        # @cuda threads=256 blocks=numblocks kernel(target, xs, ys, var)
+    end
+end
+
+
+export logpdf_tests
+function logpdf_tests()
+    x = rand(3,1000,1000) # 3 million element array
+    y = rand(3,1000,1000)
+    var = 0.1
+
+    println("logpdf()")
+    t = @benchmark logpdf($(x),$(y),$(var))
+    show(stdout, "text/plain", t)
+
+    println("logpdf2()")
+    t = @benchmark logpdf2($(x),$(y),$(var))
+    show(stdout, "text/plain", t)
+
+    println("logpdf2() cuda")
+    t = @benchmark logpdf3($(CuArray(x)),$(CuArray(y)),$(var))
+    show(stdout, "text/plain", t)
+
+
+    
+
+    nothing
+end
+
+
+
+
+
 end

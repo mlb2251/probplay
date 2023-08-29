@@ -2,7 +2,7 @@
 
 module Gaussians
 
-# using Zygote
+using Zygote
 # using Functors
 using CUDA
 using Metal
@@ -348,6 +348,33 @@ function test_all()
     nothing
 end
 
+function test_ad()
+    fresh()
+    H,W = 20,20
+
+    target = Array{Float32}(undef, 3, H, W)
+    target_gaussians = [rand_igaussian2(H,W) for _ in 1:100]
+    draw_region(target, target_gaussians, 1, H, 1, W);
+
+
+    canvas = Array{Float32}(undef, 3, H, W)
+    gaussians = [rand_igaussian2(H,W) for _ in 1:100]
+
+    g = Zygote.gradient(gaussians) do gaussians
+        draw_region(canvas, gaussians, 1, H, 1, W);
+        sum(canvas .- target)
+    end
+
+
+
+    # html_body(html_img(Float64.(canvas), width="400px"))
+    # render(publish=true)
+
+    nothing
+
+end
+
+
 
 function draw_region(canvas, gaussians, ymin, ymax, xmin, xmax)
     C,H,W = size(canvas)
@@ -375,7 +402,7 @@ end
 
 
 
-function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N)
+function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N; target=nothing)
 
     _,H,W = size(canvas)
 
@@ -392,39 +419,46 @@ function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N)
             py = ymin + pixel_height * (cy-1)
             px = xmin + pixel_width * (cx-1)
 
-            T = 1.0f0 # transmittance
-            r = 0.0f0
-            g = 0.0f0
-            b = 0.0f0
-            for G in 1:N
-                gauss = gaussians[G]
-                # get position relative to gaussian
-                x2 = px-gauss.pos.x
-                y2 = py-gauss.pos.y
-
-                # now rotate
-                x = x2*gauss.cos_angle - y2*gauss.sin_angle
-                y = x2*gauss.sin_angle + y2*gauss.cos_angle
-                
-                density = exp(-((x/gauss.scale_x)^2 + (y/gauss.scale_y)^2) / 2) / (2 * 3.141592653589f0 * gauss.scale_x * gauss.scale_y) * density_per_unit_area
-        
-                alpha = gauss.opacity * Float32(density)
-                alpha = clamp(alpha, 0f0, .999f0)
-                
-                r += T * alpha * gauss.r
-                g += T * alpha * gauss.g
-                b += T * alpha * gauss.b
-                T *= 1.0f0 - alpha
-                T < 0.01f0 && break # doesnt really impact perf in gpu case
-            end
-            @inbounds canvas[1,cy,cx] = clamp(r, 0f0, 1.0f0)
-            @inbounds canvas[2,cy,cx] = clamp(g, 0f0, 1.0f0)
-            @inbounds canvas[3,cy,cx] = clamp(b, 0f0, 1.0f0)
+            r,g,b = render_pixel(py,px,gaussians, N, density_per_unit_area)
+            @inbounds canvas[1,cy,cx] = r
+            @inbounds canvas[2,cy,cx] = g
+            @inbounds canvas[3,cy,cx] = b
         end
     end
 
     return nothing
 end
+
+@inline function render_pixel(py,px,gaussians, N, density_per_unit_area)
+    T = 1.0f0 # transmittance
+    r = 0.0f0
+    g = 0.0f0
+    b = 0.0f0
+    for G in 1:N
+        gauss = gaussians[G]
+        # get position relative to gaussian
+        x2 = px-gauss.pos.x
+        y2 = py-gauss.pos.y
+
+        # now rotate
+        x = x2*gauss.cos_angle - y2*gauss.sin_angle
+        y = x2*gauss.sin_angle + y2*gauss.cos_angle
+        
+        density = exp(-((x/gauss.scale_x)^2 + (y/gauss.scale_y)^2) / 2) / (2 * 3.141592653589f0 * gauss.scale_x * gauss.scale_y) * density_per_unit_area
+
+        alpha = gauss.opacity * Float32(density)
+        alpha = clamp(alpha, 0f0, .999f0)
+        
+        r += T * alpha * gauss.r
+        g += T * alpha * gauss.g
+        b += T * alpha * gauss.b
+        T *= 1.0f0 - alpha
+        T < 0.01f0 && break # doesnt really impact perf in gpu case
+    end
+    return clamp(r, 0f0, 1.0f0), clamp(g, 0f0, 1.0f0), clamp(b, 0f0, 1.0f0)
+end
+
+
 
 @inline function get_pos_stride(::CuDeviceArray)
     ix = (blockIdx().x-1) * blockDim().x + threadIdx().x
@@ -541,6 +575,16 @@ function logpdf_tests()
     nothing
 end
 
+
+
+
+# function mae_kernel(xs, ys, var)
+#     ix,iy,stride_x,stride_y = get_pos_stride(target)
+#     for i = index:stride:length(target)
+#         @inbounds target[i] = - (abs2((xs[i] - ys[i]) / var) + log(2π)) / 2 - log(var)
+#     end
+#     return nothing
+# end
 
 
 

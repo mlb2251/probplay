@@ -231,6 +231,27 @@ function bench_loop()
     N_GAUSS = 100
     total = 0.
 
+    GC.gc(true)
+
+    # sketch5: 5.042960s at 100x100 with 100 gauss and 400 iters
+    # M1: 2.43s
+    println("CPU")
+    function inner_cpu()
+        canvas = Array{Float32}(undef, (3, H, W))
+        gaussians = [
+            rand_igaussian2(H,W) for _ in 1:N_GAUSS
+        ]
+        draw_region(canvas, gaussians, 1, H, 1, W);
+        maximum(canvas)
+    end
+    inner_cpu()
+    @time for i in 1:ITERS
+        total += inner_cpu()
+    end
+
+    GC.gc(true)
+
+
     converter = if CUDA.functional(); CuArray else MtlArray end
     # canvas_gpu = converter(canvas)
     # gaussians_gpu = converter(gaussians)
@@ -252,25 +273,6 @@ function bench_loop()
         total += inner_gpu()
     end
 
-    GC.gc(true)
-
-
-
-    # sketch5: 5.042960s at 100x100 with 100 gauss and 400 iters
-    # M1: 4.0s
-    println("CPU")
-    function inner_cpu()
-        canvas = Array{Float32}(undef, (3, H, W))
-        gaussians = [
-            rand_igaussian2(H,W) for _ in 1:N_GAUSS
-        ]
-        draw_region(canvas, gaussians, 1, H, 1, W);
-        maximum(canvas)
-    end
-    inner_cpu()
-    @time for i in 1:ITERS
-        total += inner_cpu()
-    end
 
 
 
@@ -290,7 +292,7 @@ function bench_all()
     gaussians = [rand_igaussian2(H,W) for _ in 1:100]
 
     # sketch5: 35.302ms @ 200x200 with 100 gaussians
-    # M1: 38.422 ms
+    # M1: 20.711ms
     println("\ncpu")
     t=@benchmark draw_region($(canvas), $(gaussians), 1, $(H), 1, $(W))
     show(stdout, "text/plain", t)
@@ -299,7 +301,7 @@ function bench_all()
     CUDA.functional() && CUDA.memory_status()
 
     # sketch5: 46.994 μs μs @ 200x200
-    # M1: 591.558 μs @ 200x200
+    # M1: 576.362 μs @ 200x200
     converter = if CUDA.functional(); CuArray else MtlArray end
     canvas_gpu = converter(canvas)
     gaussians_gpu = converter(gaussians)
@@ -355,9 +357,9 @@ function draw_region(canvas, gaussians, ymin, ymax, xmin, xmax)
     launch_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, threads, blocks)
 end
 
-function launch_kernel(canvas::MtlDeviceArray, gaussians, ymin, ymax, xmin, xmax, threads, blocks)
+function launch_kernel(canvas::MtlArray, gaussians, ymin, ymax, xmin, xmax, threads, blocks)
     Metal.@sync begin
-        @metal threads=threads groups=blocks draw_pixel_kernel_mtl(canvas, gaussians, ymin, ymax, xmin, xmax, length(gaussians))
+        @metal threads=threads groups=blocks draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, length(gaussians))
     end
 end
 

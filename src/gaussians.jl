@@ -220,7 +220,7 @@ function test2()
 end
 
 
-function loop_bench_cuda()
+function bench_loop()
     # device!(1)
     GC.gc(true)
 
@@ -231,46 +231,45 @@ function loop_bench_cuda()
     N_GAUSS = 100
     total = 0.
 
-    # sketch5: 0.280410s at 100x100 with 100 gauss and 400 iters
+    converter = if CUDA.functional(); CuArray else MtlArray end
+    # canvas_gpu = converter(canvas)
+    # gaussians_gpu = converter(gaussians)
+
+
+    # sketch5: 0.064943s at 100x100 with 100 gauss and 400 iters
     # M1: 0.41s
     println("GPU")
+    function inner_gpu()
+        canvas_gpu = converter{Float32}(undef, (3, H, W))
+        gaussians = [rand_igaussian2(H,W) for _ in 1:N_GAUSS]
+        gaussians_gpu = converter(gaussians)
+        draw_region(canvas_gpu, gaussians_gpu, 1, H, 1, W);
+        canvas = Array(canvas_gpu)
+        maximum(canvas)
+    end
+    inner_gpu()
     @time for i in 1:ITERS
-        # canvas = Array{Float32}(undef, (3, H, W))
-        # canvas_cu = CuArray(canvas)
-        # CUDA.@sync begin
-        #     canvas_cu = CuArray{Float32}(undef, (3, H, W))
-        #     gaussians = [rand_igaussian2(H,W) for _ in 1:N_GAUSS]
-        #     gaussians_cu = CuArray(gaussians)
-        #     draw_region(canvas_cu, gaussians_cu, 1, H, 1, W);
-        #     canvas = Array(canvas_cu)
-        #     total += maximum(canvas)
-        # end
-
-        Metal.@sync begin
-            canvas_mtl = MtlArray{Float32}(undef, (3, H, W))
-            gaussians = [rand_igaussian2(H,W) for _ in 1:N_GAUSS]
-            gaussians_mtl = MtlArray(gaussians)
-            draw_region(canvas_mtl, gaussians_mtl, 1, H, 1, W);
-            canvas = Array(canvas_mtl)
-            total += maximum(canvas)
-        end
-
-
-
+        total += inner_gpu()
     end
 
+    GC.gc(true)
 
 
-    # sketch5: 6.783885s at 100x100 with 100 gauss and 400 iters
+
+    # sketch5: 5.042960s at 100x100 with 100 gauss and 400 iters
     # M1: 4.0s
     println("CPU")
-    @time for i in 1:ITERS
+    function inner_cpu()
         canvas = Array{Float32}(undef, (3, H, W))
         gaussians = [
             rand_igaussian2(H,W) for _ in 1:N_GAUSS
         ]
         draw_region(canvas, gaussians, 1, H, 1, W);
-        total += maximum(canvas)
+        maximum(canvas)
+    end
+    inner_cpu()
+    @time for i in 1:ITERS
+        total += inner_cpu()
     end
 
 

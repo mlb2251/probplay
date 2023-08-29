@@ -380,13 +380,18 @@ function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N)
     _,H,W = size(canvas)
 
     ix,iy,stride_x,stride_y = get_pos_stride(canvas)
+    density_per_unit_area = 50.0f0
+
+    pixel_height = Float32(ymax-ymin)/H
+    pixel_width = Float32(xmax-xmin)/W
 
     for cy in iy:stride_y:H
         for cx in ix:stride_x:W
-            py = (Float32(cy)-1)/(H-1) * (ymax-ymin) + ymin
-            px = (Float32(cx)-1)/(W-1) * (xmax-xmin) + xmin
+            # calculate where to cast our ray for the pixel at (cy,cx) in the canvas assuming
+            # (1,1) on the canvas in (ymin,xmin) in object space and (H,W) is (xmax,ymax)
+            py = ymin + pixel_height * (cy-1)
+            px = xmin + pixel_width * (cx-1)
 
-            density_per_unit_area = 50.0f0
             T = 1.0f0 # transmittance
             r = 0.0f0
             g = 0.0f0
@@ -402,7 +407,6 @@ function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N)
                 y = x2*gauss.sin_angle + y2*gauss.cos_angle
                 
                 density = exp(-((x/gauss.scale_x)^2 + (y/gauss.scale_y)^2) / 2) / (2 * 3.141592653589f0 * gauss.scale_x * gauss.scale_y) * density_per_unit_area
-                # density = exp(((x)))
         
                 alpha = gauss.opacity * Float32(density)
                 alpha = clamp(alpha, 0f0, .999f0)

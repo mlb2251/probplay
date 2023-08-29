@@ -257,9 +257,9 @@ function loop_bench_cuda()
     device!(1)
     GC.gc(true)
     CUDA.memory_status()
-    H,W = 200,200
+    H,W = 100,100
     ITERS = 400
-    N_GAUSS = 200
+    N_GAUSS = 100
     total = 0.
 
     # 0.280410 at 100x100 with 100 gauss and 400 iters
@@ -376,8 +376,8 @@ function draw_pixel_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, N)
             r = 0.
             g = 0.
             b = 0.
-            for g in 1:N
-                gauss = gaussians[g]
+            for G in 1:N
+                gauss = gaussians[G]
                 # get position relative to gaussian
                 x2 = px-gauss.pos.x
                 y2 = py-gauss.pos.y

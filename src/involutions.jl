@@ -262,7 +262,8 @@ function add_remove_sprite_involution(tr, add_remove_random, forward_retval, pro
     backward_choices = choicemap()
 
     env = env_of_trace(tr)
-    N = length(env.state.objs)
+    state = state_of_trace(tr, 0)#CHANGE THIS, t is not always 0
+    N = length(state.objs)
     M = length(env.sprites)
 
     # Gen.get_thread_info().mode_stack[end] = if add_remove_random[:add_or_remove]; :add else :remove end

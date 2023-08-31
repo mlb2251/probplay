@@ -186,8 +186,8 @@ function mh_first_frame(traces; steps=1000, step_chunk=50, final_T=nothing)
             col = String[]
             for tr in traces
                 env = env_of_trace(tr)
-                push!(col, html_img(draw(H, W, env.state.objs, env.sprites)))
-                push!(col, "step=$i<br>N=$(length(env.state.objs))<br>sprites=$(length(env.sprites))")
+                push!(col, html_img(draw(H, W, state.objs, env.sprites)))
+                push!(col, "step=$i<br>N=$(length(state.objs))<br>sprites=$(length(env.sprites))")
             end
             render_table = hcat(render_table, col)
 
@@ -237,8 +237,9 @@ function detailed_trace_row(tr, rowname; stats=nothing, final_T=nothing)
 
     (H,W,T) = get_args(tr)
     env = env_of_trace(tr)
+    state = state_of_trace(tr, 0)#zero? 
     sprites = env.sprites
-    objs = env.state.objs
+    objs = state.objs
     # rendered = html_img(render_trace_frame(tr, 0))
     rendered = html_gif(render_trace(tr); pad_to=final_T)
     bboxes = html_img(draw_bboxes(render_trace_frame(tr, 0), objs, sprites, 1, H, 1, W))
@@ -266,6 +267,7 @@ end
 
 function show_sprite(tr,i)
     env = env_of_trace(tr)
+    state = state_of_trace(tr, 0)#zer0? 
     (C,H,W) = size(tr[:init => :observed_image])
     sprite = env.sprites[i]
     colors = get_colors(length(env.sprites))
@@ -283,7 +285,7 @@ function show_sprite(tr,i)
     ystop != 1 && (canvas[:, ystop, 2:xstop-1] .= alpha_blend.(colors[i], canvas[:, ystop, 2:xstop-1], alpha))
 
     img = html_img(canvas)
-    num_objs = sum([obj.sprite_index == i for obj in env.state.objs])
+    num_objs = sum([obj.sprite_index == i for obj in state.objs])
     "$(num_objs)x$img"
 end
 
@@ -555,7 +557,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             tr = state.traces[i]
             # @show tr 
             #positions is a vector across times across objects giving their positions 
-            positions = Array{Vec}(undef, t, length(env_of_trace(tr).state.objs))
+            positions = Array{Vec}(undef, t, length(state.objs))
             for time in 1:t
                 stateobjs = tr[:steps => t].objs
                 for obj_id in 1:length(stateobjs)
@@ -565,7 +567,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
             #@show positions  
 
 
-            for obj_id in 1:length(env_of_trace(tr).state.objs)
+            for obj_id in 1:length(state.objs)
 
                 # #uncomment this, mh choosing which step function 
                 # tr, accept = mh(tr, select(:init => :init_state => :init_objs => obj_id => :step_of_obj))
@@ -737,6 +739,7 @@ show_forward_proposals :: Bool = false
     t = prev_T # `t` will be our newly added timestep
     observed_image = obs[(:steps => t => :observed_image)]
     curr_env = deepcopy(env_of_trace(prev_trace))
+    curr_state = deepcopy(state_of_trace(prev_trace, t-1))#not sure about t-1 
 
     """
     t=0 is the first observation so t=1 is the second observation (after the first step)
@@ -760,21 +763,20 @@ show_forward_proposals :: Bool = false
     end
 
 
-    for obj_id in eachindex(curr_env.state.objs)
+    for obj_id in eachindex(curr_state.objs)
 
-        curr_state = curr_env.state
         states = []
         constraints = []
         for j in 1:SAMPLES_PER_OBJ
-            curr_env.state = deepcopy(curr_state) # can be less of a deepcopy
+            curr_state = deepcopy(curr_state) # can be less of a deepcopy
          
 
-            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, choicemap())
+            {:dynamics => obj_id => j} ~ obj_dynamics(obj_id, curr_env, curr_state, choicemap())
 
             set_submap!(bwd_choices, :dynamics => obj_id => j, curr_env.exec.constraints)
 
 
-            push!(states, curr_env.state) #env.state changed
+            push!(states, curr_state) #env.state changed
             push!(constraints, curr_env.exec.constraints)
         end
 
@@ -797,7 +799,7 @@ show_forward_proposals :: Bool = false
         idx = {:idx => obj_id} ~ categorical(scores)
         
         bwd_choices[:idx => obj_id] = idx
-        curr_env.state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
+        curr_state = states[idx] #give this state onwards in the loop for the next obj, doesnt rly matter
         #curr_env.step_of_obj = step_of_objs[idx]
 
 
@@ -856,7 +858,7 @@ show_forward_proposals :: Bool = false
     # @show [curr_env.step_of_obj[i] for i in eachindex(curr_env.state.objs)]
 
     if show_forward_proposals
-        res = draw(H, W, curr_env.state.objs, curr_env.sprites)
+        res = draw(H, W, curr_state.objs, curr_env.sprites)
         html_body("<br>Result<br>", html_img(res), "<br><br>")
         # html_body("Heatmap<br>", render_heatmap(logpdfmap(ImageLikelihood(), observed_image, res, .1)), "<br><br>")
         html_body("observed-res<br>", html_img(img_diff(observed_image,res)), "<br><br>")
@@ -930,16 +932,15 @@ end
     t = next_T - 1 # `t` for the fwd proposal is equal to prev_T, which is next_T-1
 
     curr_env = env_of_trace(next_trace)
+
     prev_state = state_of_trace(next_trace, t-1) # get the state *before* the proposal even happened (the state we'll be reverted to after this finishes)
 
     fwd_choices = choicemap()
 
     # roll back to prev state
-    curr_env.state = prev_state
+    curr_state = prev_state
 
-    for obj_id in eachindex(curr_env.state.objs)
-
-        curr_state = curr_env.state
+    for obj_id in eachindex(curr_state.objs)
 
         # sample a random index where we'll keep the actual subtrace
         idx = {:idx => obj_id} ~ uniform_discrete(1, SAMPLES_PER_OBJ)
@@ -947,21 +948,21 @@ end
         actual_choices = get_submap(get_choices(next_trace), :steps => t => :objs => obj_id => :step)
 
         for j in 1:SAMPLES_PER_OBJ
-            curr_env.state = deepcopy(curr_state) # possibly slightly overkill to do this in the backward pass
+            curr_state = deepcopy(curr_state) # possibly slightly overkill to do this in the backward pass
             if j == idx
                 set_submap!(fwd_choices, :dynamics => obj_id => j, actual_choices)
             else
                 # potential problem: if one of those 19 were way better than the chosen one, itll seem like 
                 # the fwd proposal did something super unlikely
-                {:dynamics => obj_id => j} ~  obj_dynamics(obj_id, curr_env, choicemap())
+                {:dynamics => obj_id => j} ~  obj_dynamics(obj_id, curr_env, curr_state, choicemap())
                 set_submap!(fwd_choices, :dynamics => obj_id => j, curr_env.exec.constraints)
             end
         end
 
         # now run the actual dynamics (untraced, but will make no unconstrained choices)
         # for this object to get the right intermediate state
-        curr_env.state = deepcopy(curr_state)
-        obj_dynamics(obj_id, curr_env, actual_choices)
+        state = deepcopy(curr_state)
+        obj_dynamics(obj_id, curr_env, state, actual_choices)
 
     end
 

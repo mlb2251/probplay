@@ -261,7 +261,7 @@ end
 
 mutable struct Env #stuff that doesn't change accross time
     locals::Vector{Any}
-    state::State
+    #state::State
     step_of_obj::Vector{Int} # which step function for each object
     sprites::Vector{Sprite}
     code_library::Vector{CFunc}
@@ -269,8 +269,8 @@ mutable struct Env #stuff that doesn't change accross time
 end
 
 
-new_env() = Env([], State(Object[],[]), Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
-
+new_env() = Env([], Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
+#state State(Object[],[])
 
 @gen function call_func(func::CFunc, args::Vector{Any}, env::Env, state:: State, with_constraints::ChoiceMap)
     if !func.runs
@@ -297,7 +297,7 @@ end
 
 @gen function obj_dynamics(obj_id::Int, env::Env, state::State, with_constraints::ChoiceMap)
     fn = env.code_library[env.step_of_obj[obj_id]]
-    args = Any[env.state.objs[obj_id]]
+    args = Any[state.objs[obj_id]]
     if fn.runs
         try
             step ~ call_func(fn, args, env, state, with_constraints);
@@ -363,8 +363,8 @@ end
         end
         obj = Object(sprite, pos, attrs)
         # todo have it reuse slots that have been freed
-        push!(env.state.objs, obj)
-        ObjRef(length(env.state.objs))
+        push!(state.objs, obj)
+        ObjRef(length(state.objs))
     elseif head === :despawn
         obj ~ exec(e.children[2], env, state, :obj)
         obj::ObjRef

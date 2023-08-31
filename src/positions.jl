@@ -84,11 +84,11 @@ end
         env.code_library[step_of_obj] = cfunc 
         
         #running the function once to see what positions it creates 
-        poss_dyn_from_cfunc ~ obj_dynamics(obj_id, env, choicemap())
+        poss_dyn_from_cfunc ~ obj_dynamics(obj_id, env, state_of_trace(prev_trace, 0), choicemap())
         #oh noooo the states arent stored anywhere where do i get all the positions
 
         #:step
-        @show env.state.objs[obj_id].pos 
+        @show state.objs[obj_id].pos 
 
         #what about different times though 
 

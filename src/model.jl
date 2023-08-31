@@ -312,8 +312,8 @@ include("code_library.jl")
 # Base.copy(state::State) = State([copy], copy(state.globals))
 
 @gen function dynamics_and_render(t::Int, prev_state::State, env::Env, state::State, canvas_height, canvas_width, var)
-    env.state = deepcopy(prev_state)
-    for i in eachindex(env.state.objs)
+    state = deepcopy(prev_state)
+    for i in eachindex(state.objs)
         # @show i
         {:objs => i} ~ obj_dynamics(i, env, state, choicemap())
     end
@@ -408,7 +408,7 @@ sample_cfuncs = Map(sample_cfunc)
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
     
 
-    env.state = {:init_state} ~ init_state(H,W,num_sprites,env)
+    state = {:init_state} ~ init_state(H,W,num_sprites,env)
 
     # #4 TOTAL CODES ONE FOR EACH OBJECT 
     # cfuncs = [] 
@@ -427,7 +427,7 @@ sample_cfuncs = Map(sample_cfunc)
     #     end
     # end 
 
-    cfuncs ~ sample_cfuncs(collect(1:length(env.state.objs)))
+    cfuncs ~ sample_cfuncs(collect(1:length(state.objs)))
 
 
     env.code_library = cfuncs #+ [
@@ -463,10 +463,10 @@ sample_cfuncs = Map(sample_cfunc)
 
     #env.code_lib_reqs = [[], [1]] #addr 1 needed for the velocity code version 
 
-    rendered = draw(H, W, env.state.objs, env.sprites)
+    rendered = draw(H, W, state.objs, env.sprites)
     {:observed_image} ~ image_likelihood(rendered, var)
 
-    env
+    (env, state)
 end
 
 @gen function init_state(H,W,num_sprites,env)
@@ -486,9 +486,9 @@ const IMG_VAR = 0.1
 @gen (static) function model(H, W, T) 
 
     var = IMG_VAR
-    env = {:init} ~ init_model(H,W,var)
+    env, state = {:init} ~ init_model(H,W,var)
     #@show init_state
-    {:steps} ~ unfold_step(T-1, env.state, env, H, W, var)
+    {:steps} ~ unfold_step(T-1, state, env, H, W, var)
 
     return env
 end

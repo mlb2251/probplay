@@ -162,13 +162,9 @@ function bench_all()
     nothing
 end
 
-function test_all()
-    fresh()
-    CUDA.functional() && CUDA.device!(0)
-    CUDA.functional() && CUDA.memory_status()
+function test_gradients()
     H,W = 100,100
     N = 100
-    # canvas = Array{Float32}(undef, 3, H, W)
     canvas = zeros(Float32, 3, H, W)
 
     target = zeros(Float32, 3, H, W)
@@ -176,12 +172,6 @@ function test_all()
 
     orig_gaussians = rand_gauss(H,W,N)
     gaussians = copy(orig_gaussians)
-    # dgaussians = zero_gauss(N)
-
-    println("CPU rendering...")
-    draw_region(canvas, gaussians, 1, H, 1, W, nothing, target)
-    html_body(html_img(Float64.(canvas), width="400px"))
-    # render(publish=true)
 
     println("CPU gradients...")
     lr = .01
@@ -202,23 +192,33 @@ function test_all()
 
         html_body(html_img(Float64.(canvas), width="400px"))
     end
-    
+
+    nothing
+end
 
 
-    # @show dgaussians
-    # render(publish=true)
-
-    # return
-    gaussians = copy(orig_gaussians)
+function test_render()
+    CUDA.functional() && CUDA.device!(0)
+    CUDA.functional() && CUDA.memory_status()
+    H,W = 100,100
+    N = 100
     # canvas = Array{Float32}(undef, 3, H, W)
-    canvas = zeros(Float32,3, H, W)
+    canvas = zeros(Float32, 3, H, W)
 
-    # dgaussians = stack(to_igauss2d3.([IGauss2D2(Vec(0.,0.),0.,0.,0.,0.,0.,0.,0.,0.) for _ in eachindex(gaussians)]))
+    target = zeros(Float32, 3, H, W)
+    target[1,:,:] .= 1.
+
+    gaussians = rand_gauss(H,W,N)
+
+    println("CPU rendering...")
+    draw_region(canvas, gaussians, 1, H, 1, W, nothing, target)
+    html_body(html_img(Float64.(canvas), width="400px"))
+
+    canvas = zeros(Float32,3, H, W)
 
     converter = if CUDA.functional(); CuArray else MtlArray end
     canvas_gpu = converter(canvas)
     gaussians_gpu = converter(gaussians)
-    # dgaussians_gpu = converter(dgaussians)
     target_gpu = converter(target)
 
     println("GPU render")
@@ -227,8 +227,6 @@ function test_all()
     canvas = Array(canvas_gpu)
 
     html_body(html_img(Float64.(canvas), width="400px"))
-    render(publish=true)
-
     nothing
 end
 
@@ -299,13 +297,9 @@ end
 
     r,g,b = render_pixel(py,px,gaussians, N, density_per_unit_area)
 
-    # @inbounds canvas[1,cy,cx] = ForwardDiff.value(r)
-    # @inbounds canvas[2,cy,cx] = ForwardDiff.value(g)
-    # @inbounds canvas[3,cy,cx] = ForwardDiff.value(b)
-
-    @inbounds canvas[1,cy,cx] = clamp(cy/H,0.,1.)
-    @inbounds canvas[2,cy,cx] = clamp(cx/W,0.,1.)
-    @inbounds canvas[3,cy,cx] = 0.
+    @inbounds canvas[1,cy,cx] = ForwardDiff.value(r)
+    @inbounds canvas[2,cy,cx] = ForwardDiff.value(g)
+    @inbounds canvas[3,cy,cx] = ForwardDiff.value(b)
 
     @inbounds loss = abs(target[1,cy,cx] - r) + abs(target[2,cy,cx] - g) + abs(target[3,cy,cx] - b)
 

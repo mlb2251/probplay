@@ -7,8 +7,6 @@ using Metal
 using BenchmarkTools
 using ForwardDiff
 
-import GPUArraysCore: AbstractGPUArray
-
 include("html.jl")
 
 const G_Y = 1
@@ -178,12 +176,15 @@ function test_gradients()
     # dual_losses = Dual()
 
     println("CPU gradients...")
-    lr = .01
+    lr = .01f0
     for i in 1:10
         @show i
         dgaussians = ForwardDiff.gradient(gaussians) do gaussians
-            @show typeof(gaussians)
-            draw_region(canvas, gaussians, 1, H, 1, W, nothing, target)
+            # @show typeof(gaussians)
+            canvas = zeros(eltype(gaussians), 3, H, W)
+            draw_region(canvas, gaussians, 1, H, 1, W)
+            # -sum(canvas)
+            1.0
         end
         gaussians -= lr .* dgaussians
 
@@ -196,8 +197,37 @@ function test_gradients()
             gaussians[G_OPACITY,G] = clamp(gaussians[G_OPACITY,G], 0f0, 1f0)
         end
 
-        html_body(html_img(Float64.(canvas), width="400px"))
+        html_body(html_img(Float64.(ForwardDiff.value.(canvas)), width="400px"))
     end
+
+    converter = if CUDA.functional(); CuArray else MtlArray end
+    gaussians = converter(orig_gaussians)
+
+    println("GPU gradients...")
+    lr = .01f0
+    for i in 1:10
+        @show i
+        dgaussians = ForwardDiff.gradient(gaussians) do gaussians
+            # @show typeof(gaussians)
+            canvas = converter(zeros(eltype(gaussians), 3, H, W))
+            draw_region(canvas, gaussians, 1, H, 1, W)
+            -sum(canvas)
+        end
+        gaussians -= lr .* dgaussians
+
+        # possibly this stuff should go within the render function idk
+        for G in axes(gaussians,2)
+            norm = sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
+            gaussians[G_COS_ANGLE,G] /= norm
+            gaussians[G_SIN_ANGLE,G] /= norm
+            
+            gaussians[G_OPACITY,G] = clamp(gaussians[G_OPACITY,G], 0f0, 1f0)
+        end
+
+        html_body(html_img(Float64.(ForwardDiff.value.(canvas)), width="400px"))
+    end
+
+
 
     nothing
 end
@@ -217,7 +247,7 @@ function test_render()
     gaussians = rand_gauss(H,W,N)
 
     println("CPU rendering...")
-    draw_region(canvas, gaussians, 1, H, 1, W, nothing, target)
+    draw_region(canvas, gaussians, 1, H, 1, W)
     html_body(html_img(Float64.(canvas), width="400px"))
 
     canvas = zeros(Float32,3, H, W)
@@ -228,7 +258,7 @@ function test_render()
     target_gpu = converter(target)
 
     println("GPU render")
-    draw_region(canvas_gpu, gaussians_gpu, 1, H, 1, W, nothing, target_gpu)
+    draw_region(canvas_gpu, gaussians_gpu, 1, H, 1, W)
 
     canvas = Array(canvas_gpu)
 
@@ -236,57 +266,55 @@ function test_render()
     nothing
 end
 
-function draw_region(canvas::T, gaussians, ymin, ymax, xmin, xmax, gradients, target) where T <: MtlArray
+function draw_region(canvas::T, gaussians, ymin, ymax, xmin, xmax) where T <: MtlArray
     C,H,W = size(canvas)
     threads = (16,16)
     blocks = (cld(W, threads[1]), cld(H, threads[2]))
 
     Metal.@sync begin
-        @metal threads=threads groups=blocks draw_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, size(gaussians,2), gradients, target)
+        @metal threads=threads groups=blocks draw_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, size(gaussians,2))
     end
     return nothing
 end
 
-function draw_region(canvas::T, gaussians, ymin, ymax, xmin, xmax, gradients, target) where T <: CuArray
+function draw_region(canvas::T, gaussians, ymin, ymax, xmin, xmax) where T <: CuArray
     C,H,W = size(canvas)
     threads = (16,16)
     blocks = (cld(W, threads[1]), cld(H, threads[2]))
 
     CUDA.@sync begin
-        @cuda threads=threads blocks=blocks draw_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, size(gaussians,2), gradients, target)
+        @cuda threads=threads blocks=blocks draw_kernel(canvas, gaussians, ymin, ymax, xmin, xmax, size(gaussians,2))
     end
     return nothing
 end
 
-function draw_region(canvas::T, gaussians, ymin, ymax, xmin, xmax, gradients, target) where T <: Array
+function draw_region(canvas::T, gaussians, ymin, ymax, xmin, xmax) where T <: Array
     _,H,W = size(canvas)
 
-    loss = 0.
     for cx in 1:W, cy in 1:H
-        loss += draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, size(gaussians,2), target)
+        draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, size(gaussians,2))
     end
-    return loss
 end
 
 
-function draw_kernel(canvas::T, gaussians, ymin, ymax, xmin, xmax, N, gradients, target) where T <: CuDeviceArray
+function draw_kernel(canvas::T, gaussians, ymin, ymax, xmin, xmax, N) where T <: CuDeviceArray
     # get which pixel of the canvas should this thread should draw
     cx = (blockIdx().x-1) * blockDim().x + threadIdx().x
     cy = (blockIdx().y-1) * blockDim().y + threadIdx().y
 
-    draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, N, target)
+    draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, N)
     return nothing
 end
 
-function draw_kernel(canvas::T, gaussians, ymin, ymax, xmin, xmax, N, gradients, target) where T <: MtlDeviceArray
+function draw_kernel(canvas::T, gaussians, ymin, ymax, xmin, xmax, N) where T <: MtlDeviceArray
     # get which pixel of the canvas should this thread should draw
     cx,cy = Metal.thread_position_in_grid_2d()
 
-    draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, N, target)
+    draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, N)
     return nothing
 end
 
-@inline function draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, N, target)
+@inline function draw_kernel_inner(canvas, gaussians, cx, cy, ymin, ymax, xmin, xmax, N)
     _,H,W = size(canvas)
 
     if cx > W || cy > H
@@ -303,13 +331,13 @@ end
 
     r,g,b = render_pixel(py,px,gaussians, N, density_per_unit_area)
 
-    @inbounds canvas[1,cy,cx] = ForwardDiff.value(r)
-    @inbounds canvas[2,cy,cx] = ForwardDiff.value(g)
-    @inbounds canvas[3,cy,cx] = ForwardDiff.value(b)
+    @inbounds canvas[1,cy,cx] = r
+    @inbounds canvas[2,cy,cx] = g
+    @inbounds canvas[3,cy,cx] = b
 
-    @inbounds loss = abs(target[1,cy,cx] - r) + abs(target[2,cy,cx] - g) + abs(target[3,cy,cx] - b)
+    # @inbounds loss = abs(target[1,cy,cx] - r) + abs(target[2,cy,cx] - g) + abs(target[3,cy,cx] - b)
 
-    return loss
+    return
 end
 
 @inline function render_pixel(py,px,gaussians, N, density_per_unit_area)

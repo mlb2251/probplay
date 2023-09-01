@@ -160,7 +160,16 @@ function bench_all()
     nothing
 end
 
+dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDiff.Dual{T,valtype,N}
+
 function test_gradients()
+
+    # target = Array(Float32.(channelview(load("little_tony.png"))))[1:3,:,:]
+    # html_body(html_img(Float64.(target), width="400px"))
+    # _,H,W = size(target)
+
+
+
     H,W = 100,100
     N = 10
     canvas = zeros(Float32, 3, H, W)
@@ -171,67 +180,105 @@ function test_gradients()
     orig_gaussians = rand_gauss(H,W,N)
     gaussians = copy(orig_gaussians)
 
-    # losses = zeros(H,W)
-    # losses_gradcfg = GradientConfig(nothing, losses)
-    # dual_losses = Dual()
+    chunk_sz = min(H*W, 8)
+    cfg = ForwardDiff.GradientConfig(nothing, gaussians, ForwardDiff.Chunk{chunk_sz}())
+    canvas = zeros(dual_type(Float32,cfg), 3, H, W)
 
     println("CPU gradients...")
     lr = .01f0
-    for i in 1:10
+    grad_step(canvas, target, gaussians, lr, cfg)
+    @time for i in 1:10
         @show i
-        dgaussians = ForwardDiff.gradient(gaussians) do gaussians
-            # @show typeof(gaussians)
-            canvas = zeros(eltype(gaussians), 3, H, W)
-            draw_region(canvas, gaussians, 1, H, 1, W)
-            sum(abs.(target .- canvas))
-        end
-        gaussians -= lr .* dgaussians
-
-        # possibly this stuff should go within the render function idk
-        for G in axes(gaussians,2)
-            norm = sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
-            gaussians[G_COS_ANGLE,G] /= norm
-            gaussians[G_SIN_ANGLE,G] /= norm
-            
-            gaussians[G_OPACITY,G] = clamp(gaussians[G_OPACITY,G], 0f0, 1f0)
-        end
-
+        grad_step(canvas, target, gaussians, 0f0, cfg)
         html_body(html_img(Float64.(ForwardDiff.value.(canvas)), width="400px"))
     end
 
+    println("GPU gradients...")
+    CUDA.functional() && CUDA.device!(1)
+    CUDA.functional() && CUDA.memory_status()
     converter = if CUDA.functional(); CuArray else MtlArray end
     gaussians = converter(orig_gaussians)
     target = converter(target)
+    canvas = converter(canvas)
+    cfg = ForwardDiff.GradientConfig(nothing, gaussians, ForwardDiff.Chunk{chunk_sz}())
 
-    println("GPU gradients...")
     lr = .01f0
-    for i in 1:10
+    grad_step(canvas, target, gaussians, 0f0, cfg)
+    @time for i in 1:50
         @show i
-        dgaussians = ForwardDiff.gradient(gaussians) do gaussians
-            # @show typeof(gaussians)
-            canvas = converter(zeros(eltype(gaussians), 3, H, W))
-            draw_region(canvas, gaussians, 1, H, 1, W)
-            sum(abs.(target .- canvas))
-        end
-        gaussians -= lr .* dgaussians
-
-        # possibly this stuff should go within the render function idk
-        # todo note this is slow scalar indexing
-        for G in axes(gaussians,2)
-            norm = sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
-            gaussians[G_COS_ANGLE,G] /= norm
-            gaussians[G_SIN_ANGLE,G] /= norm
-            
-            gaussians[G_OPACITY,G] = clamp(gaussians[G_OPACITY,G], 0f0, 1f0)
-        end
-
+        grad_step(canvas, target, gaussians, lr, cfg)
         html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas))), width="400px"))
     end
 
-
-
     nothing
 end
+
+function grad_step(canvas, target, gaussians, lr, cfg)
+    _,H,W = size(canvas)
+    dgaussians = ForwardDiff.gradient(gaussians, cfg) do gaussians
+        draw_region(canvas, gaussians, 1, H, 1, W)
+        sum(abs.(target .- canvas))
+    end
+    gaussians .-= lr .* dgaussians
+
+    normalize_gaussians(gaussians)
+
+    # possibly this stuff should go within the render function idk
+    # for G in axes(gaussians,2)
+    #     norm = sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
+    #     gaussians[G_COS_ANGLE,G] /= norm
+    #     gaussians[G_SIN_ANGLE,G] /= norm
+        
+    #     gaussians[G_OPACITY,G] = clamp(gaussians[G_OPACITY,G], 0f0, 1f0)
+    # end
+end
+
+function normalize_gaussians(gaussians::T) where T <: CuArray
+    threads = 64
+    blocks = cld(size(gaussians,2), threads)
+    CUDA.@sync @cuda threads=threads blocks=blocks normalize_gaussians_kernel(gaussians)
+end
+
+function normalize_gaussians(gaussians::T) where T <: MtlArray
+    threads = 64
+    blocks = cld(size(gaussians,2), threads)
+    Metal.@sync @metal threads=threads groups=blocks normalize_gaussians_kernel(gaussians)
+end
+
+function normalize_gaussians_kernel(gaussians::T) where T <: CuDeviceArray
+    G = threadIdx().x
+    if G > size(gaussians,2)
+        return
+    end
+    normalize_gaussians_inner(gaussians, G)
+    return
+end
+
+function normalize_gaussians(gaussians::T) where T <: MtlDeviceArray
+    G = Metal.thread_position_in_grid_1d()
+    if G > size(gaussians,2)
+        return
+    end
+    normalize_gaussians_inner(gaussians, G)
+    return
+end
+
+function normalize_gaussians(gaussians::T) where T <: Array
+    for G in axes(gaussians,2)
+        normalize_gaussians_inner(gaussians,G)
+    end
+end
+
+@inline function normalize_gaussians_inner(gaussians, G)
+    # norm rotation
+    norm = sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
+    gaussians[G_COS_ANGLE,G] /= norm
+    gaussians[G_SIN_ANGLE,G] /= norm
+    
+    # clamp opacity
+    gaussians[G_OPACITY,G] = clamp(gaussians[G_OPACITY,G], 0f0, 1f0)
+end
+
 
 
 function test_render()
@@ -241,9 +288,6 @@ function test_render()
     N = 100
     # canvas = Array{Float32}(undef, 3, H, W)
     canvas = zeros(Float32, 3, H, W)
-
-    target = zeros(Float32, 3, H, W)
-    target[1,:,:] .= 1.
 
     gaussians = rand_gauss(H,W,N)
 
@@ -256,7 +300,6 @@ function test_render()
     converter = if CUDA.functional(); CuArray else MtlArray end
     canvas_gpu = converter(canvas)
     gaussians_gpu = converter(gaussians)
-    target_gpu = converter(target)
 
     println("GPU render")
     draw_region(canvas_gpu, gaussians_gpu, 1, H, 1, W)

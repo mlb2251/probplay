@@ -183,8 +183,7 @@ function test_gradients()
             # @show typeof(gaussians)
             canvas = zeros(eltype(gaussians), 3, H, W)
             draw_region(canvas, gaussians, 1, H, 1, W)
-            # -sum(canvas)
-            1.0
+            sum(abs.(target .- canvas))
         end
         gaussians -= lr .* dgaussians
 
@@ -202,6 +201,7 @@ function test_gradients()
 
     converter = if CUDA.functional(); CuArray else MtlArray end
     gaussians = converter(orig_gaussians)
+    target = converter(target)
 
     println("GPU gradients...")
     lr = .01f0
@@ -211,11 +211,12 @@ function test_gradients()
             # @show typeof(gaussians)
             canvas = converter(zeros(eltype(gaussians), 3, H, W))
             draw_region(canvas, gaussians, 1, H, 1, W)
-            -sum(canvas)
+            sum(abs.(target .- canvas))
         end
         gaussians -= lr .* dgaussians
 
         # possibly this stuff should go within the render function idk
+        # todo note this is slow scalar indexing
         for G in axes(gaussians,2)
             norm = sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
             gaussians[G_COS_ANGLE,G] /= norm
@@ -224,7 +225,7 @@ function test_gradients()
             gaussians[G_OPACITY,G] = clamp(gaussians[G_OPACITY,G], 0f0, 1f0)
         end
 
-        html_body(html_img(Float64.(ForwardDiff.value.(canvas)), width="400px"))
+        html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas))), width="400px"))
     end
 
 

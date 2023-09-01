@@ -214,10 +214,13 @@ function test_gradients()
 end
 
 function grad_step(canvas, target, gaussians, lr, cfg)
+    # @show size(target) size(canvas) typeof(target) typeof(canvas) typeof(canvas .- target) typeof(target .- canvas) sizeof(canvas)
+    # sum(abs.(canvas .- target))
     _,H,W = size(canvas)
     dgaussians = ForwardDiff.gradient(gaussians, cfg) do gaussians
         draw_region(canvas, gaussians, 1, H, 1, W)
         sum(abs.(target .- canvas))
+        # 1f0
     end
     gaussians .-= lr .* dgaussians
 
@@ -254,7 +257,7 @@ function normalize_gaussians_kernel(gaussians::T) where T <: CuDeviceArray
     return
 end
 
-function normalize_gaussians(gaussians::T) where T <: MtlDeviceArray
+function normalize_gaussians_kernel(gaussians::T) where T <: MtlDeviceArray
     G = Metal.thread_position_in_grid_1d()
     if G > size(gaussians,2)
         return

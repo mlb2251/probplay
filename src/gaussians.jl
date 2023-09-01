@@ -164,7 +164,7 @@ end
 
 function test_gradients()
     H,W = 100,100
-    N = 100
+    N = 10
     canvas = zeros(Float32, 3, H, W)
 
     target = zeros(Float32, 3, H, W)
@@ -173,15 +173,21 @@ function test_gradients()
     orig_gaussians = rand_gauss(H,W,N)
     gaussians = copy(orig_gaussians)
 
+    # losses = zeros(H,W)
+    # losses_gradcfg = GradientConfig(nothing, losses)
+    # dual_losses = Dual()
+
     println("CPU gradients...")
     lr = .01
-    for i in 1:20
+    for i in 1:10
         @show i
         dgaussians = ForwardDiff.gradient(gaussians) do gaussians
+            @show typeof(gaussians)
             draw_region(canvas, gaussians, 1, H, 1, W, nothing, target)
         end
         gaussians -= lr .* dgaussians
 
+        # possibly this stuff should go within the render function idk
         for G in axes(gaussians,2)
             norm = sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
             gaussians[G_COS_ANGLE,G] /= norm

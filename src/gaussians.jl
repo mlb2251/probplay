@@ -224,7 +224,7 @@ function grad_step(canvas, target, gaussians, lr, cfg)
         sum(abs.(target .- canvas))
     end
 
-    gaussians -= lr .* dgaussians
+    gaussians .-= lr .* dgaussians
 
     normalize_gaussians(gaussians)
 

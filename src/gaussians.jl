@@ -162,20 +162,20 @@ end
 
 dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDiff.Dual{T,valtype,N}
 
-function test_gradients()
+function test_gradients(target=nothing)
 
-    # target = Array(Float32.(channelview(load("little_tony.png"))))[1:3,:,:]
-    # html_body(html_img(Float64.(target), width="400px"))
-    # _,H,W = size(target)
+    if isnothing(target)
+        H,W = 100,100
+        target = zeros(Float32, 3, H, W)
+        target[1,:,:] .= 1.
+    else
+        target = Array(Float32.(channelview(load(target))))[1:3,:,:]
+        _,H,W = size(target)    
+    end
+    html_body(html_img(Float64.(target), width="400px"))
 
-
-
-    H,W = 100,100
     N = 10
     canvas = zeros(Float32, 3, H, W)
-
-    target = zeros(Float32, 3, H, W)
-    target[1,:,:] .= 1.
 
     orig_gaussians = rand_gauss(H,W,N)
     gaussians = copy(orig_gaussians)
@@ -204,7 +204,7 @@ function test_gradients()
 
     lr = .01f0
     grad_step(canvas, target, gaussians, 0f0, cfg)
-    @time for i in 1:50
+    @time for i in 1:10
         @show i
         grad_step(canvas, target, gaussians, lr, cfg)
         html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas))), width="400px"))
@@ -213,6 +213,8 @@ function test_gradients()
     nothing
 end
 
+# using ReverseDiff
+
 function grad_step(canvas, target, gaussians, lr, cfg)
     # @show size(target) size(canvas) typeof(target) typeof(canvas) typeof(canvas .- target) typeof(target .- canvas) sizeof(canvas)
     # sum(abs.(canvas .- target))
@@ -220,9 +222,9 @@ function grad_step(canvas, target, gaussians, lr, cfg)
     dgaussians = ForwardDiff.gradient(gaussians, cfg) do gaussians
         draw_region(canvas, gaussians, 1, H, 1, W)
         sum(abs.(target .- canvas))
-        # 1f0
     end
-    gaussians .-= lr .* dgaussians
+
+    gaussians -= lr .* dgaussians
 
     normalize_gaussians(gaussians)
 

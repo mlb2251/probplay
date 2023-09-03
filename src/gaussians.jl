@@ -49,11 +49,15 @@ function rand_gauss(H,W)
     cos_angle /= norm
     sin_angle /= norm
     @assert isapprox(1, cos_angle^2 + sin_angle^2)
+
+    scale_x = rand()*5 * H/100
     Float32[
         rand()*H,
         rand()*W,
-        rand()*5 * H/100,
-        rand()*5 * W/100,
+        # rand()*5 * H/100,
+        # rand()*5 * H/100,
+        scale_x,
+        scale_x,
         cos_angle,
         sin_angle,
         rand(),
@@ -163,14 +167,8 @@ end
 
 dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDiff.Dual{T,valtype,N}
 
-function test_gradients(target=nothing)
-
-    N = 1
-    lr = .005f0
-    check = false;
-    mode = :reverse
-    device = :gpu
-    ITERS = 1
+function test_gradients(;target=nothing, lr=300f0, lr_decay=0.9, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
+    
 
     Random.seed!(0)
 
@@ -216,7 +214,7 @@ function test_gradients(target=nothing)
     mode === :forward && grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, 0f0, cfg)
     mode === :reverse && grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, 0f0)
 
-    @time for i in 1:ITERS
+    @time for i in 1:iters
         @show i
         if check
             gaussians_check = copy(gaussians)
@@ -224,10 +222,14 @@ function test_gradients(target=nothing)
 
         if mode === :forward
             grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, lr, cfg)
-            html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas_dual))), width="400px"))
+            if i % log_every == 0
+                html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas_dual))), width="400px"))
+            end
         elseif mode === :reverse
-            grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, lr)   
-            html_body(html_img(Float64.(Array(canvas)), width="400px"))
+            grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, lr)
+            if i % log_every == 0
+                html_body(html_img(Float64.(Array(canvas)), width="400px"))
+            end
         else
             error("unknown mode")
         end
@@ -237,6 +239,7 @@ function test_gradients(target=nothing)
             check_grad(gaussians, gaussians_check)
         end
 
+        lr *= lr_decay
     end
 
     # gaussians = converter(orig_gaussians)
@@ -281,7 +284,7 @@ function grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, 
     _,H,W = size(canvas_dual)
     dgaussians = ForwardDiff.gradient(gaussians, cfg) do gaussians
         draw_region(canvas_dual, gaussians, transmittances, 1, H, 1, W)
-        sum(abs.(target .- canvas_dual))
+        sum(abs.(target .- canvas_dual)) / (H * W)
     end
 
     gaussians .-= lr .* dgaussians
@@ -316,7 +319,7 @@ function normalize_gaussians!(gaussians::T) where T <: MtlArray
 end
 
 function normalize_gaussians_kernel(gaussians::T) where T <: CuDeviceArray
-    G = threadIdx().x
+    G = (blockIdx().x-1) * blockDim().x + threadIdx().x
     if G > size(gaussians,2)
         return
     end
@@ -353,8 +356,9 @@ end
     gaussians[G_SCALE_X,G] = max(gaussians[G_SCALE_X,G], 0.000001f0)
     gaussians[G_SCALE_Y,G] = max(gaussians[G_SCALE_Y,G], 0.000001f0)
     gaussians[G_R,G] = clamp(gaussians[G_R,G], 0f0, 1f0)
-    gaussians[G_B,G] = clamp(gaussians[G_G,G], 0f0, 1f0)
-    gaussians[G_G,G] = clamp(gaussians[G_B,G], 0f0, 1f0)
+    gaussians[G_G,G] = clamp(gaussians[G_G,G], 0f0, 1f0)
+    gaussians[G_B,G] = clamp(gaussians[G_B,G], 0f0, 1f0)
+    return nothing
 end
 
 
@@ -427,8 +431,18 @@ function draw_region_backward(canvas::T, gaussians, transmittances, target, dgau
     Metal.@sync begin
         @metal threads=threads groups=blocks draw_kernel_backward(canvas, gaussians, transmittances, target, dgaussians,ymin, ymax, xmin, xmax, size(gaussians,2))
     end
+    return nothing 
+end
+
+function draw_region_backward(canvas::T, gaussians, transmittances, target, dgaussians, ymin, ymax, xmin, xmax) where T <: CuArray
+    C,H,W = size(canvas)
+    threads = (16,16)
+    blocks = (cld(W, threads[1]), cld(H, threads[2]))
+
+    CUDA.@sync begin
+        @cuda threads=threads blocks=blocks draw_kernel_backward(canvas, gaussians, transmittances, target, dgaussians,ymin, ymax, xmin, xmax, size(gaussians,2))
+    end
     return nothing
-        
 end
 
 
@@ -447,7 +461,15 @@ function draw_kernel_backward(canvas::T, gaussians, transmittances, target, dgau
 
     draw_kernel_inner_backward(canvas, gaussians, transmittances, target, dgaussians, cx, cy, ymin, ymax, xmin, xmax, N)
     return nothing
+end
 
+function draw_kernel_backward(canvas::T, gaussians, transmittances, target, dgaussians,ymin, ymax, xmin, xmax, N) where T <: CuDeviceArray
+    # get which pixel of the canvas should this thread should draw
+    cx = (blockIdx().x-1) * blockDim().x + threadIdx().x
+    cy = (blockIdx().y-1) * blockDim().y + threadIdx().y
+
+    draw_kernel_inner_backward(canvas, gaussians, transmittances, target, dgaussians, cx, cy, ymin, ymax, xmin, xmax, N)
+    return nothing
 end
 
 
@@ -494,7 +516,7 @@ end
     return
 end
 
-const density_per_unit_area = 50f0
+const density_per_unit_area = 30f0
 
 @inline function render_pixel(py, px, gaussians, N)
     T = 1f0 # transmittance
@@ -571,9 +593,9 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
 
     # to align with how ForwardDiff.derivative(abs, 0f0) == 1f0 
     
-    dloss_dr = r_loss_signed >= 0f0 ? -1f0 : 1f0
-    dloss_dg = g_loss_signed >= 0f0 ? -1f0 : 1f0
-    dloss_db = b_loss_signed >= 0f0 ? -1f0 : 1f0
+    dloss_dr = (r_loss_signed >= 0f0 ? -1f0 : 1f0) / (H*W)
+    dloss_dg = (g_loss_signed >= 0f0 ? -1f0 : 1f0) / (H*W)
+    dloss_db = (b_loss_signed >= 0f0 ? -1f0 : 1f0) / (H*W)
 
     # old version that sets deriv to 0f0 at loss of 0f0
     # dloss_dr = r_loss_signed == 0f0 ? 0f0 : (r_loss_signed > 0f0 ? -1f0 : 1f0)

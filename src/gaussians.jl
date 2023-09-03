@@ -165,6 +165,13 @@ dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDi
 
 function test_gradients(target=nothing)
 
+    N = 1
+    lr = .005f0
+    check = false;
+    mode = :reverse
+    device = :gpu
+    ITERS = 1
+
     Random.seed!(0)
 
     if isnothing(target)
@@ -178,24 +185,32 @@ function test_gradients(target=nothing)
     end
     html_body(html_img(Float64.(target), width="400px"))
 
-    N = 1000
     canvas = zeros(Float32, 3, H, W)
     transmittances = zeros(Float32, H, W)
-
-    orig_gaussians = rand_gauss(H,W,N)
-    gaussians = copy(orig_gaussians)
+    gaussians = rand_gauss(H,W,N)
     dgaussians = similar(gaussians)
+
+    if device === :gpu
+        CUDA.functional() && CUDA.device!(1)
+        CUDA.functional() && CUDA.memory_status()
+        converter = CUDA.functional() ? CuArray : MtlArray
+
+        target = converter(target)
+        canvas = converter(canvas)
+        transmittances = converter(transmittances)
+        gaussians = converter(gaussians)
+        dgaussians = converter(dgaussians)
+    end
 
     chunk_sz = min(H*W, 8)
     cfg = ForwardDiff.GradientConfig(nothing, gaussians, ForwardDiff.Chunk{chunk_sz}())
     canvas_dual = zeros(dual_type(Float32,cfg), 3, H, W)
 
-    println("CPU gradients...")
-    # lr = .005f0
-    lr = .005f0
-    check = false;
-    mode = :reverse
-    ITERS = 100
+    if device === :gpu
+        canvas_dual = converter(canvas_dual)
+    end
+
+    println("Optimizing...")
 
     # dry run with lr=0 to precompile
     mode === :forward && grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, 0f0, cfg)
@@ -209,8 +224,10 @@ function test_gradients(target=nothing)
 
         if mode === :forward
             grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, lr, cfg)
+            html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas_dual))), width="400px"))
         elseif mode === :reverse
             grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, lr)   
+            html_body(html_img(Float64.(Array(canvas)), width="400px"))
         else
             error("unknown mode")
         end
@@ -220,14 +237,8 @@ function test_gradients(target=nothing)
             check_grad(gaussians, gaussians_check)
         end
 
-        html_body(html_img(Float64.(canvas), width="400px"))
-        # html_body(html_img(Float64.(ForwardDiff.value.(canvas_dual)), width="400px"))
     end
 
-    # println("GPU gradients...")
-    # CUDA.functional() && CUDA.device!(1)
-    # CUDA.functional() && CUDA.memory_status()
-    # converter = if CUDA.functional(); CuArray else MtlArray end
     # gaussians = converter(orig_gaussians)
     # target = converter(target)
     # canvas = converter(canvas)
@@ -407,12 +418,36 @@ function draw_region(canvas::T, gaussians, transmittances, ymin, ymax, xmin, xma
     end
 end
 
-function draw_region_backward(canvas, gaussians, transmittances, target, dgaussians, ymin, ymax, xmin, xmax)
+
+function draw_region_backward(canvas::T, gaussians, transmittances, target, dgaussians, ymin, ymax, xmin, xmax) where T <: MtlArray
+    C,H,W = size(canvas)
+    threads = (1,1)
+    blocks = (cld(W, threads[1]), cld(H, threads[2]))
+
+    Metal.@sync begin
+        @metal threads=threads groups=blocks draw_kernel_backward(canvas, gaussians, transmittances, target, dgaussians,ymin, ymax, xmin, xmax, size(gaussians,2))
+    end
+    return nothing
+        
+end
+
+
+function draw_region_backward(canvas::T, gaussians, transmittances, target, dgaussians, ymin, ymax, xmin, xmax) where T <: Array
     _,H,W = size(canvas)
 
     for cx in 1:W, cy in 1:H
         draw_kernel_inner_backward(canvas, gaussians, transmittances, target, dgaussians, cx, cy, ymin, ymax, xmin, xmax, size(gaussians,2))
     end
+end
+
+
+function draw_kernel_backward(canvas::T, gaussians, transmittances, target, dgaussians,ymin, ymax, xmin, xmax, N) where T <: MtlDeviceArray
+    # get which pixel of the canvas should this thread should draw
+    cx,cy = Metal.thread_position_in_grid_2d()
+
+    draw_kernel_inner_backward(canvas, gaussians, transmittances, target, dgaussians, cx, cy, ymin, ymax, xmin, xmax, N)
+    return nothing
+
 end
 
 

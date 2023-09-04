@@ -569,7 +569,7 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
     _,H,W = size(canvas)
 
     # Metal.synchronize_threads()
-    # gauss = MtlThreadGroupArray(Float32, G_PARAMS)
+    # dgauss = MtlThreadGroupArray(Float32, G_PARAMS)
     # Metal.synchronize_threads()
     # gauss .= gaussians
 
@@ -622,6 +622,21 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
 
         # Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
+        # if thread_position_in_grid_1d() == 1
+            # dgauss[G_OPACITY] = 0f0
+            # dgauss[G_R] = 0f0
+            # dgauss[G_G] = 0f0
+            # dgauss[G_B] = 0f0
+            # dgauss[G_X] = 0f0
+            # dgauss[G_Y] = 0f0
+            # dgauss[G_SCALE_X] = 0f0
+            # dgauss[G_SCALE_Y] = 0f0
+            # dgauss[G_COS_ANGLE] = 0f0
+            # dgauss[G_SIN_ANGLE] = 0f0
+        # end
+
+        # Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+
         # thread = thread_position_in_threadgroup_1d()
         # if thread < G_PARAMS
         #     gauss[thread] = gaussians[thread,G]
@@ -632,8 +647,6 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
         #         gauss[thread] = gaussians[thread,G]
         #     end
         # end
-
-        # Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
 
 
         # gauss[G_X] = gaussians[G_X,G]
@@ -786,6 +799,19 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
         g_after -= g_diff
         b_after -= b_diff
         T_after = T_before
+
+        # if thread_position_in_grid_1d() == 1
+            # dgaussians[G_OPACITY,G] += dgauss[G_OPACITY]
+            # Metal.@atomic dgaussians[G_R,G] += dgauss[G_R]
+            # Metal.@atomic dgaussians[G_G,G] += dgauss[G_G]
+            # Metal.@atomic dgaussians[G_B,G] += dgauss[G_B]
+            # Metal.@atomic dgaussians[G_X,G] += dgauss[G_X]
+            # Metal.@atomic dgaussians[G_Y,G] += dgauss[G_Y]
+            # Metal.@atomic dgaussians[G_SCALE_X,G] += dgauss[G_SCALE_X]
+            # Metal.@atomic dgaussians[G_SCALE_Y,G] += dgauss[G_SCALE_Y]
+            # Metal.@atomic dgaussians[G_COS_ANGLE,G] += dgauss[G_COS_ANGLE]
+            # Metal.@atomic dgaussians[G_SIN_ANGLE,G] += dgauss[G_SIN_ANGLE]
+        # end
     end
 
 
@@ -798,7 +824,9 @@ end
 
 @inline function atomic_add_generic!(dgaussians::T, param, G, val) where T <: MtlDeviceArray 
     Metal.@atomic dgaussians[param,G] += val
+    # Metal.@atomic dgaussians[param] += val
     # dgaussians[param,G] += val
+    # Metal.atomic_fetch_add_explicit(Metal.pointer(dgaussians,param), val)
     # Metal.atomic_fetch_add_explicit(Metal.pointer(dgaussians,10*G+param), val)
 end
 

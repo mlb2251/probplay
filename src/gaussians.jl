@@ -218,7 +218,6 @@ function test_gradients(;target=nothing, lr=300.0, lr_decay=.90, N = 100, iters 
     mode === :reverse && grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, 0f0)
 
     @time for i in 1:iters
-        @show i,lr
         if check
             gaussians_check = copy(gaussians)
         end
@@ -226,11 +225,13 @@ function test_gradients(;target=nothing, lr=300.0, lr_decay=.90, N = 100, iters 
         if mode === :forward
             grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, lr, cfg)
             if i % log_every == 0
+                @show i,lr
                 html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas_dual))), width="400px"))
             end
         elseif mode === :reverse
             grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, lr)
             if i % log_every == 0
+                @show i,lr
                 html_body(html_img(Float64.(Array(canvas)), width="400px"))
             end
         else
@@ -247,6 +248,8 @@ function test_gradients(;target=nothing, lr=300.0, lr_decay=.90, N = 100, iters 
 
         lr *= lr_decay
     end
+
+    html_body(html_img(Float64.(Array(canvas)), width="400px"))
 
     # gaussians = converter(orig_gaussians)
     # target = converter(target)
@@ -546,6 +549,8 @@ const density_per_unit_area = 30f0
         # we clamp density instead of alpha (which is what the paper does) because we dont want to lose the gradient to G_OPACITY
         # -- though the paper just doesnt factor the min() into the gradient anyways I believe
         clamped_density = min(density, .99f0)
+
+
         # @show clamped_density
         alpha = gaussians[G_OPACITY,G] * clamped_density
         # alpha = min(pre_alpha, .99f0)
@@ -685,6 +690,10 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
         clamped_density = min(density, .99f0)
         alpha = gaussians[G_OPACITY,G] * clamped_density
 
+        if alpha < 1f0/255f0
+            continue
+        end
+
 
         # dexponent_dG_SCALE_X = -0.5f0 * 2f0 * (x / gaussians[G_SCALE_X,G]) * (- x / gaussians[G_SCALE_X,G]^2)
         # ... simplifies to:
@@ -712,9 +721,9 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
         dalpha_dG_OPACITY = clamped_density
         dalpha_dclamped_density = gaussians[G_OPACITY,G]
 
-        # if alpha < 1f0/255f0
-        #     continue
-        # end
+        if alpha < 1f0/255f0
+            continue
+        end
 
         # END alpha calculation
 
@@ -827,7 +836,7 @@ end
     # Metal.@atomic dgaussians[param] += val
     # dgaussians[param,G] += val
     # Metal.atomic_fetch_add_explicit(Metal.pointer(dgaussians,param), val)
-    # Metal.atomic_fetch_add_explicit(Metal.pointer(dgaussians,10*G+param), val)
+    # Metal.atomic_fetch_add_explicit(Metal.pointer(dgaussians,G_PARAMS*G+param), val)
 end
 
 @inline function atomic_add_generic!(dgaussians::T, param, G, val) where T <: Array 

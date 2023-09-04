@@ -50,14 +50,14 @@ function rand_gauss(H,W)
     sin_angle /= norm
     @assert isapprox(1, cos_angle^2 + sin_angle^2)
 
-    scale_x = rand()*5 * H/100
+    # scale_x = rand()*5 * H/100
     Float32[
         rand()*H,
         rand()*W,
-        # rand()*5 * H/100,
-        # rand()*5 * H/100,
-        scale_x,
-        scale_x,
+        rand()*5 * H/100,
+        rand()*5 * H/100,
+        # scale_x,
+        # scale_x,
         cos_angle,
         sin_angle,
         rand(),
@@ -564,9 +564,12 @@ const density_per_unit_area = 30f0
     return r, g, b, T
 end
 
-function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, dgaussians, cx, cy, ymin, ymax, xmin, xmax, N)
+function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, dgaussians, cx, cy, ymin, ymax, xmin, xmax, N) # ,::Val{N}) where N
     # START boilerplate from draw_kernel_inner
     _,H,W = size(canvas)
+
+    # gauss = MtlThreadGroupArray(Float32, (G_PARAMS, 1000))
+    # gauss .= gaussians
 
     if cx > W || cy > H
         return

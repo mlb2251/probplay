@@ -568,7 +568,9 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
     # START boilerplate from draw_kernel_inner
     _,H,W = size(canvas)
 
-    # gauss = MtlThreadGroupArray(Float32, (G_PARAMS, 1000))
+    # Metal.synchronize_threads()
+    # gauss = MtlThreadGroupArray(Float32, G_PARAMS)
+    # Metal.synchronize_threads()
     # gauss .= gaussians
 
     if cx > W || cy > H
@@ -614,8 +616,27 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
 
     # dloss_dr != 0f0 && @show dloss_dr
 
+    # gauss = zeros(Float32, G_PARAMS)
 
     for G in reverse(1:N)
+
+        # Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+        # thread = thread_position_in_threadgroup_1d()
+        # if thread < G_PARAMS
+        #     gauss[thread] = gaussians[thread,G]
+        # end
+
+        # if threads_per_threadgroup_1d() < G_PARAMS && thread == 1
+        #     for thread in threads_per_threadgroup_1d():G_PARAMS
+        #         gauss[thread] = gaussians[thread,G]
+        #     end
+        # end
+
+        # Metal.threadgroup_barrier(Metal.MemoryFlagThreadGroup)
+
+
+        # gauss[G_X] = gaussians[G_X,G]
 
         # START we repeat all this alpha calculation as the 3D gaussian splatting paper does, instead of storing the per-gauss per-pixel results
         x2 = px-gaussians[G_X,G]

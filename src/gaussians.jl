@@ -554,9 +554,9 @@ const density_per_unit_area = 30f0
         # @show clamped_density
         alpha = gaussians[G_OPACITY,G] * clamped_density
         # alpha = min(pre_alpha, .99f0)
-        # if alpha < 1f0/255f0
-        #     continue
-        # end
+        if alpha < 1f0/255f0
+            continue
+        end
         
         r = r + T * alpha * gaussians[G_R,G]
         g = g + T * alpha * gaussians[G_G,G]

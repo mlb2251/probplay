@@ -167,8 +167,11 @@ end
 
 dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDiff.Dual{T,valtype,N}
 
-function test_gradients(;target=nothing, lr=300f0, lr_decay=1f0, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
+function test_gradients(;target=nothing, lr=300.0, lr_decay=.90, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
     
+
+    lr_decay = Float32(lr_decay)
+    lr = Float32(lr)
 
     Random.seed!(0)
 
@@ -595,6 +598,7 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
     # dloss_dr = -1f0 * (r_loss_signed > 0f0 ? 1f0 : -1f0) * 1f0
 
     # to align with how ForwardDiff.derivative(abs, 0f0) == 1f0 
+    # however this does cause weird instabilities 
     
     dloss_dr = (r_loss_signed >= 0f0 ? -1f0 : 1f0) / (H*W)
     dloss_dg = (g_loss_signed >= 0f0 ? -1f0 : 1f0) / (H*W)
@@ -664,8 +668,8 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
         ddensity_ddenominator = -density / denominator
 
         # this is what forwarddiff would do, but it seems possibly undesirable!
-        # dclamped_density_ddensity = density < .99f0 ? 1f0 : 0f0
-        dclamped_density_ddensity = 1f0
+        dclamped_density_ddensity = density < .99f0 ? 1f0 : 0f0
+        # dclamped_density_ddensity = 1f0
 
         
         dalpha_dG_OPACITY = clamped_density

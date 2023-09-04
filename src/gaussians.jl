@@ -167,7 +167,7 @@ end
 
 dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDiff.Dual{T,valtype,N}
 
-function test_gradients(;target=nothing, lr=300f0, lr_decay=0.9, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
+function test_gradients(;target=nothing, lr=300f0, lr_decay=1.0, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
     
 
     Random.seed!(0)
@@ -215,7 +215,7 @@ function test_gradients(;target=nothing, lr=300f0, lr_decay=0.9, N = 100, iters 
     mode === :reverse && grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, 0f0)
 
     @time for i in 1:iters
-        @show i
+        @show i,lr
         if check
             gaussians_check = copy(gaussians)
         end
@@ -238,6 +238,9 @@ function test_gradients(;target=nothing, lr=300f0, lr_decay=0.9, N = 100, iters 
             grad_step_forward_mode(canvas_dual, target, gaussians_check, transmittances, lr, cfg)
             check_grad(gaussians, gaussians_check)
         end
+
+        # count = sum(gaussians[G_OPACITY,:] .< 0.001)
+        # @show count/N
 
         lr *= lr_decay
     end
@@ -598,9 +601,9 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
     dloss_db = (b_loss_signed >= 0f0 ? -1f0 : 1f0) / (H*W)
 
     # old version that sets deriv to 0f0 at loss of 0f0
-    # dloss_dr = r_loss_signed == 0f0 ? 0f0 : (r_loss_signed > 0f0 ? -1f0 : 1f0)
-    # dloss_dg = g_loss_signed == 0f0 ? 0f0 : (g_loss_signed > 0f0 ? -1f0 : 1f0)
-    # dloss_db = b_loss_signed == 0f0 ? 0f0 : (b_loss_signed > 0f0 ? -1f0 : 1f0)
+    # dloss_dr = r_loss_signed == 0f0 ? 0f0 : (r_loss_signed > 0f0 ? -1f0 : 1f0) / (H*W)
+    # dloss_dg = g_loss_signed == 0f0 ? 0f0 : (g_loss_signed > 0f0 ? -1f0 : 1f0) / (H*W)
+    # dloss_db = b_loss_signed == 0f0 ? 0f0 : (b_loss_signed > 0f0 ? -1f0 : 1f0) / (H*W)
 
     # dloss_dr != 0f0 && @show dloss_dr
 
@@ -616,6 +619,13 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
 
         x = x2*gaussians[G_COS_ANGLE,G] - y2*gaussians[G_SIN_ANGLE,G]
         y = x2*gaussians[G_SIN_ANGLE,G] + y2*gaussians[G_COS_ANGLE,G]
+
+        # normed_cos_angle = gaussians[G_COS_ANGLE,G] / sqrt(gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2)
+        # = gaussians[G_COS_ANGLE,G] * (gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2) ^ -0.5f0
+        # dnormed_cos_angle_dcos_angle = (norm) ^ -0.5f0 + gaussians[G_COS_ANGLE,G] * -0.5f0 * (norm) ^ -1.5f0 * 2 * gaussians[G_COS_ANGLE,G]
+        # norm = gaussians[G_COS_ANGLE,G]^2 + gaussians[G_SIN_ANGLE,G]^2
+        # dnormed_cos_angle_dcos_angle = 1/sqrt(norm) + gaussians[G_COS_ANGLE,G] * -0.5f0  *
+        # todo do it on paper... also unclear this is the way to go lol
 
         dx_dx2 = gaussians[G_COS_ANGLE,G]
         dx_dy2 = -gaussians[G_SIN_ANGLE,G]
@@ -654,7 +664,9 @@ function draw_kernel_inner_backward(canvas, gaussians, transmittances, target, d
         ddensity_ddenominator = -density / denominator
 
         # this is what forwarddiff would do, but it seems possibly undesirable!
-        dclamped_density_ddensity = density < .99f0 ? 1f0 : 0f0
+        # dclamped_density_ddensity = density < .99f0 ? 1f0 : 0f0
+        dclamped_density_ddensity = 1f0
+
         
         dalpha_dG_OPACITY = clamped_density
         dalpha_dclamped_density = gaussians[G_OPACITY,G]

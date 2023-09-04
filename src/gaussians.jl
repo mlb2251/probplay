@@ -167,7 +167,7 @@ end
 
 dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDiff.Dual{T,valtype,N}
 
-function test_gradients(;target=nothing, lr=300f0, lr_decay=1.0, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
+function test_gradients(;target=nothing, lr=300f0, lr_decay=1f0, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
     
 
     Random.seed!(0)
@@ -428,7 +428,7 @@ end
 
 function draw_region_backward(canvas::T, gaussians, transmittances, target, dgaussians, ymin, ymax, xmin, xmax) where T <: MtlArray
     C,H,W = size(canvas)
-    threads = (1,1)
+    threads = (16,16)
     blocks = (cld(W, threads[1]), cld(H, threads[2]))
 
     Metal.@sync begin
@@ -770,6 +770,8 @@ end
 
 @inline function atomic_add_generic!(dgaussians::T, param, G, val) where T <: MtlDeviceArray 
     Metal.@atomic dgaussians[param,G] += val
+    # dgaussians[param,G] += val
+    # Metal.atomic_fetch_add_explicit(Metal.pointer(dgaussians,10*G+param), val)
 end
 
 @inline function atomic_add_generic!(dgaussians::T, param, G, val) where T <: Array 

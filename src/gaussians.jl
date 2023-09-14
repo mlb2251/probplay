@@ -24,7 +24,8 @@ const G_B = 10
 const G_PARAMS = 10
 
 # struct Gauss
-#     pos :: Vec
+#     x::Float32
+#     y::Float32
 #     scale_y::Float32
 #     scale_x::Float32
 #     cos_angle::Float32
@@ -167,7 +168,7 @@ end
 
 dual_type(valtype,::ForwardDiff.GradientConfig{T,V,N}) where {T,V,N} = ForwardDiff.Dual{T,valtype,N}
 
-function test_gradients(;target=nothing, lr=300.0, lr_decay=.90, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
+function test_gradients(;target=nothing, lr=300, lr_min=50, lr_decay=.99, N = 100, iters = 20, check = false, mode = :reverse, device = :gpu, log_every=1)
     
 
     lr_decay = Float32(lr_decay)
@@ -225,17 +226,21 @@ function test_gradients(;target=nothing, lr=300.0, lr_decay=.90, N = 100, iters 
         if mode === :forward
             grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, lr, cfg)
             if i % log_every == 0
-                @show i,lr
                 html_body(html_img(Float64.(ForwardDiff.value.(Array(canvas_dual))), width="400px"))
             end
         elseif mode === :reverse
+            # draw_region(canvas, gaussians, transmittances, 1, H, 1, W)
             grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, lr)
             if i % log_every == 0
-                @show i,lr
                 html_body(html_img(Float64.(Array(canvas)), width="400px"))
             end
         else
             error("unknown mode")
+        end
+
+        if i % log_every == 0
+            loss = sum(abs.(target .- canvas)) / (H * W)
+            @show i,lr,loss
         end
 
         if check
@@ -246,7 +251,7 @@ function test_gradients(;target=nothing, lr=300.0, lr_decay=.90, N = 100, iters 
         # count = sum(gaussians[G_OPACITY,:] .< 0.001)
         # @show count/N
 
-        lr *= lr_decay
+        lr = max(lr*lr_decay, lr_min)
     end
 
     html_body(html_img(Float64.(Array(canvas)), width="400px"))
@@ -293,7 +298,8 @@ function grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, 
     _,H,W = size(canvas_dual)
     dgaussians = ForwardDiff.gradient(gaussians, cfg) do gaussians
         draw_region(canvas_dual, gaussians, transmittances, 1, H, 1, W)
-        sum(abs.(target .- canvas_dual)) / (H * W)
+        loss = sum(abs.(target .- canvas_dual)) / (H * W)
+        loss
     end
 
     gaussians .-= lr .* dgaussians
@@ -306,7 +312,7 @@ function grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaus
     dgaussians .= 0f0
     draw_region_backward(canvas, gaussians, transmittances, target, dgaussians, 1, H, 1, W)
     gaussians .-= lr .* dgaussians
-    normalize_gaussians!(gaussians)
+    normalize_gaussians!(gaussians);
 end
 
 
@@ -525,7 +531,7 @@ end
     return
 end
 
-const density_per_unit_area = 30f0
+const density_per_unit_area = 300f0
 
 @inline function render_pixel(py, px, gaussians, N)
     T = 1f0 # transmittance

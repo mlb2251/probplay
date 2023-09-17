@@ -8,7 +8,7 @@ env_of_trace(trace::TraceToken) = env_of_trace(trace.trace)
 state_of_trace(trace::TraceToken, t) = state_of_trace(trace.trace, t)
 
 function env_of_trace(trace)
-    return trace[:init]
+    return trace[:init][1]
 end
 
 function state_of_trace(trace, t)

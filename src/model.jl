@@ -311,7 +311,7 @@ include("code_library.jl")
 
 # Base.copy(state::State) = State([copy], copy(state.globals))
 
-@gen function dynamics_and_render(t::Int, prev_state::State, env::Env, state::State, canvas_height, canvas_width, var)
+@gen function dynamics_and_render(t::Int, prev_state::State, env::Env, canvas_height, canvas_width, var)
     state = deepcopy(prev_state)
     for i in eachindex(state.objs)
         # @show i
@@ -406,7 +406,6 @@ sample_cfuncs = Map(sample_cfunc)
     env = new_env();
     
     env.sprites = {:init_sprites} ~ make_sprites(collect(1:num_sprites), [H for _ in 1:num_sprites], [W for _ in 1:num_sprites]) 
-    
 
     state = {:init_state} ~ init_state(H,W,num_sprites,env)
 

@@ -282,14 +282,14 @@ new_env() = Env([], Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], fa
     empty!(env.exec.path)
     env.exec.constraints = with_constraints
     env.exec.has_constraints = !isempty(with_constraints)
-    try
+    # try
         res ~ exec(func.body, env, state, :res);
-    catch e
+    # catch e
         #@show "CAUGHTEM"
         #@show e 
-        func.runs = false
-        return nothing 
-    end 
+        # func.runs = false
+        # return nothing 
+    # end 
     env.locals = save_locals
     return res
     
@@ -298,14 +298,13 @@ end
 @gen function obj_dynamics(obj_id::Int, env::Env, state::State, with_constraints::ChoiceMap)
     fn = env.code_library[env.step_of_obj[obj_id]]
     args = Any[state.objs[obj_id]]
-    if fn.runs
-        try
+    # if fn.runs
+        # try
             step ~ call_func(fn, args, env, state, with_constraints);
-            @show step 
-        catch e
-            fn.runs = false
-        end 
-    end 
+        # catch e
+            # fn.runs = false
+        # end 
+    # end 
     return nothing
 end
 
@@ -387,25 +386,25 @@ end
         TypeRef(id)
     elseif head === :vec
         #@show e
-        y ~ exec(e.children[2], env, :y)
-        x ~ exec(e.children[3], env, :x)
+        y ~ exec(e.children[2], env, state, :y)
+        x ~ exec(e.children[3], env, state, :x)
         #@show y,x
         #@show Vec(y,x)
         Vec(y,x)
     elseif head === :+
-        a ~ exec(e.children[2], env, :a)
-        b ~ exec(e.children[3], env, :b)
+        a ~ exec(e.children[2], env, state, :a)
+        b ~ exec(e.children[3], env, state, :b)
         a + b
     elseif head === :get_local
         idx = unwrap(e.children[2])::Int
         env.locals[idx]
     elseif head === :set_local
         idx = unwrap(e.children[2])::Int
-        value ~ exec(e.children[3], env, :value)
+        value ~ exec(e.children[3], env, state, :value)
         env.locals[idx] = value
         nothing
     elseif head === :get_attr
-        obj ~ exec(e.children[2], env, :obj)
+        obj ~ exec(e.children[2], env, state, :obj)
         attr = unwrap(e.children[3])
         if attr isa Symbol
             getproperty(obj, attr)
@@ -413,9 +412,9 @@ end
             obj.attrs[attr]
         end
     elseif head === :set_attr
-        obj ~ exec(e.children[2], env, :obj)
+        obj ~ exec(e.children[2], env, state, :obj)
         attr = unwrap(e.children[3])
-        value ~ exec(e.children[4], env, :value)
+        value ~ exec(e.children[4], env, state, :value)
         if attr isa Symbol
             setproperty!(obj, attr, value)
         else
@@ -423,28 +422,28 @@ end
         end
         nothing
     elseif head === :isnull
-        obj ~ exec(e.children[2], env, :obj)
+        obj ~ exec(e.children[2], env, state, :obj)
         obj::ObjRef
         obj.id == 0
     elseif head === :null
         ObjRef(0)
     # primitive distributions
     elseif head === :normal_vec
-        mu ~ exec(e.children[2], env, :mu)
-        var ~ exec(e.children[3], env, :var)
+        mu ~ exec(e.children[2], env, state, :mu)
+        var ~ exec(e.children[3], env, state, :var)
         # ret_normal_vec ~ normal_vec(mu, var)
         # constrain!(env.exec, :ret_normal_vec, ret_normal_vec)
         ret_normal_vec ~ sample_or_constrained(env.exec, :ret_normal_vec, normal_vec, [mu, var])
         ret_normal_vec
     elseif head === :normal
-        mu ~ exec(e.children[2], env,  :mu)
-        var ~ exec(e.children[3], env,  :var)
+        mu ~ exec(e.children[2], env, state,  :mu)
+        var ~ exec(e.children[3], env, state,  :var)
         # ret_normal ~ normal(mu, var)
         # constrain!(env.exec, :ret_normal, ret_normal)
         ret_normal ~ sample_or_constrained(env.exec, :ret_normal, normal, [mu, var])
         ret_normal
     elseif head === :bernoulli
-        p ~ exec(e.children[2], env,  :p)
+        p ~ exec(e.children[2], env, state,  :p)
         # ret_bernoulli ~ bernoulli(p)
         # constrain!(env.exec, :ret_bernoulli, ret_bernoulli)
         ret_bernoulli ~ sample_or_constrained(env.exec, :ret_bernoulli, bernoulli, [p])

@@ -389,11 +389,13 @@ make_sprites = Map(make_type)
     sampled_code = nothing 
 
     try 
-        sampled_code ~ code_prior(0, Yay) 
+        sampled_code ~ code_prior(0, Yay)
+        # @show sampled_code
         return CFunc(parse(SExpr, string(sampled_code)), true)
         
     catch e 
-        #TEMP, UNCOMMENT TO SEE ERRORS @show "code sampling failed with error $(e)"
+        #TEMP, UNCOMMENT TO SEE ERRORS
+        # @show "code sampling failed with error $(e)"
         return CFunc(nothing, false)
     end
 end
@@ -429,7 +431,8 @@ sample_cfuncs = Map(sample_cfunc)
     cfuncs ~ sample_cfuncs(collect(1:length(state.objs)))
 
 
-    env.code_library = cfuncs #+ [
+    env.code_library = cfuncs 
+    env.code_library = [
         # cfuncs[1],
         # cfuncs[2],
         # cfuncs[3],
@@ -443,7 +446,8 @@ sample_cfuncs = Map(sample_cfunc)
         # stationary
         # CFunc(parse(SExpr,"(pass)")),
         # move const vel down right
-        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))")),
+        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))"), true)
+        for i in 1:length(state.objs)
         # move const vel down
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
 
@@ -458,7 +462,7 @@ sample_cfuncs = Map(sample_cfunc)
         #goal get one const velocity func where velocity is a learned latent var pretty lit
         #add a list of attributes it needs
         # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
-    #]
+    ]
 
     #env.code_lib_reqs = [[], [1]] #addr 1 needed for the velocity code version 
 

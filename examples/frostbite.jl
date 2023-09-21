@@ -17,20 +17,50 @@ function redux()
 
 
     N = 10
-    T = 10
+    T = 60
     html_body("<script>tMax=$T</script>")
-    K = G_PARAMS
+    V_Y = G_PARAMS + 1
+    V_X = G_PARAMS + 2
+
+    K = G_PARAMS + 2
 
     lib = Library()
 
-    add_fn(lib, "(store (arg 1) (add (load (arg 1)) (arg 2)))", :add_in_place)
-    add_fn(lib, "(call add_in_place 1 (arg 1))", :moveY)
-    add_fn(lib, "(store 2 (add (load 2) (arg 1)))", :moveX)
-    add_fn(lib, "(call moveY -.05)", :const_vel)
-    add_fn(lib, "(call moveY (normal 0.01 .01))", :random_walk)
-    add_fn(lib, "(call moveY (mul .1 (load 2)))", :vel_prop_to_x_pos)
+    add_fn(lib, "(store (arg 1) (+ (load (arg 1)) (arg 2)))", :add_in_place)
+    add_fn(lib, "(store (arg 1) (- 0. (load (arg 1))))", :neg_in_place)
+    
+    add_fn(lib, "(call add_in_place 1 (arg 1))", :move_y)
+    add_fn(lib, "(call add_in_place 2 (arg 1))", :move_x)
 
-    objs = Atari.rand_gauss(1,1,N)
+    add_fn(lib, "(call move_y -.05)", :const_vel)
+    add_fn(lib, "(call move_x (normal 0. .02))", :random_walk)
+    add_fn(lib, "(call move_y (* .1 (load 2)))", :vel_prop_to_x_pos)
+
+    add_fn(lib, "(call move_y (* (ifelse (< (load 2) .5) .05 -.05) (load 2)))", :up_down)
+
+    add_fn(lib, "(seq (call random_walk) (call up_down))", :random_walk_up_down)
+
+
+    add_fn(lib, "(call move_y (* .05 (load $V_Y)))", :latent_vy)
+    add_fn(lib, "(call move_x (* .05 (load $V_X)))", :latent_vx)
+
+    add_fn(lib, "(seq (call latent_vy) (call latent_vx))", :latent_vel)
+
+    # too low/high flip vx/vy
+    add_fn(lib, "(ifelse (< (load 1) 0.) (call neg_in_place $V_Y) pass)", :bounce_top)
+    add_fn(lib, "(ifelse (> (load 1) 1.) (call neg_in_place $V_Y) pass)", :bounce_bottom)
+    add_fn(lib, "(ifelse (< (load 2) 0.) (call neg_in_place $V_X) pass)", :bounce_left)
+    add_fn(lib, "(ifelse (> (load 2) 1.) (call neg_in_place $V_X) pass)", :bounce_right)
+
+    add_fn(lib, "(seq (call bounce_top) (seq (call bounce_bottom) (seq (call bounce_left) (call bounce_right))))", :wall_bounces)
+
+
+    add_fn(lib, "(seq (call wall_bounces) (call latent_vel))", :bounce)
+
+    # add_fn(lib, "(seq  (call vel_prop_to_x_pos))", :bounce_y)
+
+
+    objs = Atari.rand_gauss(1,1,K,N)
     # target_objs = Atari.rand_gauss(1,1,3)
 
     # objs = zeros(Float64, K, N)
@@ -42,7 +72,7 @@ function redux()
     # objs[G_G,:] .= 0
     # objs[G_B,:] .= 0
 
-    state = State(objs, [lib.abbreviations[:random_walk] for _ in 1:N])
+    state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
     einfo = Atari.ExecInfo(choicemap(), [], false)
 
     H,W = 400,400

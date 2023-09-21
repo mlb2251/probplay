@@ -41,11 +41,11 @@ export G_Y, G_X, G_SCALE_Y, G_SCALE_X, G_COS_ANGLE, G_SIN_ANGLE, G_OPACITY, G_R,
 zero_gauss() = zeros(Float32, G_PARAMS)
 zero_gauss(N) = zeros(Float32, G_PARAMS, N)
 
-function rand_gauss(H,W,N)
-    stack([rand_gauss(H,W) for _ in 1:N])
+function rand_gauss(H,W,K,N)
+    stack([rand_gauss(H,W,K) for _ in 1:N])
 end
 
-function rand_gauss(H,W)
+function rand_gauss(H,W,K)
     cos_angle = rand()*2 - 1
     sin_angle = rand()*2 - 1
     norm = sqrt(cos_angle^2 + sin_angle^2)
@@ -55,7 +55,7 @@ function rand_gauss(H,W)
 
     scale_x = rand()*5 * H/100
     scale_y = (rand()*.5 - .5/2 + 1.) * scale_x
-    Float32[
+    vcat(Float32[
         rand()*H,
         rand()*W,
         scale_x,
@@ -68,7 +68,9 @@ function rand_gauss(H,W)
         rand(),
         rand(),
         rand()
-    ]
+        ],
+        rand(Float32, K-G_PARAMS)
+    )
 end
 
 function bench_loop()

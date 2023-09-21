@@ -424,20 +424,59 @@ end
         fn_res
     elseif head === :const
         unwrap(e.children[2])
-    elseif head === :add
+    elseif head === :+
         a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
         b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
         a + b
-    elseif head === :mul
+    elseif head === :*
         a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
         b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
         a * b
+    elseif head === :-
+        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a - b
+    elseif head === :<
+        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a < b
+    elseif head === :>
+        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a > b
+    elseif head === :(==)
+        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a == b
+    elseif head === :not
+        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
+        !a
     elseif head === :normal
         mu ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :mu)
         var ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :var)
         ret_normal ~ sample_or_constrained(einfo, :ret_normal, normal, [mu, var])
         ret_normal
-
+    elseif head === :ifelse
+        cond ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :cond)
+        if cond
+            branch ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :branch)
+        else
+            branch ~ exec(e.children[4], args, obj_id, state, code_library, einfo, :branch)
+        end
+        branch
+    elseif head === :seq
+        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        b
+    elseif head === :println
+        for i in 2:length(e.children)
+            a ~ exec(e.children[i], args, obj_id, state, code_library, einfo, :a)
+            print(a)
+        end
+        println()
+        nothing
+    elseif head === :str
+        return string(e.children[2])
 
     # elseif head === :spawn
     #     ty ~ exec(e.children[2], env, state, :ty)

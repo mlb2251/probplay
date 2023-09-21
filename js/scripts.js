@@ -27,7 +27,7 @@ function refresh() {
         elem.checked = autoplayOn;
     }
     if (autoplayOn === true && autoplayInterval === undefined) {
-        autoplayInterval = setInterval(stepTime, 333);
+        autoplayInterval = setInterval(stepTime, 100);
     }
     if (autoplayOn === false && autoplayInterval !== undefined) {
         autoplayInterval = clearInterval(autoplayInterval);

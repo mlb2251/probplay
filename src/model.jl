@@ -1,13 +1,13 @@
 using Gen
-using LinearAlgebra
+# using LinearAlgebra
 using Images
-using AutoHashEquals
+# using AutoHashEquals
 using Dates
 import Distributions
-using Revise #maybe? 
+# using Revise #maybe? 
 
 
-@auto_hash_equals struct Vec
+struct Vec
     y::Float64
     x::Float64
 end

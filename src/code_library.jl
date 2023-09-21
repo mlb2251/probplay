@@ -226,7 +226,7 @@ end
 # end
 
 mutable struct State #stuff that changes across time 
-    objs::Matrix{Float64}
+    objs::Matrix{Float32}
     step_of_obj::Vector{Int} # which step function for each object
 end
 
@@ -336,8 +336,10 @@ end
     elseif head === :store
         register = unwrap(e.children[2])
         value ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :value)
+        # @show state.objs
         state.objs[register, obj_id] = value
-        @show (register,obj_id,value)
+        # @show state.objs
+        # @show (register,obj_id,value)
         nothing
     # elseif head === :dt
     #     dt
@@ -473,6 +475,8 @@ end
         @assert !startswith(string(head), ":") "the symbol $head has an extra leading colon (:) note that parsing sexprs inserts colons so you may have unnecessarily included one"
         error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
     end
+
+    println("$e -> $ret")
 
     @assert pop!(einfo.path) == addr
     return ret

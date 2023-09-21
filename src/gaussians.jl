@@ -1,14 +1,14 @@
 
 
-module Gaussians
+# module Gaussians
 
 using CUDA
 using Metal
-using BenchmarkTools
+# using BenchmarkTools
 using ForwardDiff
 using Random
 
-include("html.jl")
+# include("html.jl")
 
 const G_Y = 1
 const G_X = 2
@@ -22,6 +22,8 @@ const G_G = 9
 const G_B = 10
 
 const G_PARAMS = 10
+
+export G_Y, G_X, G_SCALE_Y, G_SCALE_X, G_COS_ANGLE, G_SIN_ANGLE, G_OPACITY, G_R, G_G, G_B, G_PARAMS
 
 # struct Gauss
 #     x::Float32
@@ -140,7 +142,7 @@ function bench_all()
     # sketch5: 35.302ms @ 200x200 with 100 gaussians
     # M1: 20.711ms
     println("\ncpu")
-    t=@benchmark draw_region($(canvas), $(gaussians), 1, $(H), 1, $(W))
+    # t=@benchmark draw_region($(canvas), $(gaussians), 1, $(H), 1, $(W))
     show(stdout, "text/plain", t)
 
     GC.gc(true)
@@ -151,7 +153,7 @@ function bench_all()
     converter = if CUDA.functional(); CuArray else MtlArray end
     canvas_gpu = converter(canvas)
     gaussians_gpu = converter(gaussians)
-    t=@benchmark draw_region($(canvas_gpu), $(gaussians_gpu), 1, $(H), 1, $(W));
+    # t=@benchmark draw_region($(canvas_gpu), $(gaussians_gpu), 1, $(H), 1, $(W));
     println("\ngpu kernel")
     show(stdout, "text/plain", t)
     
@@ -306,11 +308,10 @@ function grad_step_forward_mode(canvas_dual, target, gaussians, transmittances, 
     normalize_gaussians!(gaussians)
 end
 
-function grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, lr)
-    _,H,W = size(canvas)
-    draw_region(canvas, gaussians, transmittances, 1, H, 1, W)
+function grad_step_reverse_mode(canvas, target, gaussians, transmittances, dgaussians, lr, ymin, ymax, xmin, xmax)
+    draw_region(canvas, gaussians, transmittances, ymin, ymax, xmin, xmax)
     dgaussians .= 0f0
-    draw_region_backward(canvas, gaussians, transmittances, target, dgaussians, 1, H, 1, W)
+    draw_region_backward(canvas, gaussians, transmittances, target, dgaussians, ymin, ymax, xmin, xmax)
     gaussians .-= lr .* dgaussians
     normalize_gaussians!(gaussians);
 end
@@ -851,4 +852,4 @@ end
 
 
 
-end
+# end

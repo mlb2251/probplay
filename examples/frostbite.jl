@@ -1,5 +1,85 @@
 using Atari
 using Gen
+import Atari: State
+
+
+const G_Y = 1
+const G_X = 2
+const G_RADIUS = 3
+const G_R = 4
+const G_G = 5
+const G_B = 6
+
+
+function redux()
+    N = 1
+    K = 8
+
+    moveX = 1
+    code_library = [
+        # moveX
+        CFunc(parse(SExpr, "(store 1 (add (load 1) (arg 1)))"), true),
+        CFunc(parse(SExpr, "(call $moveX .05)"), true),
+        # CFunc(parse(SExpr, "(store 1 (add (load 1) .1))"), true),
+    ]
+
+    objs = zeros(Float64, K, N)
+    objs[G_Y,:] .= .5
+    objs[G_X,:] .= .5
+    objs[G_RADIUS,:] .= .2
+    objs[G_R,:] .= 1
+    objs[G_G,:] .= 0
+    objs[G_B,:] .= 0
+
+    state = State(objs, ones(N))
+    einfo = Atari.ExecInfo(choicemap(), [], false)
+
+    H,W = 100,100
+    canvas = zeros(Float64, 3, H, W)
+
+    render(state, canvas, 0, 1, 0, 1)
+    html_body(html_img(canvas, width="400px"))
+
+    for t in 1:100
+        call_func(2, [], 1, state, code_library, einfo)
+        render(state, canvas, 0, 1, 0, 1)
+        html_body(html_img(canvas, width="400px"))    
+    end
+
+end
+
+
+
+function render(state::State, canvas, ymin, ymax, xmin, xmax)
+    (K,N) = size(state.objs)
+    (_,H,W) = size(canvas)
+
+    pixel_height = Float32(ymax-ymin)/H
+    pixel_width = Float32(xmax-xmin)/W
+
+    canvas .= 0.
+
+    for cx in 1:W
+        for cy in 1:H
+            py = ymin + pixel_height * (cy-1)
+            px = xmin + pixel_width * (cx-1)
+
+            for i in 1:N
+                y = py - state.objs[G_Y,i]
+                x = px - state.objs[G_X,i]
+                radius = state.objs[G_RADIUS,i]
+
+                density = exp(-((y^2 + x^2) / (2*radius^2)))
+
+                canvas[1,cy,cx] += state.objs[G_R,i]*density
+                canvas[2,cy,cx] += state.objs[G_G,i]*density
+                canvas[3,cy,cx] += state.objs[G_B,i]*density
+            end
+        end
+    end
+
+    canvas
+end
 
 
 square!(sprites, color, side) = rect!(sprites, color, side, side)

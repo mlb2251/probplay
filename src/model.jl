@@ -60,13 +60,17 @@ struct TyRef
 end
 
 mutable struct Object
-    # type :: Int
-    sprite_index :: Int
-    pos :: Vec
+    x :: Float64
+    y :: Float64
+    r :: Float64
+    g :: Float64
+    b :: Float64
+    h :: Float64
+    w :: Float64
     attrs :: Vector{Any}
 
-    Object(sprite_index, pos) = new(sprite_index, pos, [])
-    Object(sprite_index, pos, attrs) = new(sprite_index, pos, attrs)
+    # Object(sprite_index, pos) = new(sprite_index, pos, [])
+    # Object(sprite_index, pos, attrs) = new(sprite_index, pos, attrs)
 end
 
 Base.copy(obj::Object) = Object(obj.sprite_index, obj.pos, copy(obj.float_attrs))

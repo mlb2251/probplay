@@ -208,6 +208,7 @@ end
 # end
 
 @inline function unwrap(e::SExpr)
+    @assert e.is_leaf "$e is not a leaf"
     e.leaf
 end
 
@@ -318,6 +319,8 @@ end
     if e.is_leaf
         return e.leaf
     end
+    @show e
+    @show args
 
     @assert !(addr isa Pair)
     push!(einfo.path, addr)
@@ -328,13 +331,13 @@ end
     ret = if head === :pass
         nothing
     elseif head === :load
-        register = unwrap(e.children[2])
+        register ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :register)
         state.objs[register, obj_id]
     elseif head === :arg
         i = unwrap(e.children[2])
         args[i]
     elseif head === :store
-        register = unwrap(e.children[2])
+        register ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :register)
         value ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :value)
         # @show state.objs
         state.objs[register, obj_id] = value
@@ -346,8 +349,8 @@ end
     # elseif head === :elapsed
     #     elapsed
     elseif head === :call
-        fn = unwrap(e.children[2])
-        inner_args = Float64[]
+        fn ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :fn)
+        inner_args = []
         for i in 3:length(e.children)
             inner_arg = {(:args,i)} ~ exec(e.children[i], args, obj_id, state, code_library, einfo, (:args,i))
             push!(inner_args, inner_arg)
@@ -476,7 +479,7 @@ end
         error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
     end
 
-    println("$e -> $ret")
+    # println("$e -> $ret")
 
     @assert pop!(einfo.path) == addr
     return ret

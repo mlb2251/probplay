@@ -9,17 +9,28 @@ import Atari: State
 # const G_G = 5
 # const G_B = 6
 
-
+using Random
 function redux()
+
+    Random.seed!(1)
+
+
     N = 1
     K = G_PARAMS
 
-    moveX = 1
+    add_in_place = 1
+    moveY = 2
+    moveX = 3
     code_library = [
+        # (add_in_place addr val)
+        CFunc(parse(SExpr, "(store (arg 1) (add (load (arg 1)) (arg 2)))"), true),
+        # moveY
+        CFunc(parse(SExpr, "(call $add_in_place 1 (arg 1))"), true),
+        # CFunc(parse(SExpr, "(store 1 (add (load 1) (arg 1)))"), true),
         # moveX
-        CFunc(parse(SExpr, "(store 1 (add (load 1) (arg 1)))"), true),
-        CFunc(parse(SExpr, "(call $moveX .05)"), true),
-        # CFunc(parse(SExpr, "(store 1 (add (load 1) .1))"), true),
+        CFunc(parse(SExpr, "(store 2 (add (load 2) (arg 1)))"), true),
+        # const vel motion
+        CFunc(parse(SExpr, "(call $moveY -.05)"), true),
     ]
 
     objs = Atari.rand_gauss(1,1,1)
@@ -53,13 +64,14 @@ function redux()
 
     lr = 0.001
     dgaussians = similar(objs)
-    for t in 1:10
-        call_func(2, [], 1, state, code_library, einfo)
+    @time for t in 1:10
+        # call_func(2, [], 1, state, code_library, einfo)
+        tr = simulate(call_func, (length(code_library), [], 1, state, code_library, einfo));
         # Atari.grad_step_reverse_mode(canvas, target, objs, transmittances, dgaussians, lr, 0,1,0,1)
         # objs[G_OPACITY,:] .= 1
         # if t % 10 == 1
-            @show objs[:,1]
-            @show state.objs[:,1]
+            # @show objs[:,1]
+            # @show state.objs[:,1]
             draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
             html_body(html_img(canvas, width="400px"))
         # end

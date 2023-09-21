@@ -53,12 +53,13 @@ function rand_gauss(H,W)
     sin_angle /= norm
     @assert isapprox(1, cos_angle^2 + sin_angle^2)
 
-    # scale_x = rand()*5 * H/100
+    scale_x = rand()*5 * H/100
+    scale_y = (rand()*.5 - .5/2 + 1.) * scale_x
     Float32[
         rand()*H,
         rand()*W,
-        rand()*5 * H/100,
-        rand()*5 * H/100,
+        scale_x,
+        scale_y,
         # scale_x,
         # scale_x,
         cos_angle,
@@ -532,7 +533,10 @@ end
     return
 end
 
-const density_per_unit_area = 300f0
+# const density_per_unit_area = 300f0
+
+const density_per_unit_area = 0.01f0
+
 
 @inline function render_pixel(py, px, gaussians, N)
     T = 1f0 # transmittance

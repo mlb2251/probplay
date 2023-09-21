@@ -35,7 +35,7 @@ end
 """
 Makes a fresh global html, returning the old one
 """
-function html_fresh()
+function fresh()
     html_set(html_new())
 end
 
@@ -129,7 +129,7 @@ function html_tslider()
 end
 
 
-function html_render(;open=true, publish::Union{Bool,Nothing}=nothing, styles="css/styles.css", scripts="js/scripts.js")
+function render(;open=true, publish::Union{Bool,Nothing}=nothing, styles="css/styles.css", scripts="js/scripts.js")
     if isnothing(publish)
         publish = occursin("csail.mit.edu", gethostname()) && occursin("sketch", gethostname())
     end
@@ -252,7 +252,3 @@ function open_in_default_browser(url::AbstractString)::Bool
         
     end
 end
-
-
-const fresh = html_fresh
-const render = html_render

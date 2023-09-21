@@ -10,6 +10,7 @@ import Atari: State
 # const G_B = 6
 
 using Random
+
 function redux()
 
     # Random.seed!(1)
@@ -20,24 +21,14 @@ function redux()
     html_body("<script>tMax=$T</script>")
     K = G_PARAMS
 
-    add_in_place = 1
-    moveY = 2
-    moveX = 3
-    const_vel = 4
-    random_walk = 5
-    code_library = [
-        # (add_in_place addr val)
-        CFunc(parse(SExpr, "(store (arg 1) (add (load (arg 1)) (arg 2)))"), true),
-        # moveY
-        CFunc(parse(SExpr, "(call $add_in_place 1 (arg 1))"), true),
-        # CFunc(parse(SExpr, "(store 1 (add (load 1) (arg 1)))"), true),
-        # moveX
-        CFunc(parse(SExpr, "(store 2 (add (load 2) (arg 1)))"), true),
-        # const vel motion
-        CFunc(parse(SExpr, "(call $moveY -.05)"), true),
-        # random walk
-        CFunc(parse(SExpr, "(call $moveY (normal 0 .01))"), true),
-    ]
+    lib = Library()
+
+    add_fn(lib, "(store (arg 1) (add (load (arg 1)) (arg 2)))", :add_in_place)
+    add_fn(lib, "(call add_in_place 1 (arg 1))", :moveY)
+    add_fn(lib, "(store 2 (add (load 2) (arg 1)))", :moveX)
+    add_fn(lib, "(call moveY -.05)", :const_vel)
+    add_fn(lib, "(call moveY (normal 0.01 .01))", :random_walk)
+    add_fn(lib, "(call moveY (mul .1 (load 2)))", :vel_prop_to_x_pos)
 
     objs = Atari.rand_gauss(1,1,N)
     # target_objs = Atari.rand_gauss(1,1,3)
@@ -51,7 +42,7 @@ function redux()
     # objs[G_G,:] .= 0
     # objs[G_B,:] .= 0
 
-    state = State(objs, [random_walk for _ in 1:N])
+    state = State(objs, [lib.abbreviations[:random_walk] for _ in 1:N])
     einfo = Atari.ExecInfo(choicemap(), [], false)
 
     H,W = 400,400
@@ -77,7 +68,7 @@ function redux()
         @show t
         # call_func(2, [], 1, state, code_library, einfo)
         for obj_id in 1:N
-            tr = simulate(Atari.obj_dynamics, (obj_id, state, code_library, einfo, choicemap()));
+            tr = simulate(Atari.obj_dynamics, (obj_id, state, lib, einfo, choicemap()));
         # Atari.grad_step_reverse_mode(canvas, target, objs, transmittances, dgaussians, lr, 0,1,0,1)
         # objs[G_OPACITY,:] .= 1s
         # if t % 10 == 1

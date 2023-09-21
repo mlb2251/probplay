@@ -1,6 +1,6 @@
 
 using Gen
-export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env
+export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env, Library, add_fn
 
 mutable struct SExpr
     is_leaf::Bool
@@ -243,6 +243,10 @@ mutable struct CFunc
     runs::Bool
 end
 
+CFunc(expr::SExpr) = CFunc(expr, true)
+CFunc(s::String) = CFunc(parse(SExpr, s))
+
+
 mutable struct Ty
     step::CFunc
     attrs::Vector{Type}
@@ -273,6 +277,25 @@ mutable struct Env #stuff that doesn't change accross time
 end
 
 
+mutable struct Library
+    fns::Vector{CFunc}
+    abbreviations::Dict{Symbol, Int}
+
+    Library() = new(Vector{CFunc}(), Dict{Symbol, Int}())
+end
+
+function add_fn(lib::Library, func::CFunc, name=nothing)
+    push!(lib.fns, func)
+    if !isnothing(name)
+        @assert !haskey(lib.abbreviations, name)
+        lib.abbreviations[name] = length(lib.fns)
+    end
+end
+
+add_fn(lib::Library, func::String, name=nothing) = add_fn(lib, CFunc(func), name)
+
+
+
 # new_env() = Env([], Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
 #state State(Object[],[])
 
@@ -280,7 +303,11 @@ end
     # if !func.runs
     #     return nothing 
     # end 
-    func = code_library[func_id]
+    if func_id isa Symbol
+        func_id = code_library.abbreviations[func_id]
+    end
+
+    func = code_library.fns[func_id]
     # save_locals = env.locals
     # env.locals = args
     # try

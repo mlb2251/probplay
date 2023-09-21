@@ -6,7 +6,7 @@ mutable struct SExpr
     is_leaf::Bool
     leaf::Any #not SExprs here, should require smth about non listey s expr?? 
     children::Vector{SExpr}
-    parent::Union{Tuple{SExpr,Int}, Nothing} # parent and which index of the child it is
+    # parent::Union{Tuple{SExpr,Int}, Nothing} # parent and which index of the child it is
 end
 
 struct Primitive
@@ -27,29 +27,44 @@ struct Yay
 end 
 
 
-function sexpr_node(children::Vector{SExpr}; parent=nothing)
+function sexpr_node(children::Vector{SExpr})
     """outputs a node s expression"""
-    expr = SExpr(false, nothing, children, parent)
-    for (i,child) in enumerate(children)
-        isnothing(child.parent) || error("arg already has parent")
-        child.parent = (expr,i)
-    end
+    expr = SExpr(false, nothing, children)
+    # for (i,child) in enumerate(children)
+    #     isnothing(child.parent) || error("arg already has parent")
+    #     child.parent = (expr,i)
+    # end
     expr 
 end
 
-function sexpr_leaf(leaf; parent=nothing)
+function sexpr_leaf(leaf)
     """outputs a leaf s expression, like a number or something"""
-    SExpr(true, leaf, Vector{SExpr}(), parent)
+    SExpr(true, leaf, Vector{SExpr}())
 end
 
-function Base.copy(e::SExpr)
-    SExpr(
-        e.is_leaf,
-        e.leaf,
-        [copy(child) for child in e.children],
-        nothing,
-    )
+"""
+Max arity of an expr. Assumes arguments are always of the form `(arg i)` where i>0.
+For example (add (arg 1) 2.5) has arity 1.
+"""
+function arity(e::SExpr)
+    arity = 0
+    for subtree in subexpressions(e)
+        # if subtree is of the form (arg i) and i is greater than the current max arity, update the max arity
+        if !subtree.is_leaf && length(subtree.children) == 2 && subtree.children[1].leaf === :arg && subtree.children[2].leaf > arity
+            arity = subtree.children[2].leaf
+        end
+    end
+    arity
 end
+
+# function Base.copy(e::SExpr)
+#     SExpr(
+#         e.is_leaf,
+#         e.leaf,
+#         [copy(child) for child in e.children],
+#         nothing,
+#     )
+# end
 
 "child-first traversal"
 function subexpressions(e::SExpr; subexprs = SExpr[])
@@ -58,6 +73,11 @@ function subexpressions(e::SExpr; subexprs = SExpr[])
     end
     push!(subexprs, e)
 end
+
+# function iter_subexprs(e::SExpr)
+#     Iterators.flatten((Iterators.only(e), Iterators.map(iter_subexprs, e.children)))
+# end
+# Base.iterate(e::SExpr, state=1) = state > length(e.children) ? nothing : (e.children[state], state+1
 
 Base.size(e::SExpr) = if e.is_leaf 1. else sum(size, e.children, init=0.) end
 
@@ -156,6 +176,7 @@ function Base.parse(::Type{SExpr}, original_s::String)
 
         if items[i] == "("
             push!(expr_stack, sexpr_node(SExpr[]))
+            # expr_stack[end].children[end].parent = expr_stack[end]
         elseif items[i] == ")"
             # end an expression: pop the last SExpr off of expr_stack and add it to the SExpr at one level before that
 
@@ -166,15 +187,20 @@ function Base.parse(::Type{SExpr}, original_s::String)
 
             last = pop!(expr_stack)
             push!(expr_stack[end].children, last)
+            # expr_stack[end].children[end].parent = expr_stack[end]
         else
             # any other item like "foo" or "+" is a symbol
             push!(expr_stack[end].children, make_leaf(items[i]))
+            # expr_stack[end].children[end].parent = expr_stack[end]
         end
     end
 
     length(expr_stack) != 0 || error("unreachable - should have been caught by the first check for string emptiness")
     length(expr_stack) == 1 || error("unbalanced parens: not enough close parens in $original_s")
 
+    # for c in expr_stack[1].children
+    #     c.parent = expr_stack[1]
+    # end
     return pop!(expr_stack)
 end
 
@@ -258,6 +284,11 @@ end
     # save_locals = env.locals
     # env.locals = args
     # try
+
+    if arity(func.body) != length(args)
+        error("wrong number of arguments to function $func_id: $(func.body) invoked with args $args at trace position $(einfo.path)")
+    end
+
     res = {:body} ~ exec(func.body, args, obj_id, state, code_library, einfo, :body)
     # catch e
         #@show "CAUGHTEM"
@@ -270,7 +301,8 @@ end
 end
 
 @gen function obj_dynamics(obj_id, state, code_library, einfo, with_constraints::ChoiceMap)
-    # fn = env.code_library[env.step_of_obj[obj_id]]
+    fn = state.step_of_obj[obj_id]
+    args = []
     # args = Any[state.objs[obj_id]]
 
     empty!(einfo.path)
@@ -301,9 +333,9 @@ end
     res = if einfo.has_constraints
         get_value(einfo.constraints, path)
     else
-        if !fn.runs
-            return nothing
-        end
+        # if !fn.runs
+        #     return nothing
+        # end
         retval ~ fn(args...)
         @assert !has_value(einfo.constraints, path) || error("sampled same address twice")
         set_value!(einfo.constraints, path, retval)
@@ -319,8 +351,13 @@ end
     if e.is_leaf
         return e.leaf
     end
-    @show e
-    @show args
+
+    # for c in e.children
+    #     @assert c.parent === e "$e $c"
+    # end
+
+    # @show e
+    # @show args
 
     @assert !(addr isa Pair)
     push!(einfo.path, addr)
@@ -335,6 +372,7 @@ end
         state.objs[register, obj_id]
     elseif head === :arg
         i = unwrap(e.children[2])
+        # println(join(einfo.path, " -> "))
         args[i]
     elseif head === :store
         register ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :register)
@@ -370,7 +408,7 @@ end
     elseif head === :normal
         mu ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :mu)
         var ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :var)
-        ret_normal ~ sample_or_constrained(env.exec, :ret_normal, normal, [mu, var])
+        ret_normal ~ sample_or_constrained(einfo, :ret_normal, normal, [mu, var])
         ret_normal
 
 

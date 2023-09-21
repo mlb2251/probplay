@@ -12,15 +12,19 @@ import Atari: State
 using Random
 function redux()
 
-    Random.seed!(1)
+    # Random.seed!(1)
 
 
-    N = 1
+    N = 10
+    T = 10
+    html_body("<script>tMax=$T</script>")
     K = G_PARAMS
 
     add_in_place = 1
     moveY = 2
     moveX = 3
+    const_vel = 4
+    random_walk = 5
     code_library = [
         # (add_in_place addr val)
         CFunc(parse(SExpr, "(store (arg 1) (add (load (arg 1)) (arg 2)))"), true),
@@ -31,9 +35,11 @@ function redux()
         CFunc(parse(SExpr, "(store 2 (add (load 2) (arg 1)))"), true),
         # const vel motion
         CFunc(parse(SExpr, "(call $moveY -.05)"), true),
+        # random walk
+        CFunc(parse(SExpr, "(call $moveY (normal 0 .01))"), true),
     ]
 
-    objs = Atari.rand_gauss(1,1,1)
+    objs = Atari.rand_gauss(1,1,N)
     # target_objs = Atari.rand_gauss(1,1,3)
 
     # objs = zeros(Float64, K, N)
@@ -45,11 +51,12 @@ function redux()
     # objs[G_G,:] .= 0
     # objs[G_B,:] .= 0
 
-    state = State(objs, ones(N))
+    state = State(objs, [random_walk for _ in 1:N])
     einfo = Atari.ExecInfo(choicemap(), [], false)
 
     H,W = 400,400
     canvas = zeros(Float64, 3, H, W)
+    anim = zeros(Float64, 3, H, W, T)
 
     # render(state, canvas, 0, 1, 0, 1)
     transmittances = zeros(Float32, H, W)
@@ -64,18 +71,28 @@ function redux()
 
     lr = 0.001
     dgaussians = similar(objs)
-    @time for t in 1:10
+
+
+    @time for t in 1:T
+        @show t
         # call_func(2, [], 1, state, code_library, einfo)
-        tr = simulate(call_func, (length(code_library), [], 1, state, code_library, einfo));
+        for obj_id in 1:N
+            tr = simulate(Atari.obj_dynamics, (obj_id, state, code_library, einfo, choicemap()));
         # Atari.grad_step_reverse_mode(canvas, target, objs, transmittances, dgaussians, lr, 0,1,0,1)
-        # objs[G_OPACITY,:] .= 1
+        # objs[G_OPACITY,:] .= 1s
         # if t % 10 == 1
             # @show objs[:,1]
             # @show state.objs[:,1]
-            draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
-            html_body(html_img(canvas, width="400px"))
         # end
+        end
+        draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
+        anim[:,:,:,t] .= canvas
     end
+
+    # html_body(html_img(canvas, width="400px"))
+
+    html_body(html_gif(anim, width="400px"))
+
 
     # for t in 1:100
     #     render(state, canvas, 0, 1, 0, 1)

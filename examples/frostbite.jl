@@ -19,38 +19,62 @@ function redux()
     N = 10
     T = 60
     html_body("<script>tMax=$T</script>")
-    V_Y = G_PARAMS + 1
-    V_X = G_PARAMS + 2
 
     K = G_PARAMS + 2
 
-    lib = Library()
+    # const G_Y = 1
+    # const G_X = 2
+    # const G_SCALE_Y = 3
+    # const G_SCALE_X = 4
+    # const G_COS_ANGLE = 5
+    # const G_SIN_ANGLE = 6
+    # const G_OPACITY = 7
+    # const G_R = 8
+    # const G_G = 9
+    # const G_B = 10
+    # V_Y = G_PARAMS + 1
+    # V_X = G_PARAMS + 2
+
+    lib = Library(K)
+    add_reg(lib, :y, G_Y)
+    add_reg(lib, :x, G_X)
+    add_reg(lib, :scale_y, G_SCALE_Y)
+    add_reg(lib, :scale_x, G_SCALE_X)
+    add_reg(lib, :cos_angle, G_COS_ANGLE)
+    add_reg(lib, :sin_angle, G_SIN_ANGLE)
+    add_reg(lib, :opacity, G_OPACITY)
+    add_reg(lib, :r, G_R)
+    add_reg(lib, :g, G_G)
+    add_reg(lib, :b, G_B)
+
+    add_reg(lib, :vy, G_PARAMS+1)
+    add_reg(lib, :vx, G_PARAMS+2)
 
     add_fn(lib, "(store (arg 1) (+ (load (arg 1)) (arg 2)))", :add_in_place)
     add_fn(lib, "(store (arg 1) (- 0. (load (arg 1))))", :neg_in_place)
     
-    add_fn(lib, "(call add_in_place 1 (arg 1))", :move_y)
-    add_fn(lib, "(call add_in_place 2 (arg 1))", :move_x)
+    add_fn(lib, "(call add_in_place y (arg 1))", :move_y)
+    add_fn(lib, "(call add_in_place x (arg 1))", :move_x)
 
     add_fn(lib, "(call move_y -.05)", :const_vel)
     add_fn(lib, "(call move_x (normal 0. .02))", :random_walk)
-    add_fn(lib, "(call move_y (* .1 (load 2)))", :vel_prop_to_x_pos)
+    add_fn(lib, "(call move_y (* .1 (load x)))", :vel_prop_to_x_pos)
 
-    add_fn(lib, "(call move_y (* (ifelse (< (load 2) .5) .05 -.05) (load 2)))", :up_down)
+    add_fn(lib, "(call move_y (* (ifelse (< (load x) .5) .05 -.05) (load x)))", :up_down)
 
     add_fn(lib, "(seq (call random_walk) (call up_down))", :random_walk_up_down)
 
 
-    add_fn(lib, "(call move_y (* .05 (load $V_Y)))", :latent_vy)
-    add_fn(lib, "(call move_x (* .05 (load $V_X)))", :latent_vx)
+    add_fn(lib, "(call move_y (* .05 (load vy)))", :latent_vy)
+    add_fn(lib, "(call move_x (* .05 (load vx)))", :latent_vx)
 
     add_fn(lib, "(seq (call latent_vy) (call latent_vx))", :latent_vel)
 
     # too low/high flip vx/vy
-    add_fn(lib, "(ifelse (< (load 1) 0.) (call neg_in_place $V_Y) pass)", :bounce_top)
-    add_fn(lib, "(ifelse (> (load 1) 1.) (call neg_in_place $V_Y) pass)", :bounce_bottom)
-    add_fn(lib, "(ifelse (< (load 2) 0.) (call neg_in_place $V_X) pass)", :bounce_left)
-    add_fn(lib, "(ifelse (> (load 2) 1.) (call neg_in_place $V_X) pass)", :bounce_right)
+    add_fn(lib, "(ifelse (< (load y) 0.) (call neg_in_place vy) pass)", :bounce_top)
+    add_fn(lib, "(ifelse (> (load y) 1.) (call neg_in_place vy) pass)", :bounce_bottom)
+    add_fn(lib, "(ifelse (< (load x) 0.) (call neg_in_place vx) pass)", :bounce_left)
+    add_fn(lib, "(ifelse (> (load x) 1.) (call neg_in_place vx) pass)", :bounce_right)
 
     add_fn(lib, "(seq (call bounce_top) (seq (call bounce_bottom) (seq (call bounce_left) (call bounce_right))))", :wall_bounces)
 

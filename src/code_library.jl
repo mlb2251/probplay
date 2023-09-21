@@ -1,6 +1,6 @@
 
 using Gen
-export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env, Library, add_fn
+export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env, Library, add_fn, add_reg
 
 mutable struct SExpr
     is_leaf::Bool
@@ -281,7 +281,11 @@ mutable struct Library
     fns::Vector{CFunc}
     abbreviations::Dict{Symbol, Int}
 
-    Library() = new(Vector{CFunc}(), Dict{Symbol, Int}())
+    register_of_name::Dict{Symbol, Int}
+    name_of_register::Vector{Symbol}
+    register_aliases::Dict{Symbol, Int}
+
+    Library(num_registers) = new(Vector{CFunc}(), Dict{Symbol, Int}(), Dict{Symbol, Int}(), [Symbol("&$i") for i in 1:num_registers], Dict{Symbol, Int}())
 end
 
 function add_fn(lib::Library, func::CFunc, name=nothing)
@@ -294,6 +298,24 @@ end
 
 add_fn(lib::Library, func::String, name=nothing) = add_fn(lib, CFunc(func), name)
 
+function add_reg(lib::Library, name::Symbol, register::Int)
+    lib.register_aliases[name] = register
+end
+
+get_fn(lib::Library, name::Symbol) = lib.fns[lib.abbreviations[name]]
+get_fn(lib::Library, name::Int) = lib.fns[name]
+
+get_register(lib::Library, name::Int) = name
+
+function get_register(lib::Library, name::Symbol)
+    if haskey(lib.register_of_name, name)
+        return lib.register_of_name[name]
+    elseif haskey(lib.register_aliases, name)
+        return lib.register_aliases[name]
+    else
+        error("register $name not found")
+    end
+end
 
 
 # new_env() = Env([], Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
@@ -374,7 +396,7 @@ end
 end
 
 
-@gen function exec(e::SExpr, args, obj_id, state, code_library, einfo, addr)
+@gen function exec(e::SExpr, args, obj_id, state, lib, einfo, addr)
     if e.is_leaf
         return e.leaf
     end
@@ -395,17 +417,19 @@ end
     ret = if head === :pass
         nothing
     elseif head === :load
-        register ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :register)
-        state.objs[register, obj_id]
+        register ~ exec(e.children[2], args, obj_id, state, lib, einfo, :register)
+        reg = get_register(lib,register)
+        state.objs[reg, obj_id]
     elseif head === :arg
         i = unwrap(e.children[2])
         # println(join(einfo.path, " -> "))
         args[i]
     elseif head === :store
-        register ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :register)
-        value ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :value)
+        register ~ exec(e.children[2], args, obj_id, state, lib, einfo, :register)
+        reg = get_register(lib,register)
+        value ~ exec(e.children[3], args, obj_id, state, lib, einfo, :value)
         # @show state.objs
-        state.objs[register, obj_id] = value
+        state.objs[reg, obj_id] = value
         # @show state.objs
         # @show (register,obj_id,value)
         nothing
@@ -414,63 +438,63 @@ end
     # elseif head === :elapsed
     #     elapsed
     elseif head === :call
-        fn ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :fn)
+        fn ~ exec(e.children[2], args, obj_id, state, lib, einfo, :fn)
         inner_args = []
         for i in 3:length(e.children)
-            inner_arg = {(:args,i)} ~ exec(e.children[i], args, obj_id, state, code_library, einfo, (:args,i))
+            inner_arg = {(:args,i)} ~ exec(e.children[i], args, obj_id, state, lib, einfo, (:args,i))
             push!(inner_args, inner_arg)
         end
-        fn_res ~ call_func(fn, inner_args, obj_id, state, code_library, einfo)
+        fn_res ~ call_func(fn, inner_args, obj_id, state, lib, einfo)
         fn_res
     elseif head === :const
         unwrap(e.children[2])
     elseif head === :+
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
-        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)
         a + b
     elseif head === :*
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
-        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)
         a * b
     elseif head === :-
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
-        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)
         a - b
     elseif head === :<
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
-        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)
         a < b
     elseif head === :>
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
-        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)
         a > b
     elseif head === :(==)
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
-        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)
         a == b
     elseif head === :not
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
         !a
     elseif head === :normal
-        mu ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :mu)
-        var ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :var)
+        mu ~ exec(e.children[2], args, obj_id, state, lib, einfo, :mu)
+        var ~ exec(e.children[3], args, obj_id, state, lib, einfo, :var)
         ret_normal ~ sample_or_constrained(einfo, :ret_normal, normal, [mu, var])
         ret_normal
     elseif head === :ifelse
-        cond ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :cond)
+        cond ~ exec(e.children[2], args, obj_id, state, lib, einfo, :cond)
         if cond
-            branch ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :branch)
+            branch ~ exec(e.children[3], args, obj_id, state, lib, einfo, :branch)
         else
-            branch ~ exec(e.children[4], args, obj_id, state, code_library, einfo, :branch)
+            branch ~ exec(e.children[4], args, obj_id, state, lib, einfo, :branch)
         end
         branch
     elseif head === :seq
-        a ~ exec(e.children[2], args, obj_id, state, code_library, einfo, :a)
-        b ~ exec(e.children[3], args, obj_id, state, code_library, einfo, :b)
+        a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
+        b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)
         b
     elseif head === :println
         for i in 2:length(e.children)
-            a ~ exec(e.children[i], args, obj_id, state, code_library, einfo, :a)
+            a ~ exec(e.children[i], args, obj_id, state, lib, einfo, :a)
             print(a)
         end
         println()

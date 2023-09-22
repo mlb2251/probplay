@@ -1,7 +1,7 @@
 
 using Gen
 export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env, Library, add_fn, add_reg
-export func_production, const_production, dist_production
+export func_production, const_production, dist_production, uniform_sexpr
 
 mutable struct SExpr
     is_leaf::Bool

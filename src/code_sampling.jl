@@ -40,8 +40,46 @@ function Gen.logpdf(::UniformNode, prod, output_type, must_be_leaf, productions)
     else
         return -log(length(possible_productions(output_type, must_be_leaf, productions)))
     end
-
 end
+
+
+struct UniformSExpr <: Gen.Distribution{SExpr} end
+const uniform_sexpr = UniformSExpr()
+(::UniformSExpr)(output_type, productions) = random(UniformSExpr(), output_type, productions)
+
+function Gen.random(::UniformSExpr, output_type, max_depth, productions)
+    must_be_leaf = max_depth <= 0
+    node = uniform_node(output_type, must_be_leaf, productions)
+
+    if node.val !== nothing
+        return sexpr_leaf(node.val)
+    elseif node.dist !== nothing
+        (dist, args) = node.dist
+        sampled_val = dist(args...)
+        return sexpr_leaf(sampled_val)
+    else
+        child_vec = SExpr[sexpr_leaf(node.name)]
+        for arg_type in node.arg_types
+            sexpr = uniform_sexpr(arg_type, max_depth-1, productions)
+            push!(child_vec, sexpr)
+        end
+        return sexpr_node(child_vec)
+    end
+end
+
+
+function Gen.logpdf(::UniformSExpr, sexpr, output_type, max_depth, productions)
+    for e in subexpressions(sexpr)
+        if e.is_leaf
+            @show e
+        end
+    end
+    -Inf
+end
+
+
+
+
 
 #CODE SAMPLING 
 @gen function code_prior(depth, output_type, productions)

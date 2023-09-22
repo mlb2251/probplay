@@ -88,10 +88,14 @@ function redux()
 
     for i in 1:10
         tr = simulate(code_prior, (3,:nothing,productions))
-        println(get_retval(tr))
+        e = get_retval(tr)
+        println(e)
+        println(get_score(tr))
+        Gen.logpdf(uniform_sexpr, e, 3, :nothing, productions)
+        @show e
     end
 
-    # return
+    return
 
 
 

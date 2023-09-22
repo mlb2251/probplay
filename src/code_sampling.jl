@@ -72,25 +72,17 @@ end
 #CODE SAMPLING 
 @gen function code_prior(depth, output_type)
     """samples code recursively!"""
-    depthp1 = depth + 1
-    must_be_leaf = depthp1 > 10
+    must_be_leaf = depth + 1 > 10
 
-    thing ~ uniform_node(output_type, must_be_leaf)
+    node ~ uniform_node(output_type, must_be_leaf)
 
-    if typeof(thing) == LeafType
-        leaf ~ thing.distribution(thing.dist_args...)
+    if typeof(node) == LeafType
+        leaf ~ node.distribution(node.dist_args...)
         return sexpr_leaf(leaf)
-    else #is type primitive 
-        func = thing
-        num_children = func.arity
-        #vector of SExprs
-        child_vec = SExpr[]
-        #doing the first symbol (the function symbol)
-        sexpr = sexpr_leaf(func)
-        push!(child_vec, sexpr)
-        #arguments 
-        for child_ind in 1:num_children
-            sexpr = {(:sexpr, child_ind)} ~ code_prior(depthp1, func.input_type[child_ind])
+    else
+        child_vec = SExpr[sexpr_leaf(node.name)]
+        for i in 1:node.arity
+            sexpr = {(:sexpr, i)} ~ code_prior(depth + 1, node.input_type[i])
             push!(child_vec, sexpr)
         end
         return sexpr_node(child_vec)

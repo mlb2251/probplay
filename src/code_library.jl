@@ -114,12 +114,7 @@ num_nodes(e::SExpr) = 1 + sum(num_nodes, e.children, init=0)
 
 Base.show(io::IO, e::SExpr) = begin
     if e.is_leaf
-        if typeof(e.leaf) == Primitive
-            print(io, e.leaf.name)
-        else
-            print(io, e.leaf)
-        end
-
+        print(io, e.leaf)
         @assert isempty(e.children)
     else
         print(io, "(")

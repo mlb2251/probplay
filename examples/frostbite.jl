@@ -70,10 +70,31 @@ function redux()
     state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
     einfo = Atari.ExecInfo(choicemap(), [], false)
 
+    productions = [
+
+        new_production(:move_x, [], :nothing),
+
+
+        new_production(:pass, [], :step),
+        new_production(:vec, [:float, :float], :vec),
+        new_production(:+, [:float, :float], :float),
+        new_production(:+, [:vec, :vec], :vec),
+        new_production(:get_local, [:int], :obj),
+        new_production(:get_attr, [:obj, :sym], :vec),
+        new_production(:get_attr, [:obj, :int], :float),
+        new_production(:set_attr, [:obj, :sym, :vec], :step),
+
+        # distributions over constants
+        new_production(:meta_normal, [], :float; dist=(Gen.normal, [0,2])),
+        new_production(:meta_choose_symbol, [], :sym; dist=(choose_symbol, [])),
+
+        # constants
+        new_production(:const_1, [], :int; val=1),
+    ]
 
 
     for i in 1:10
-        tr = simulate(code_prior, (3,:float))
+        tr = simulate(code_prior, (3,:float,productions))
         println(get_retval(tr))
     end
 

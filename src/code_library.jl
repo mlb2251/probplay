@@ -9,21 +9,19 @@ mutable struct SExpr
     # parent::Union{Tuple{SExpr,Int}, Nothing} # parent and which index of the child it is
 end
 
-struct Primitive
+struct Production
     name::Symbol
-    arity::Int64
-    #either a type of a list of types of length arity 
-    input_type::Vector{DataType} #Replace these with functions, or maybe that's overkill, usually just checking type, but could check positive etc
-    output_type::Type
+    arg_types::Vector{Symbol}
+    ret_type::Symbol
+    # for things that produce leaf values directly like constants
+    val::Union{Nothing, Any}
+    # for things that produce leaf values by sampling from a distribution
+    dist::Union{Nothing, Tuple{Gen.Distribution, Vector{Any}}}
 end
 
-struct LeafType
-    type::Type
-    distribution::Any #fix this, but Distribution breaks it 
-    dist_args::Vector{Any}
-end
-
-struct Yay
+function new_production(name, arg_types, ret_type; val=nothing, dist=nothing)
+    @assert val === nothing || dist === nothing
+    Production(name, arg_types, ret_type, val, dist)
 end
 
 

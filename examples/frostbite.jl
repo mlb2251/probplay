@@ -73,7 +73,7 @@ function redux()
 
 
     for i in 1:10
-        tr = simulate(code_prior, (3,Float64))
+        tr = simulate(code_prior, (3,:float))
         println(get_retval(tr))
     end
 

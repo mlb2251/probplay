@@ -393,7 +393,7 @@ make_sprites = Map(make_type)
     sampled_code = nothing 
 
     try 
-        sampled_code ~ code_prior(0, Yay)
+        sampled_code ~ code_prior(0, :step)
         # @show sampled_code
         return CFunc(parse(SExpr, string(sampled_code)), true)
         

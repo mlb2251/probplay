@@ -17,11 +17,13 @@ struct Production
     val::Union{Nothing, Any}
     # for things that produce leaf values by sampling from a distribution
     dist::Union{Nothing, Tuple{Gen.Distribution, Vector{Any}}}
+    # indicates it should be prefaced with `:call` like (call move_y 1.2)
+    is_call::Bool
 end
 
-function new_production(name, arg_types, ret_type; val=nothing, dist=nothing)
+function new_production(name, arg_types, ret_type; val=nothing, dist=nothing, call=false)
     @assert val === nothing || dist === nothing
-    Production(name, arg_types, ret_type, val, dist)
+    Production(name, arg_types, ret_type, val, dist, call)
 end
 
 

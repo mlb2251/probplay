@@ -70,6 +70,17 @@ function redux()
     state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
     einfo = Atari.ExecInfo(choicemap(), [], false)
 
+
+
+    for i in 1:10
+        tr = simulate(code_prior, (3,Float64))
+        println(get_retval(tr))
+    end
+
+    return
+
+
+
     H,W = 400,400
     canvas = zeros(Float64, 3, H, W)
     anim = zeros(Float64, 3, H, W, T)

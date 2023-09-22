@@ -85,31 +85,31 @@ num_nodes(e::SExpr) = 1 + sum(num_nodes, e.children, init=0)
 
 
 
-Base.string(e::SExpr) = begin
-    string_toret = ""
-    if e.is_leaf
-        if typeof(e.leaf) == Primitive
-            string_toret = string_toret * string(e.leaf.name)
-        else
-            string_toret = string_toret * string(e.leaf)
-        end
+# Base.string(e::SExpr) = begin
+#     string_toret = ""
+#     if e.is_leaf
+#         if typeof(e.leaf) == Primitive
+#             string_toret = string_toret * string(e.leaf.name)
+#         else
+#             string_toret = string_toret * string(e.leaf)
+#         end
 
-        @assert isempty(e.children)
-    else
-        string_toret = string_toret * "("
+#         @assert isempty(e.children)
+#     else
+#         string_toret = string_toret * "("
 
-        for (i, child) in enumerate(e.children)
-            #@show child, typeof(child)
-            string_toret = string_toret * string(child)
-            if i != length(e.children)
-                string_toret = string_toret * " "
-            end
-        end
-        string_toret = string_toret * ")"
-        # print(io, "(", join(e.children, " "), ")")
-    end
-    return string_toret
-end
+#         for (i, child) in enumerate(e.children)
+#             #@show child, typeof(child)
+#             string_toret = string_toret * string(child)
+#             if i != length(e.children)
+#                 string_toret = string_toret * " "
+#             end
+#         end
+#         string_toret = string_toret * ")"
+#         # print(io, "(", join(e.children, " "), ")")
+#     end
+#     return string_toret
+# end
 
 
 Base.show(io::IO, e::SExpr) = begin

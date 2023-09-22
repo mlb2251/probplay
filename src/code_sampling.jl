@@ -24,15 +24,23 @@ leafs = [
 ]
 
 #SAMPLING FUNCTIONS DISTRIBUTION 
-struct GetWithOutput <: Gen.Distribution{Union{Primitive,LeafType}} end
+struct UniformNode <: Gen.Distribution{Union{Primitive,LeafType}} end
+const uniform_node = UniformNode()
+(::UniformNode)(output_type, must_be_leaf) = random(UniformNode(), output_type, must_be_leaf)
 
-function Gen.random(::GetWithOutput, output_type, must_be_leaf)
+
+function Gen.random(::UniformNode, output_type, must_be_leaf)
     """samples random function or leaftype with requirements"""
+    return rand(possible_productions(output_type, must_be_leaf))
+end
+
+function possible_productions(output_type, must_be_leaf)
+    """returns possible productions given output type and must_be_leaf"""
     possible_things = []
 
     #adding possible leafs 
     for leaf in leafs
-        if (output_type === nothing || leaf.type == output_type)
+        if leaf.type === output_type
             push!(possible_things, leaf)
         end
     end
@@ -40,70 +48,26 @@ function Gen.random(::GetWithOutput, output_type, must_be_leaf)
     #adding funcs if not must_be_leaf
     if !must_be_leaf
         for func in funcs
-            if (output_type === nothing || func.output_type == output_type)
+            if func.output_type === output_type
                 push!(possible_things, func)
             end
         end
     end
 
-    #@show possible_things
-
-    if length(possible_things) == 0
-        if must_be_leaf
-            return error("No leafs with type $output_type")
-        else
-            return error("No functions with output type $output_type")
-        end
-    end
-
-    return possible_things[uniform_discrete(1, length(possible_things))]
-    #possible_funcs[categorical([1/length(possible_funcs) for _ in 1:length(possible_funcs)])]#could weight this
+    return possible_things
 end
 
-function get_num_things_with_output(output, must_be_leaf)
-    """
-    helper for log pdf
-    counts number of funcs and leaftypes that have the requirements
-    might be redundant with above function wasting time
-    """
-    num_things = 0
 
-    #counting possible leafs
-    for leaf in leafs
-        if (output === nothing || leaf.type == output)
-            num_things += 1
-        end
-    end
-
-    #counting possible funcs
-    if !must_be_leaf
-        for func in funcs
-            if (output === nothing || func.output_type == output)
-                num_things += 1
-            end
-        end
-    end
-
-
-    return num_things
-end
-
-function Gen.logpdf(::GetWithOutput, thing, output_type, must_be_leaf)
+function Gen.logpdf(::UniformNode, thing, output_type, must_be_leaf)
     if typeof(thing) == LeafType && thing.type != output_type
         return -Inf
     elseif typeof(thing) == Primitive && (must_be_leaf || thing.output_type != output_type)
         return -Inf
     else
-        return log(1 / get_num_things_with_output(output_type, must_be_leaf))
+        return -log(length(possible_productions(output_type, must_be_leaf)))
     end
 
 end
-
-const get_with_output = GetWithOutput()
-(::GetWithOutput)(output_type, must_be_leaf) = random(GetWithOutput(), output_type, must_be_leaf)
-
-
-
 
 #CODE SAMPLING 
 @gen function code_prior(depth, output_type)
@@ -111,7 +75,7 @@ const get_with_output = GetWithOutput()
     depthp1 = depth + 1
     must_be_leaf = depthp1 > 10
 
-    thing ~ get_with_output(output_type, must_be_leaf)
+    thing ~ uniform_node(output_type, must_be_leaf)
 
     if typeof(thing) == LeafType
         leaf ~ thing.distribution(thing.dist_args...)

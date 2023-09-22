@@ -40,29 +40,29 @@ function redux()
     add_fn(lib, "(store (arg 1) (+ (load (arg 1)) (arg 2)))", :add_in_place)
     add_fn(lib, "(store (arg 1) (- 0. (load (arg 1))))", :neg_in_place)
     
-    add_fn(lib, "(call add_in_place y (arg 1))", :move_y)
-    add_fn(lib, "(call add_in_place x (arg 1))", :move_x)
+    add_fn(lib, "(add_in_place y (arg 1))", :move_y)
+    add_fn(lib, "(add_in_place x (arg 1))", :move_x)
 
-    # add_fn(lib, "(call move_y -.05)", :const_vel)
-    # add_fn(lib, "(call move_x (normal 0. .02))", :random_walk)
-    # add_fn(lib, "(call move_y (* .1 (load x)))", :vel_prop_to_x_pos)
-    # add_fn(lib, "(call move_y (* (ifelse (< (load x) .5) .05 -.05) (load x)))", :up_down)
-    # add_fn(lib, "(seq (call random_walk) (call up_down))", :random_walk_up_down)
+    # add_fn(lib, "(move_y -.05)", :const_vel)
+    # add_fn(lib, "(move_x (normal 0. .02))", :random_walk)
+    # add_fn(lib, "(move_y (* .1 (load x)))", :vel_prop_to_x_pos)
+    # add_fn(lib, "(move_y (* (ifelse (< (load x) .5) .05 -.05) (load x)))", :up_down)
+    # add_fn(lib, "(seq (random_walk) (up_down))", :random_walk_up_down)
 
-    add_fn(lib, "(call move_y (* .05 (load vy)))", :latent_vy)
-    add_fn(lib, "(call move_x (* .05 (load vx)))", :latent_vx)
+    add_fn(lib, "(move_y (* .05 (load vy)))", :latent_vy)
+    add_fn(lib, "(move_x (* .05 (load vx)))", :latent_vx)
 
-    add_fn(lib, "(seq (call latent_vy) (call latent_vx))", :latent_vel)
+    add_fn(lib, "(seq (latent_vy) (latent_vx))", :latent_vel)
 
     # too low/high flip vx/vy
-    add_fn(lib, "(ifelse (< (load y) 0.) (call neg_in_place vy) pass)", :bounce_top)
-    add_fn(lib, "(ifelse (> (load y) 1.) (call neg_in_place vy) pass)", :bounce_bottom)
-    add_fn(lib, "(ifelse (< (load x) 0.) (call neg_in_place vx) pass)", :bounce_left)
-    add_fn(lib, "(ifelse (> (load x) 1.) (call neg_in_place vx) pass)", :bounce_right)
+    add_fn(lib, "(ifelse (< (load y) 0.) (neg_in_place vy) pass)", :bounce_top)
+    add_fn(lib, "(ifelse (> (load y) 1.) (neg_in_place vy) pass)", :bounce_bottom)
+    add_fn(lib, "(ifelse (< (load x) 0.) (neg_in_place vx) pass)", :bounce_left)
+    add_fn(lib, "(ifelse (> (load x) 1.) (neg_in_place vx) pass)", :bounce_right)
 
-    add_fn(lib, "(seq (call bounce_top) (seq (call bounce_bottom) (seq (call bounce_left) (call bounce_right))))", :wall_bounces)
+    add_fn(lib, "(seq (bounce_top) (seq (bounce_bottom) (seq (bounce_left) (bounce_right))))", :wall_bounces)
 
-    add_fn(lib, "(seq (call wall_bounces) (call latent_vel))", :bounce)
+    add_fn(lib, "(seq (wall_bounces) (latent_vel))", :bounce)
 
     objs = Atari.rand_gauss(1,1,K,N)
     # target_objs = Atari.rand_gauss(1,1,3)
@@ -71,19 +71,17 @@ function redux()
     einfo = Atari.ExecInfo(choicemap(), [], false)
 
     productions = [
-        new_production(:*, [:float, :float], :float),
-        new_production(:load, [:addr], :float),
-
-        # calls
-        new_production(:move_x, [:float], :nothing; call=true),
-        new_production(:move_y, [:float], :nothing; call=true),
+        func_production(:*, [:float, :float], :float),
+        func_production(:load, [:addr], :float),
+        func_production(:move_x, [:float], :nothing),
+        func_production(:move_y, [:float], :nothing),
 
         # dists
-        new_production(:meta_rand, [], :float; dist=(Gen.uniform, [0.,1.])),
+        dist_production(:meta_rand, :float, Gen.uniform, [0.,1.]),
 
         # constants
-        new_production(:vx, [], :addr; val=:vx),
-        new_production(:vy, [], :addr; val=:vy),
+        const_production(:vx, :addr, :vx),
+        const_production(:vy, :addr, :vy),
 
     ]
 
@@ -93,7 +91,7 @@ function redux()
         println(get_retval(tr))
     end
 
-    return
+    # return
 
 
 

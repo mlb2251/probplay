@@ -1,6 +1,7 @@
 
 using Gen
 export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env, Library, add_fn, add_reg
+export func_production, const_production, dist_production
 
 mutable struct SExpr
     is_leaf::Bool
@@ -17,15 +18,19 @@ struct Production
     val::Union{Nothing, Any}
     # for things that produce leaf values by sampling from a distribution
     dist::Union{Nothing, Tuple{Gen.Distribution, Vector{Any}}}
-    # indicates it should be prefaced with `:call` like (call move_y 1.2)
-    is_call::Bool
 end
 
-function new_production(name, arg_types, ret_type; val=nothing, dist=nothing, call=false)
-    @assert val === nothing || dist === nothing
-    Production(name, arg_types, ret_type, val, dist, call)
+function func_production(name, arg_types, ret_type)
+    Production(name, arg_types, ret_type, nothing, nothing)
 end
 
+function const_production(name, ret_type, val)
+    Production(name, Symbol[], ret_type, val, nothing)
+end
+
+function dist_production(name, ret_type, dist, dist_args)
+    Production(name, Symbol[], ret_type, nothing, (dist,dist_args))
+end
 
 function sexpr_node(children::Vector{SExpr})
     """outputs a node s expression"""
@@ -140,12 +145,6 @@ end
 
 """
 Parse a string into an SExpr. Uses lisp-like syntax.
-
-"foo" -> SAtom(:foo)
-"(foo)" -> SList([SAtom(:foo)])
-"((foo))" -> SList([SList([SAtom(:foo)])]) 
-"(foo bar baz)" -> SList([SAtom(:foo), SAtom(:bar), SAtom(:baz)])
-"()" -> SList([])
 
 """
 function Base.parse(::Type{SExpr}, original_s::String)
@@ -321,6 +320,7 @@ end
     #     return nothing 
     # end 
     if func_id isa Symbol
+        @assert haskey(code_library.abbreviations, func_id) "function `$func_id` not found in code library"
         func_id = code_library.abbreviations[func_id]
     end
 
@@ -432,15 +432,6 @@ end
         #     dt
         # elseif head === :elapsed
         #     elapsed
-    elseif head === :call
-        fn ~ exec(e.children[2], args, obj_id, state, lib, einfo, :fn)
-        inner_args = []
-        for i in 3:length(e.children)
-            inner_arg = {(:args, i)} ~ exec(e.children[i], args, obj_id, state, lib, einfo, (:args, i))
-            push!(inner_args, inner_arg)
-        end
-        fn_res ~ call_func(fn, inner_args, obj_id, state, lib, einfo)
-        fn_res
     elseif head === :const
         unwrap(e.children[2])
     elseif head === :+
@@ -597,9 +588,20 @@ end
         #     ret_bernoulli ~ sample_or_constrained(env.exec, :ret_bernoulli, bernoulli, [p])
         #     ret_bernoulli
     else
-        @assert head isa Symbol "$(typeof(head))"
-        @assert !startswith(string(head), ":") "the symbol $head has an extra leading colon (:) note that parsing sexprs inserts colons so you may have unnecessarily included one"
-        error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
+
+        # assume this is a function call
+        fn ~ exec(e.children[1], args, obj_id, state, lib, einfo, :fn)
+        inner_args = []
+        for i in 2:length(e.children)
+            inner_arg = {(:args, i-1)} ~ exec(e.children[i], args, obj_id, state, lib, einfo, (:args, i-1))
+            push!(inner_args, inner_arg)
+        end
+        fn_res ~ call_func(fn, inner_args, obj_id, state, lib, einfo)
+        fn_res
+
+        # @assert head isa Symbol "$(typeof(head))"
+        # @assert !startswith(string(head), ":") "the symbol $head has an extra leading colon (:) note that parsing sexprs inserts colons so you may have unnecessarily included one"
+        # error("unrecognized head $head ($(string(head))) $(head === :set_attr) $(head == :set_attr)")
     end
 
     # println("$e -> $ret")

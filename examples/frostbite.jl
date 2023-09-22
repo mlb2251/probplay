@@ -17,23 +17,10 @@ function redux()
 
 
     N = 10
-    T = 60
+    T = 100
     html_body("<script>tMax=$T</script>")
 
     K = G_PARAMS + 2
-
-    # const G_Y = 1
-    # const G_X = 2
-    # const G_SCALE_Y = 3
-    # const G_SCALE_X = 4
-    # const G_COS_ANGLE = 5
-    # const G_SIN_ANGLE = 6
-    # const G_OPACITY = 7
-    # const G_R = 8
-    # const G_G = 9
-    # const G_B = 10
-    # V_Y = G_PARAMS + 1
-    # V_X = G_PARAMS + 2
 
     lib = Library(K)
     add_reg(lib, :y, G_Y)
@@ -56,14 +43,11 @@ function redux()
     add_fn(lib, "(call add_in_place y (arg 1))", :move_y)
     add_fn(lib, "(call add_in_place x (arg 1))", :move_x)
 
-    add_fn(lib, "(call move_y -.05)", :const_vel)
-    add_fn(lib, "(call move_x (normal 0. .02))", :random_walk)
-    add_fn(lib, "(call move_y (* .1 (load x)))", :vel_prop_to_x_pos)
-
-    add_fn(lib, "(call move_y (* (ifelse (< (load x) .5) .05 -.05) (load x)))", :up_down)
-
-    add_fn(lib, "(seq (call random_walk) (call up_down))", :random_walk_up_down)
-
+    # add_fn(lib, "(call move_y -.05)", :const_vel)
+    # add_fn(lib, "(call move_x (normal 0. .02))", :random_walk)
+    # add_fn(lib, "(call move_y (* .1 (load x)))", :vel_prop_to_x_pos)
+    # add_fn(lib, "(call move_y (* (ifelse (< (load x) .5) .05 -.05) (load x)))", :up_down)
+    # add_fn(lib, "(seq (call random_walk) (call up_down))", :random_walk_up_down)
 
     add_fn(lib, "(call move_y (* .05 (load vy)))", :latent_vy)
     add_fn(lib, "(call move_x (* .05 (load vx)))", :latent_vx)
@@ -78,23 +62,10 @@ function redux()
 
     add_fn(lib, "(seq (call bounce_top) (seq (call bounce_bottom) (seq (call bounce_left) (call bounce_right))))", :wall_bounces)
 
-
     add_fn(lib, "(seq (call wall_bounces) (call latent_vel))", :bounce)
-
-    # add_fn(lib, "(seq  (call vel_prop_to_x_pos))", :bounce_y)
-
 
     objs = Atari.rand_gauss(1,1,K,N)
     # target_objs = Atari.rand_gauss(1,1,3)
-
-    # objs = zeros(Float64, K, N)
-    # objs[G_Y,:] .= .5
-    # objs[G_X,:] .= .5
-    # objs[G_SCALE_X,:] .= .2
-    # objs[G_SCALE_Y,:] .= .2
-    # objs[G_R,:] .= 1
-    # objs[G_G,:] .= 0
-    # objs[G_B,:] .= 0
 
     state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
     einfo = Atari.ExecInfo(choicemap(), [], false)

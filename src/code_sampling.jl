@@ -3,42 +3,25 @@ import Distributions
 export code_prior, run_cp
 #inspired by Gen Tutorial: https://www.gen.dev/tutorials/rj/tutorial
 
-
-# is_leaf_states = [true, false]
-# is_leaf_probs = [0.5, 0.5]
-# @dist choose_is_leaf() = is_leaf_states[categorical(is_leaf_probs)]
-
-symbols = [Symbol("pos")]
+symbols = [:pos]
 @dist choose_symbol() = symbols[categorical([1/length(symbols) for i in 1:length(symbols)])]
 
 funcs = [
-    #spawn Primitive(:spawn, 3, [TyRef, Sprite, Vec], Nothing),#boolean is placeholder for idk
-    #despawn todo
-    #ty todo what even is this 
     Primitive(:pass, 0, [], Yay),
     Primitive(:vec, 2, [Float64, Float64], Vec), 
     Primitive(:+ , 2, [Float64, Float64], Float64), 
     Primitive(:+ , 2, [Vec, Vec], Vec),
     Primitive(:get_local, 1, [Int64], Object),
-    #set_local
     Primitive(:get_attr, 2, [Object, Symbol], Vec), #todo make more general
     Primitive(:get_attr, 2, [Object, Int64], Float64), #todo make more general
     Primitive(:set_attr, 3, [Object, Symbol, Vec], Yay), #todo make more general 
-    #isnull why would that ever happen 
-    #null why ever 
-    #normal vec 
-    #Primitive(:normal, 2, [Float64, Float64], Float64),
-    #bernoulli 
 ]
 
 leafs = [
-
     LeafType(Float64, Gen.normal, [0, 2]),
-    #LeafType(Float64, Gen.poisson, [1]), #todo make more general
     LeafType(Int64, Gen.uniform_discrete, [1, 1]),
     LeafType(Symbol, choose_symbol, []),
 ]
-
 
 #SAMPLING FUNCTIONS DISTRIBUTION 
 struct Get_with_output <: Gen.Distribution{Union{Primitive, LeafType}} end 
@@ -126,11 +109,7 @@ const get_with_output = Get_with_output()
 @gen function code_prior(depth, output_type)
     """samples code recursively!"""
     depthp1 = depth + 1
-    if depthp1 > 10
-        must_be_leaf = true
-    else 
-        must_be_leaf = false
-    end
+    must_be_leaf = depthp1 > 10
 
     thing ~ get_with_output(output_type, must_be_leaf)
 

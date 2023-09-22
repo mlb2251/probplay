@@ -1,16 +1,16 @@
-using Gen 
+using Gen
 import Distributions
 export code_prior, run_cp
 #inspired by Gen Tutorial: https://www.gen.dev/tutorials/rj/tutorial
 
 symbols = [:pos]
-@dist choose_symbol() = symbols[categorical([1/length(symbols) for i in 1:length(symbols)])]
+@dist choose_symbol() = symbols[categorical([1 / length(symbols) for i in 1:length(symbols)])]
 
 funcs = [
     Primitive(:pass, 0, [], Yay),
-    Primitive(:vec, 2, [Float64, Float64], Vec), 
-    Primitive(:+ , 2, [Float64, Float64], Float64), 
-    Primitive(:+ , 2, [Vec, Vec], Vec),
+    Primitive(:vec, 2, [Float64, Float64], Vec),
+    Primitive(:+, 2, [Float64, Float64], Float64),
+    Primitive(:+, 2, [Vec, Vec], Vec),
     Primitive(:get_local, 1, [Int64], Object),
     Primitive(:get_attr, 2, [Object, Symbol], Vec), #todo make more general
     Primitive(:get_attr, 2, [Object, Int64], Float64), #todo make more general
@@ -24,9 +24,9 @@ leafs = [
 ]
 
 #SAMPLING FUNCTIONS DISTRIBUTION 
-struct Get_with_output <: Gen.Distribution{Union{Primitive, LeafType}} end 
+struct GetWithOutput <: Gen.Distribution{Union{Primitive,LeafType}} end
 
-function Gen.random(::Get_with_output, output_type, must_be_leaf)
+function Gen.random(::GetWithOutput, output_type, must_be_leaf)
     """samples random function or leaftype with requirements"""
     possible_things = []
 
@@ -34,7 +34,7 @@ function Gen.random(::Get_with_output, output_type, must_be_leaf)
     for leaf in leafs
         if (output_type === nothing || leaf.type == output_type)
             push!(possible_things, leaf)
-        end 
+        end
     end
 
     #adding funcs if not must_be_leaf
@@ -42,8 +42,8 @@ function Gen.random(::Get_with_output, output_type, must_be_leaf)
         for func in funcs
             if (output_type === nothing || func.output_type == output_type)
                 push!(possible_things, func)
-            end 
-        end 
+            end
+        end
     end
 
     #@show possible_things
@@ -53,24 +53,26 @@ function Gen.random(::Get_with_output, output_type, must_be_leaf)
             return error("No leafs with type $output_type")
         else
             return error("No functions with output type $output_type")
-        end 
-    end 
+        end
+    end
 
     return possible_things[uniform_discrete(1, length(possible_things))]
     #possible_funcs[categorical([1/length(possible_funcs) for _ in 1:length(possible_funcs)])]#could weight this
-end 
+end
 
 function get_num_things_with_output(output, must_be_leaf)
-    """helper for log pdf
+    """
+    helper for log pdf
     counts number of funcs and leaftypes that have the requirements
-    might be redundant with above function wasting time """
+    might be redundant with above function wasting time
+    """
     num_things = 0
 
     #counting possible leafs
     for leaf in leafs
         if (output === nothing || leaf.type == output)
             num_things += 1
-        end 
+        end
     end
 
     #counting possible funcs
@@ -78,29 +80,27 @@ function get_num_things_with_output(output, must_be_leaf)
         for func in funcs
             if (output === nothing || func.output_type == output)
                 num_things += 1
-            end 
-        end 
+            end
+        end
     end
 
 
     return num_things
 end
 
-function Gen.logpdf(::Get_with_output, thing, output_type, must_be_leaf)
-    """likeliness"""
-
+function Gen.logpdf(::GetWithOutput, thing, output_type, must_be_leaf)
     if typeof(thing) == LeafType && thing.type != output_type
         return -Inf
     elseif typeof(thing) == Primitive && (must_be_leaf || thing.output_type != output_type)
         return -Inf
-    else 
-        return log(1/get_num_things_with_output(output_type, must_be_leaf))
+    else
+        return log(1 / get_num_things_with_output(output_type, must_be_leaf))
     end
 
 end
 
-const get_with_output = Get_with_output()
-(::Get_with_output)(output_type, must_be_leaf) = random(Get_with_output(), output_type, must_be_leaf)
+const get_with_output = GetWithOutput()
+(::GetWithOutput)(output_type, must_be_leaf) = random(GetWithOutput(), output_type, must_be_leaf)
 
 
 
@@ -126,14 +126,14 @@ const get_with_output = Get_with_output()
         push!(child_vec, sexpr)
         #arguments 
         for child_ind in 1:num_children
-            sexpr = {(:sexpr, child_ind)} ~ code_prior(depthp1, func.input_type[child_ind]) 
+            sexpr = {(:sexpr, child_ind)} ~ code_prior(depthp1, func.input_type[child_ind])
             push!(child_vec, sexpr)
-        end 
+        end
         return sexpr_node(child_vec)
 
-    end 
-end 
-    
+    end
+end
+
 
 
 function run_cp(n=1, failable=false)
@@ -141,7 +141,7 @@ function run_cp(n=1, failable=false)
         if failable
             code = code_prior(0, Yay)
             println(code)
-        else 
+        else
             try
                 code = code_prior(0, Yay)
                 println(code)
@@ -149,6 +149,6 @@ function run_cp(n=1, failable=false)
                 println(e)
             end
         end
-    end 
-end 
+    end
+end
 

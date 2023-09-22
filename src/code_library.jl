@@ -21,20 +21,15 @@ struct LeafType
     type::Type
     distribution::Any #fix this, but Distribution breaks it 
     dist_args::Vector{Any}
-end 
+end
 
 struct Yay
-end 
+end
 
 
 function sexpr_node(children::Vector{SExpr})
     """outputs a node s expression"""
-    expr = SExpr(false, nothing, children)
-    # for (i,child) in enumerate(children)
-    #     isnothing(child.parent) || error("arg already has parent")
-    #     child.parent = (expr,i)
-    # end
-    expr 
+    SExpr(false, nothing, children)
 end
 
 function sexpr_leaf(leaf)
@@ -67,7 +62,7 @@ end
 # end
 
 "child-first traversal"
-function subexpressions(e::SExpr; subexprs = SExpr[])
+function subexpressions(e::SExpr; subexprs=SExpr[])
     for child in e.children
         subexpressions(child, subexprs=subexprs)
     end
@@ -79,7 +74,12 @@ end
 # end
 # Base.iterate(e::SExpr, state=1) = state > length(e.children) ? nothing : (e.children[state], state+1
 
-Base.size(e::SExpr) = if e.is_leaf 1. else sum(size, e.children, init=0.) end
+Base.size(e::SExpr) =
+    if e.is_leaf
+        1.0
+    else
+        sum(size, e.children, init=0.0)
+    end
 
 num_nodes(e::SExpr) = 1 + sum(num_nodes, e.children, init=0)
 
@@ -90,15 +90,15 @@ Base.string(e::SExpr) = begin
     if e.is_leaf
         if typeof(e.leaf) == Primitive
             string_toret = string_toret * string(e.leaf.name)
-        else 
+        else
             string_toret = string_toret * string(e.leaf)
-        end 
-        
+        end
+
         @assert isempty(e.children)
     else
         string_toret = string_toret * "("
-        
-        for (i,child) in enumerate(e.children)
+
+        for (i, child) in enumerate(e.children)
             #@show child, typeof(child)
             string_toret = string_toret * string(child)
             if i != length(e.children)
@@ -112,18 +112,18 @@ Base.string(e::SExpr) = begin
 end
 
 
-Base.show(io::IO, e::SExpr) = begin    
+Base.show(io::IO, e::SExpr) = begin
     if e.is_leaf
         if typeof(e.leaf) == Primitive
             print(io, e.leaf.name)
-        else 
+        else
             print(io, e.leaf)
-        end 
-        
+        end
+
         @assert isempty(e.children)
     else
         print(io, "(")
-        for (i,child) in enumerate(e.children)
+        for (i, child) in enumerate(e.children)
             Base.show(io, child)
             if i != length(e.children)
                 print(io, " ")
@@ -140,7 +140,7 @@ function make_leaf(item)
     isnothing(val) || return sexpr_leaf(val)
     val = tryparse(Float64, item)
     isnothing(val) || return sexpr_leaf(val)
-    return sexpr_leaf(Symbol(item))     
+    return sexpr_leaf(Symbol(item))
 end
 
 """
@@ -165,7 +165,7 @@ function Base.parse(::Type{SExpr}, original_s::String)
     # this is a single symbol like "foo" or "bar"
     length(items) == 1 && return make_leaf(items[1])
 
-    i=0
+    i = 0
     expr_stack = SExpr[]
     # num_open_parens = Int[]
 
@@ -239,7 +239,7 @@ end
 end
 
 mutable struct CFunc
-    body::Union{SExpr, Nothing}
+    body::Union{SExpr,Nothing}
     runs::Bool
 end
 
@@ -279,13 +279,13 @@ end
 
 mutable struct Library
     fns::Vector{CFunc}
-    abbreviations::Dict{Symbol, Int}
+    abbreviations::Dict{Symbol,Int}
 
-    register_of_name::Dict{Symbol, Int}
+    register_of_name::Dict{Symbol,Int}
     name_of_register::Vector{Symbol}
-    register_aliases::Dict{Symbol, Int}
+    register_aliases::Dict{Symbol,Int}
 
-    Library(num_registers) = new(Vector{CFunc}(), Dict{Symbol, Int}(), Dict{Symbol, Int}(), [Symbol("&$i") for i in 1:num_registers], Dict{Symbol, Int}())
+    Library(num_registers) = new(Vector{CFunc}(), Dict{Symbol,Int}(), Dict{Symbol,Int}(), [Symbol("&$i") for i in 1:num_registers], Dict{Symbol,Int}())
 end
 
 function add_fn(lib::Library, func::CFunc, name=nothing)
@@ -340,10 +340,10 @@ end
 
     res = {:body} ~ exec(func.body, args, obj_id, state, code_library, einfo, :body)
     # catch e
-        #@show "CAUGHTEM"
-        #@show e 
-        # func.runs = false
-        # return nothing 
+    #@show "CAUGHTEM"
+    #@show e 
+    # func.runs = false
+    # return nothing 
     # end 
     # env.locals = save_locals
     return res
@@ -359,11 +359,11 @@ end
     einfo.has_constraints = !isempty(with_constraints)
 
     # if fn.runs
-        # try
-    step ~ call_func(fn, args, obj_id, state, code_library, einfo);
-        # catch e
-            # fn.runs = false
-        # end 
+    # try
+    step ~ call_func(fn, args, obj_id, state, code_library, einfo)
+    # catch e
+    # fn.runs = false
+    # end 
     # end 
     return nothing
 end
@@ -378,7 +378,7 @@ end
 @gen function sample_or_constrained(einfo::ExecInfo, addr, fn, args)
     push!(einfo.path, addr)
     push!(einfo.path, :retval)
-    path = foldr(Pair,einfo.path)
+    path = foldr(Pair, einfo.path)
     res = if einfo.has_constraints
         get_value(einfo.constraints, path)
     else
@@ -418,7 +418,7 @@ end
         nothing
     elseif head === :load
         register ~ exec(e.children[2], args, obj_id, state, lib, einfo, :register)
-        reg = get_register(lib,register)
+        reg = get_register(lib, register)
         state.objs[reg, obj_id]
     elseif head === :arg
         i = unwrap(e.children[2])
@@ -426,22 +426,22 @@ end
         args[i]
     elseif head === :store
         register ~ exec(e.children[2], args, obj_id, state, lib, einfo, :register)
-        reg = get_register(lib,register)
+        reg = get_register(lib, register)
         value ~ exec(e.children[3], args, obj_id, state, lib, einfo, :value)
         # @show state.objs
         state.objs[reg, obj_id] = value
         # @show state.objs
         # @show (register,obj_id,value)
         nothing
-    # elseif head === :dt
-    #     dt
-    # elseif head === :elapsed
-    #     elapsed
+        # elseif head === :dt
+        #     dt
+        # elseif head === :elapsed
+        #     elapsed
     elseif head === :call
         fn ~ exec(e.children[2], args, obj_id, state, lib, einfo, :fn)
         inner_args = []
         for i in 3:length(e.children)
-            inner_arg = {(:args,i)} ~ exec(e.children[i], args, obj_id, state, lib, einfo, (:args,i))
+            inner_arg = {(:args, i)} ~ exec(e.children[i], args, obj_id, state, lib, einfo, (:args, i))
             push!(inner_args, inner_arg)
         end
         fn_res ~ call_func(fn, inner_args, obj_id, state, lib, einfo)
@@ -502,105 +502,105 @@ end
     elseif head === :str
         return string(e.children[2])
 
-    # elseif head === :spawn
-    #     ty ~ exec(e.children[2], env, state, :ty)
-    #     ty::TyRef
-    #     sprite ~ exec(e.children[3], env, state, :sprite)
-    #     pos ~ exec(e.children[4], env, state, :pos)
-    #     attrs = []
-    #     for (i,attr_ty) in enumerate(env.types[ty.id].attrs)
-    #         attr = {(:attrs, i)} ~ exec(e.children[4+i], env, state, (:attrs,i))
-    #         attr::attr_ty # type assert
-    #         push!(attrs, attr)
-    #     end
-    #     obj = Object(sprite, pos, attrs)
-    #     # todo have it reuse slots that have been freed
-    #     push!(state.objs, obj)
-    #     ObjRef(length(state.objs))
-    # elseif head === :despawn
-    #     obj ~ exec(e.children[2], env, state, :obj)
-    #     obj::ObjRef
-    #     obj.id = 0
-    #     # find every objref to this and set it to null
-    #     # for obj2 in env.state.objs
-    #     #     if obj2 isa Object
-    #     #         for i in eachindex(obj2.attrs)
-    #     #             obj3 = obj2.attrs[i]
-    #     #             if obj3 isa ObjRef && obj3.id == obj.id
-    #     #                 obj2.attrs[i].id = 0
-    #     #             end
-    #     #         end
-    #     #     end
-    #     # end
-    #     return nothing
-    # elseif head === :ty
-    #     id = unwrap(e.children[2])::Int
-    #     @assert 0 < id <= length(env.types)
-    #     TypeRef(id)
-    # elseif head === :vec
-    #     #@show e
-    #     y ~ exec(e.children[2], env, state, :y)
-    #     x ~ exec(e.children[3], env, state, :x)
-    #     #@show y,x
-    #     #@show Vec(y,x)
-    #     Vec(y,x)
-    # elseif head === :+
-    #     a ~ exec(e.children[2], env, state, :a)
-    #     b ~ exec(e.children[3], env, state, :b)
-    #     a + b
-    # elseif head === :get_local
-    #     idx = unwrap(e.children[2])::Int
-    #     env.locals[idx]
-    # elseif head === :set_local
-    #     idx = unwrap(e.children[2])::Int
-    #     value ~ exec(e.children[3], env, state, :value)
-    #     env.locals[idx] = value
-    #     nothing
-    # elseif head === :get_attr
-    #     obj ~ exec(e.children[2], env, state, :obj)
-    #     attr = unwrap(e.children[3])
-    #     if attr isa Symbol
-    #         getproperty(obj, attr)
-    #     else
-    #         obj.attrs[attr]
-    #     end
-    # elseif head === :set_attr
-    #     obj ~ exec(e.children[2], env, state, :obj)
-    #     attr = unwrap(e.children[3])
-    #     value ~ exec(e.children[4], env, state, :value)
-    #     if attr isa Symbol
-    #         setproperty!(obj, attr, value)
-    #     else
-    #         obj.attrs[attr] = value
-    #     end
-    #     nothing
-    # elseif head === :isnull
-    #     obj ~ exec(e.children[2], env, state, :obj)
-    #     obj::ObjRef
-    #     obj.id == 0
-    # elseif head === :null
-    #     ObjRef(0)
-    # # primitive distributions
-    # elseif head === :normal_vec
-    #     mu ~ exec(e.children[2], env, state, :mu)
-    #     var ~ exec(e.children[3], env, state, :var)
-    #     # ret_normal_vec ~ normal_vec(mu, var)
-    #     # constrain!(env.exec, :ret_normal_vec, ret_normal_vec)
-    #     ret_normal_vec ~ sample_or_constrained(env.exec, :ret_normal_vec, normal_vec, [mu, var])
-    #     ret_normal_vec
-    # elseif head === :normal
-    #     mu ~ exec(e.children[2], env, state,  :mu)
-    #     var ~ exec(e.children[3], env, state,  :var)
-    #     # ret_normal ~ normal(mu, var)
-    #     # constrain!(env.exec, :ret_normal, ret_normal)
-    #     ret_normal ~ sample_or_constrained(env.exec, :ret_normal, normal, [mu, var])
-    #     ret_normal
-    # elseif head === :bernoulli
-    #     p ~ exec(e.children[2], env, state,  :p)
-    #     # ret_bernoulli ~ bernoulli(p)
-    #     # constrain!(env.exec, :ret_bernoulli, ret_bernoulli)
-    #     ret_bernoulli ~ sample_or_constrained(env.exec, :ret_bernoulli, bernoulli, [p])
-    #     ret_bernoulli
+        # elseif head === :spawn
+        #     ty ~ exec(e.children[2], env, state, :ty)
+        #     ty::TyRef
+        #     sprite ~ exec(e.children[3], env, state, :sprite)
+        #     pos ~ exec(e.children[4], env, state, :pos)
+        #     attrs = []
+        #     for (i,attr_ty) in enumerate(env.types[ty.id].attrs)
+        #         attr = {(:attrs, i)} ~ exec(e.children[4+i], env, state, (:attrs,i))
+        #         attr::attr_ty # type assert
+        #         push!(attrs, attr)
+        #     end
+        #     obj = Object(sprite, pos, attrs)
+        #     # todo have it reuse slots that have been freed
+        #     push!(state.objs, obj)
+        #     ObjRef(length(state.objs))
+        # elseif head === :despawn
+        #     obj ~ exec(e.children[2], env, state, :obj)
+        #     obj::ObjRef
+        #     obj.id = 0
+        #     # find every objref to this and set it to null
+        #     # for obj2 in env.state.objs
+        #     #     if obj2 isa Object
+        #     #         for i in eachindex(obj2.attrs)
+        #     #             obj3 = obj2.attrs[i]
+        #     #             if obj3 isa ObjRef && obj3.id == obj.id
+        #     #                 obj2.attrs[i].id = 0
+        #     #             end
+        #     #         end
+        #     #     end
+        #     # end
+        #     return nothing
+        # elseif head === :ty
+        #     id = unwrap(e.children[2])::Int
+        #     @assert 0 < id <= length(env.types)
+        #     TypeRef(id)
+        # elseif head === :vec
+        #     #@show e
+        #     y ~ exec(e.children[2], env, state, :y)
+        #     x ~ exec(e.children[3], env, state, :x)
+        #     #@show y,x
+        #     #@show Vec(y,x)
+        #     Vec(y,x)
+        # elseif head === :+
+        #     a ~ exec(e.children[2], env, state, :a)
+        #     b ~ exec(e.children[3], env, state, :b)
+        #     a + b
+        # elseif head === :get_local
+        #     idx = unwrap(e.children[2])::Int
+        #     env.locals[idx]
+        # elseif head === :set_local
+        #     idx = unwrap(e.children[2])::Int
+        #     value ~ exec(e.children[3], env, state, :value)
+        #     env.locals[idx] = value
+        #     nothing
+        # elseif head === :get_attr
+        #     obj ~ exec(e.children[2], env, state, :obj)
+        #     attr = unwrap(e.children[3])
+        #     if attr isa Symbol
+        #         getproperty(obj, attr)
+        #     else
+        #         obj.attrs[attr]
+        #     end
+        # elseif head === :set_attr
+        #     obj ~ exec(e.children[2], env, state, :obj)
+        #     attr = unwrap(e.children[3])
+        #     value ~ exec(e.children[4], env, state, :value)
+        #     if attr isa Symbol
+        #         setproperty!(obj, attr, value)
+        #     else
+        #         obj.attrs[attr] = value
+        #     end
+        #     nothing
+        # elseif head === :isnull
+        #     obj ~ exec(e.children[2], env, state, :obj)
+        #     obj::ObjRef
+        #     obj.id == 0
+        # elseif head === :null
+        #     ObjRef(0)
+        # # primitive distributions
+        # elseif head === :normal_vec
+        #     mu ~ exec(e.children[2], env, state, :mu)
+        #     var ~ exec(e.children[3], env, state, :var)
+        #     # ret_normal_vec ~ normal_vec(mu, var)
+        #     # constrain!(env.exec, :ret_normal_vec, ret_normal_vec)
+        #     ret_normal_vec ~ sample_or_constrained(env.exec, :ret_normal_vec, normal_vec, [mu, var])
+        #     ret_normal_vec
+        # elseif head === :normal
+        #     mu ~ exec(e.children[2], env, state,  :mu)
+        #     var ~ exec(e.children[3], env, state,  :var)
+        #     # ret_normal ~ normal(mu, var)
+        #     # constrain!(env.exec, :ret_normal, ret_normal)
+        #     ret_normal ~ sample_or_constrained(env.exec, :ret_normal, normal, [mu, var])
+        #     ret_normal
+        # elseif head === :bernoulli
+        #     p ~ exec(e.children[2], env, state,  :p)
+        #     # ret_bernoulli ~ bernoulli(p)
+        #     # constrain!(env.exec, :ret_bernoulli, ret_bernoulli)
+        #     ret_bernoulli ~ sample_or_constrained(env.exec, :ret_bernoulli, bernoulli, [p])
+        #     ret_bernoulli
     else
         @assert head isa Symbol "$(typeof(head))"
         @assert !startswith(string(head), ":") "the symbol $head has an extra leading colon (:) note that parsing sexprs inserts colons so you may have unnecessarily included one"

@@ -1,6 +1,7 @@
 using Atari
 using Gen
 import Atari: State
+import JSON
 
 # const G_Y = 1
 # const G_X = 2
@@ -11,13 +12,18 @@ import Atari: State
 
 using Random
 
-function redux()
+function redux(;save=nothing,load=nothing)
 
     # Random.seed!(1)
 
 
-    N = 10
-    T = 30
+    N = 2
+    T = 10
+    H,W = 400,400
+    canvas = zeros(Float64, 3, H, W)
+    transmittances = zeros(Float32, H, W)
+
+
     html_body("<script>tMax=$T</script>")
 
     K = G_PARAMS + 2
@@ -89,18 +95,10 @@ function redux()
     # return
 
     
-
-    
     # target_objs = Atari.rand_gauss(1,1,3)
 
-    
-
-
-    H,W = 400,400
-    canvas = zeros(Float64, 3, H, W)
 
     # render(state, canvas, 0, 1, 0, 1)
-    transmittances = zeros(Float32, H, W)
 
     # target = similar(canvas)
     # draw_region(target, target_objs, transmittances, 0, 1, 0, 1)
@@ -113,19 +111,40 @@ function redux()
     # lr = 0.001
     # dgaussians = similar(objs)
 
+    add_fn(lib, "(move_y -.05)", :target)
+    # html_body("<br><code> $name: $e </code><br>")
 
-    @time for j in 1:10
+    # observations[x_or_y, obj_id, t]
+    states = zeros(Float64, K, N, T)
 
-        e = uniform_sexpr(:nothing, 10, dsl)
-        name = Symbol("candidate_$j")
-        add_fn(lib, e, name)
-        html_body("<br><code> $name: $e </code><br>")
+    # read it back to make sure it worked and demonstrate reading
+    if load !== nothing
+        open(load) do f
+            dict = JSON.parse(f)
+            @assert T == dict["T"]
+            @assert N == dict["N"]
+            @assert K == dict["K"]
+            states .= reshape(dict["states"], K, N, T)
+        end
+    end
+
+
+    @time for j in 1:1
+
+        # e = uniform_sexpr(:nothing, 10, dsl)
+        # name = Symbol("candidate_$j")
+        # add_fn(lib, e, name)
+        # html_body("<br><code> $name: $e </code><br>")
 
         einfo = Atari.ExecInfo(choicemap(), [], false)
         objs = Atari.rand_gauss(1,1,K,N)
-        state = State(objs, [lib.abbreviations[name] for _ in 1:N])
+        objs = Float32[0.4; 0.4; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.;;
+                       0.6; 0.6; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.]
+
+        state = State(objs, [lib.abbreviations[:target] for _ in 1:N])
 
         anim = zeros(Float64, 3, H, W, T)
+        target_anim = zeros(Float64, 3, H, W, T)
 
         for t in 1:T
             t % 10 == 0 && @show t
@@ -136,17 +155,32 @@ function redux()
                 # tr = simulate(Atari.obj_dynamics, (obj_id, state, lib, einfo, choicemap()));
 
                 # Atari.grad_step_reverse_mode(canvas, target, objs, transmittances, dgaussians, lr, 0,1,0,1)
-                # objs[G_OPACITY,:] .= 1s
-                # if t % 10 == 1
-                    # @show objs[:,1]
-                    # @show state.objs[:,1]
-                # end
             end
             draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
             anim[:,:,:,t] .= canvas
+
+            if load !== nothing
+                draw_region(canvas, states[:,:,t], transmittances, 0, 1, 0, 1)
+                target_anim[:,:,:,t] .= canvas
+            end
+
+            if save !== nothing
+                states[:,:,t] .= objs
+            end
         end
         # html_body(html_img(canvas, width="400px"))
         html_body(html_gif(anim, width="400px"))
+        if load !== nothing
+            html_body(html_gif(target_anim, width="400px"))
+        end
+    end
+
+    # write to json
+    if save !== nothing
+        open(save, "w") do f
+            dict = Dict("T" => T, "N" => N, "K" => K, "states" => reshape(states,:))
+            JSON.print(f, dict, 4)
+        end
     end
 
 

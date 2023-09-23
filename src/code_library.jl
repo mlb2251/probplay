@@ -15,8 +15,6 @@ struct Production
     name::Symbol
     arg_types::Vector{Symbol}
     ret_type::Symbol
-    # for things that produce leaf values directly like constants
-    val::Union{Nothing, Any}
     # for things that produce leaf values by sampling from a distribution
     dist::Union{Nothing, Tuple{Gen.Distribution, Vector{Any}}}
 end
@@ -42,26 +40,17 @@ DSL() = DSL(Dict{Symbol, Productions}())
 function func_production(dsl, name, arg_types, ret_type, weight)
     prods = get!(dsl.productions_by_type, ret_type, Productions())
     @assert all(p -> p.name !== name, prods.productions) "a production for type $ret_type with name $name already exists"
-    push!(prods.productions, Production(name, arg_types, ret_type, nothing, nothing));
+    push!(prods.productions, Production(name, arg_types, ret_type, nothing));
     push!(prods.weights, weight)
-end
-
-function const_production(dsl, name, ret_type, val, weight)
-    prods = get!(dsl.productions_by_type, ret_type, Productions())
-    @assert all(p -> p.name !== name, prods.productions) "a production for type $ret_type with name $name already exists"
-    @assert prods.leaf_dist === nothing "a const/dist for type $ret_type already exists"
-    push!(prods.productions, Production(name, Symbol[], ret_type, val, nothing))
-    push!(prods.weights, weight)
-    prods.leaf_dist = Production(name, Symbol[], ret_type, val, nothing);
 end
 
 function dist_production(dsl, name, ret_type, dist, dist_args, weight)
     prods = get!(dsl.productions_by_type, ret_type, Productions())
     @assert all(p -> p.name !== name, prods.productions) "a production for type $ret_type with name $name already exists"
     @assert prods.leaf_dist === nothing "a const/dist for type $ret_type already exists"
-    push!(prods.productions, Production(name, Symbol[], ret_type, nothing, (dist,dist_args)))
+    push!(prods.productions, Production(name, Symbol[], ret_type, (dist,dist_args)))
     push!(prods.weights, weight)
-    prods.leaf_dist = Production(name, Symbol[], ret_type, nothing, (dist,dist_args));
+    prods.leaf_dist = Production(name, Symbol[], ret_type, (dist,dist_args));
 end
 
 function type_sexpr!(sexpr::SExpr, type::Symbol, dsl::DSL)

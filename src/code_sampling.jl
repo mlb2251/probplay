@@ -41,9 +41,7 @@ function Gen.random(::UniformSExpr, output_type, max_depth, dsl)
     total_weight = sum(prods.weights)
     prod = labeled_cat(prods.productions, prods.weights ./ total_weight)
 
-    if prod.val !== nothing
-        return sexpr_leaf(prod.val; type=output_type)
-    elseif prod.dist !== nothing
+    if prod.dist !== nothing
         (dist, args) = prod.dist
         sampled_val = dist(args...)
         return sexpr_leaf(sampled_val; type=output_type)
@@ -85,16 +83,11 @@ function Gen.logpdf(::UniformSExpr, sexpr, type, max_depth, dsl)
     if sexpr.is_leaf
         # we're a leaf!
         sexpr.leaf === :bottom && return -Inf
-        if prod.val !== nothing
-            sexpr.leaf === prod.val && return log_weight + 0. # logpdf of a constant has only one possible value so 0
-            return -Inf
-        else
-            @assert prod.dist !== nothing "malformed production for leaf type - lacks both .const and .dist"
-            (dist, args) = prod.dist
-            lpdf = Gen.logpdf(dist, sexpr.leaf, args...)
-            # println("lpdf of $(sexpr.leaf) in $(dist)($args): $lpdf")
-            return log_weight + lpdf
-        end
+        @assert prod.dist !== nothing "malformed production for leaf type - lacks both .const and .dist"
+        (dist, args) = prod.dist
+        lpdf = Gen.logpdf(dist, sexpr.leaf, args...)
+        # println("lpdf of $(sexpr.leaf) in $(dist)($args): $lpdf")
+        return log_weight + lpdf
     end
 
     # not a leaf so recurse on children

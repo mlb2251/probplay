@@ -70,29 +70,29 @@ function redux()
     state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
     einfo = Atari.ExecInfo(choicemap(), [], false)
 
-    productions = [
-        func_production(:*, [:float, :float], :float),
-        func_production(:load, [:addr], :float),
-        func_production(:move_x, [:float], :nothing),
-        func_production(:move_y, [:float], :nothing),
 
-        # dists
-        dist_production(:meta_rand, :float, Gen.uniform, [0.,1.]),
+    dsl = DSL()
+    func_production(dsl, :*, [:float, :float], :float, 1.)
+    func_production(dsl, :load, [:addr], :float, 1.)
+    func_production(dsl, :move_x, [:float], :nothing, 1.)
+    func_production(dsl, :move_y, [:float], :nothing, 1.)
 
-        # constants
-        const_production(:vx, :addr, :vx),
-        const_production(:vy, :addr, :vy),
-
-    ]
+    # dists
+    dist_production(dsl, :const_float, :float, Gen.uniform, [0.,1.], 1.)
+    dist_production(dsl, :const_addr, :addr, labeled_cat, [[:vx,:vy],[.5,.5]], 2.)
 
 
-    for i in 1:10
-        tr = simulate(code_prior, (3,:nothing,productions))
-        e = get_retval(tr)
-        println(e)
-        println(get_score(tr))
-        Gen.logpdf(uniform_sexpr, e, 3, :nothing, productions)
-        @show e
+
+    # e = parse(SExpr,"(move_y (* (* 0.7260728987638994 (* bottom bottom)) (* 0.745933944667155 0.7080628918140206)))")
+    # @show e
+    # type_sexpr!(e, :nothing, dsl)
+
+    # @show Gen.logpdf(uniform_sexpr, e, :nothing, 4, dsl)
+
+    @time for i in 1:10
+        e = uniform_sexpr(:nothing, 10, dsl)
+        ll = Gen.logpdf(uniform_sexpr, e, :nothing, 4, dsl)
+        @show (e,ll)
     end
 
     return

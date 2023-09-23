@@ -1,12 +1,13 @@
 
 using Gen
 export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env, Library, add_fn, add_reg
-export func_production, const_production, dist_production, uniform_sexpr
+export func_production, const_production, dist_production, uniform_sexpr, DSL, labeled_cat, type_sexpr!
 
 mutable struct SExpr
     is_leaf::Bool
     leaf::Any #not SExprs here, should require smth about non listey s expr?? 
     children::Vector{SExpr}
+    type::Symbol
     # parent::Union{Tuple{SExpr,Int}, Nothing} # parent and which index of the child it is
 end
 
@@ -20,26 +21,78 @@ struct Production
     dist::Union{Nothing, Tuple{Gen.Distribution, Vector{Any}}}
 end
 
-function func_production(name, arg_types, ret_type)
-    Production(name, arg_types, ret_type, nothing, nothing)
+mutable struct Productions
+    productions::Vector{Production}
+    weights::Vector{Float64}
+    leaf_dist::Union{Nothing,Production} # this is also in .productions
 end
 
-function const_production(name, ret_type, val)
-    Production(name, Symbol[], ret_type, val, nothing)
+Productions() = Productions(Production[], Float64[], nothing)
+
+mutable struct DSL
+    productions_by_type::Dict{Symbol, Productions}
 end
 
-function dist_production(name, ret_type, dist, dist_args)
-    Production(name, Symbol[], ret_type, nothing, (dist,dist_args))
+DSL() = DSL(Dict{Symbol, Productions}())
+
+
+@dist labeled_cat(labels, probs) = labels[categorical(probs)]
+
+
+function func_production(dsl, name, arg_types, ret_type, weight)
+    prods = get!(dsl.productions_by_type, ret_type, Productions())
+    @assert all(p -> p.name !== name, prods.productions) "a production for type $ret_type with name $name already exists"
+    push!(prods.productions, Production(name, arg_types, ret_type, nothing, nothing));
+    push!(prods.weights, weight)
 end
 
-function sexpr_node(children::Vector{SExpr})
+function const_production(dsl, name, ret_type, val, weight)
+    prods = get!(dsl.productions_by_type, ret_type, Productions())
+    @assert all(p -> p.name !== name, prods.productions) "a production for type $ret_type with name $name already exists"
+    @assert prods.leaf_dist === nothing "a const/dist for type $ret_type already exists"
+    push!(prods.productions, Production(name, Symbol[], ret_type, val, nothing))
+    push!(prods.weights, weight)
+    prods.leaf_dist = Production(name, Symbol[], ret_type, val, nothing);
+end
+
+function dist_production(dsl, name, ret_type, dist, dist_args, weight)
+    prods = get!(dsl.productions_by_type, ret_type, Productions())
+    @assert all(p -> p.name !== name, prods.productions) "a production for type $ret_type with name $name already exists"
+    @assert prods.leaf_dist === nothing "a const/dist for type $ret_type already exists"
+    push!(prods.productions, Production(name, Symbol[], ret_type, nothing, (dist,dist_args)))
+    push!(prods.weights, weight)
+    prods.leaf_dist = Production(name, Symbol[], ret_type, nothing, (dist,dist_args));
+end
+
+function type_sexpr!(sexpr::SExpr, type::Symbol, dsl::DSL)
+    """
+    set the .type fields of a sexpr and its descendents based on the given type
+    (and inferring which DSL productions were used to generate it to recursively determine types).
+    Does not check validity of leaf values (just blindly assigns them the requested type) - use logpdf to check for that.
+    """
+    sexpr.type = type
+    sexpr.is_leaf && return sexpr
+    @assert !isempty(sexpr.children)
+    head = sexpr.children[1].leaf
+    prods = dsl.productions_by_type[type]
+    prod_idx = findfirst(p -> p.name === head, prods.productions)
+    prod = prods.productions[prod_idx]
+    @assert length(prod.arg_types) == length(sexpr.children) - 1
+    for (i,child) in enumerate(sexpr.children[2:end])
+        type_sexpr!(child, prod.arg_types[i], dsl)
+    end
+    sexpr
+end
+
+
+function sexpr_node(children::Vector{SExpr}; type=:untyped)
     """outputs a node s expression"""
-    SExpr(false, nothing, children)
+    SExpr(false, nothing, children, type)
 end
 
-function sexpr_leaf(leaf)
+function sexpr_leaf(leaf; type=:untyped)
     """outputs a leaf s expression, like a number or something"""
-    SExpr(true, leaf, Vector{SExpr}())
+    SExpr(true, leaf, Vector{SExpr}(), type)
 end
 
 """

@@ -17,7 +17,7 @@ function redux()
 
 
     N = 10
-    T = 100
+    T = 30
     html_body("<script>tMax=$T</script>")
 
     K = G_PARAMS + 2
@@ -64,13 +64,6 @@ function redux()
 
     add_fn(lib, "(seq (wall_bounces) (latent_vel))", :bounce)
 
-    objs = Atari.rand_gauss(1,1,K,N)
-    # target_objs = Atari.rand_gauss(1,1,3)
-
-    state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
-    einfo = Atari.ExecInfo(choicemap(), [], false)
-
-
     dsl = DSL()
     func_production(dsl, :*, [:float, :float], :float, 1.)
     func_production(dsl, :load, [:addr], :float, 1.)
@@ -82,26 +75,29 @@ function redux()
     dist_production(dsl, :const_addr, :addr, labeled_cat, [[:vx,:vy],[.5,.5]], 2.)
 
 
-
     # e = parse(SExpr,"(move_y (* (* 0.7260728987638994 (* bottom bottom)) (* 0.745933944667155 0.7080628918140206)))")
     # @show e
     # type_sexpr!(e, :nothing, dsl)
 
     # @show Gen.logpdf(uniform_sexpr, e, :nothing, 4, dsl)
 
-    @time for i in 1:10
-        e = uniform_sexpr(:nothing, 10, dsl)
-        ll = Gen.logpdf(uniform_sexpr, e, :nothing, 4, dsl)
-        @show (e,ll)
-    end
+    # @time for i in 1:10
+        # ll = Gen.logpdf(uniform_sexpr, e, :nothing, 4, dsl)
+        # @show (e,ll)
+    # end
 
-    return
+    # return
 
+    
+
+    
+    # target_objs = Atari.rand_gauss(1,1,3)
+
+    
 
 
     H,W = 400,400
     canvas = zeros(Float64, 3, H, W)
-    anim = zeros(Float64, 3, H, W, T)
 
     # render(state, canvas, 0, 1, 0, 1)
     transmittances = zeros(Float32, H, W)
@@ -109,34 +105,49 @@ function redux()
     # target = similar(canvas)
     # draw_region(target, target_objs, transmittances, 0, 1, 0, 1)
 
-    draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
+    # draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
 
     # html_body(html_img(target, width="400px"))
-    html_body(html_img(canvas, width="400px"))
-
-    lr = 0.001
-    dgaussians = similar(objs)
-
-
-    @time for t in 1:T
-        @show t
-        # call_func(2, [], 1, state, code_library, einfo)
-        for obj_id in 1:N
-            tr = simulate(Atari.obj_dynamics, (obj_id, state, lib, einfo, choicemap()));
-        # Atari.grad_step_reverse_mode(canvas, target, objs, transmittances, dgaussians, lr, 0,1,0,1)
-        # objs[G_OPACITY,:] .= 1s
-        # if t % 10 == 1
-            # @show objs[:,1]
-            # @show state.objs[:,1]
-        # end
-        end
-        draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
-        anim[:,:,:,t] .= canvas
-    end
-
     # html_body(html_img(canvas, width="400px"))
 
-    html_body(html_gif(anim, width="400px"))
+    # lr = 0.001
+    # dgaussians = similar(objs)
+
+
+    @time for j in 1:10
+
+        e = uniform_sexpr(:nothing, 10, dsl)
+        name = Symbol("candidate_$j")
+        add_fn(lib, e, name)
+        html_body("<br><code> $name: $e </code><br>")
+
+        einfo = Atari.ExecInfo(choicemap(), [], false)
+        objs = Atari.rand_gauss(1,1,K,N)
+        state = State(objs, [lib.abbreviations[name] for _ in 1:N])
+
+        anim = zeros(Float64, 3, H, W, T)
+
+        for t in 1:T
+            t % 10 == 0 && @show t
+            # call_func(2, [], 1, state, code_library, einfo)
+            for obj_id in 1:N
+                Atari.obj_dynamics(obj_id, state, lib, einfo, choicemap());
+
+                # tr = simulate(Atari.obj_dynamics, (obj_id, state, lib, einfo, choicemap()));
+
+                # Atari.grad_step_reverse_mode(canvas, target, objs, transmittances, dgaussians, lr, 0,1,0,1)
+                # objs[G_OPACITY,:] .= 1s
+                # if t % 10 == 1
+                    # @show objs[:,1]
+                    # @show state.objs[:,1]
+                # end
+            end
+            draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
+            anim[:,:,:,t] .= canvas
+        end
+        # html_body(html_img(canvas, width="400px"))
+        html_body(html_gif(anim, width="400px"))
+    end
 
 
     # for t in 1:100

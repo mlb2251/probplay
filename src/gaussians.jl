@@ -64,10 +64,10 @@ function rand_gauss(H, W, K)
             # scale_x,
             cos_angle,
             sin_angle,
-            rand(),
-            rand(),
-            rand(),
-            rand()
+            1, # opacity
+            rand(), # r
+            rand(), # g
+            rand() # b
         ],
         rand(Float32, K - G_PARAMS)
     )

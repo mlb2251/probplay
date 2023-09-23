@@ -95,32 +95,3 @@ function Gen.logpdf(::UniformSExpr, sexpr, type, max_depth, dsl)
 
     log_weight + sum(Gen.logpdf(uniform_sexpr, e, ty, max_depth-1, dsl) for (ty,e) in zip(prod.arg_types, sexpr.children[2:end]))
 end
-
-
-#CODE SAMPLING 
-# @gen function code_prior(max_depth, output_type, productions)
-#     """samples code recursively!"""
-
-#     if max_depth <= 0
-#         return sexpr_leaf(:bottom; type=output_type)
-#     end
-
-#     node ~ uniform_production(output_type, productions)
-
-#     if node.val !== nothing
-#         return sexpr_leaf(node.val; type=output_type)
-#     elseif node.dist !== nothing
-#         (dist, args) = node.dist
-#         sampled_val ~ dist(args...)
-#         return sexpr_leaf(sampled_val; type=output_type)
-#     else
-#         child_vec = SExpr[sexpr_leaf(node.name; type=:fn)]
-#         for (i, arg_type) in enumerate(node.arg_types)
-#             sexpr = {(:sexpr, i)} ~ code_prior(max_depth-1, arg_type, productions)
-#             push!(child_vec, sexpr)
-#         end
-#         return sexpr_node(child_vec; type=output_type)
-
-#     end
-# end
-

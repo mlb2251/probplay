@@ -333,6 +333,7 @@ function add_fn(lib::Library, func::CFunc, name=nothing)
 end
 
 add_fn(lib::Library, func::String, name=nothing) = add_fn(lib, CFunc(func), name)
+add_fn(lib::Library, func::SExpr, name=nothing) = add_fn(lib, CFunc(func), name)
 
 function add_reg(lib::Library, name::Symbol, register::Int)
     lib.register_aliases[name] = register

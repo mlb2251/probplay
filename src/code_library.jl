@@ -1,7 +1,7 @@
 
 using Gen
 export exec, Yay, LeafType, TyRef, ObjRef, Primitive, SExpr, sexpr_node, sexpr_leaf, subexpressions, size, num_nodes, unwrap, new_env, call_func, CLibrary, CFunc, Env, Library, add_fn, add_reg
-export func_production, const_production, dist_production, uniform_sexpr, DSL, labeled_cat, type_sexpr!
+export func_production, const_production, dist_production, uniform_sexpr, DSL, labeled_cat, type_sexpr!, get_register
 
 mutable struct SExpr
     is_leaf::Bool
@@ -292,10 +292,18 @@ end
 #     fns::Vector{CFunc}
 # end
 
-mutable struct State #stuff that changes across time 
-    objs::Matrix{Float32}
+mutable struct State{T <: Real} #stuff that changes across time 
+    objs::Matrix{T}
+    # consts::Vector{T}
     step_of_obj::Vector{Int} # which step function for each object
 end
+
+# mutable struct DState #stuff that changes across time 
+#     objs::Matrix{T}
+#     consts::Vector{Float32}
+#     step_of_obj::Vector{Int} # which step function for each object
+# end
+
 
 mutable struct ExecInfo
     constraints::ChoiceMap
@@ -436,6 +444,9 @@ end
 
 @gen function exec(e::SExpr, args, obj_id, state, lib, einfo, addr)
     if e.is_leaf
+        if e.leaf isa Float64
+            return Float32(e.leaf)
+        end
         return e.leaf
     end
 
@@ -458,6 +469,11 @@ end
         register ~ exec(e.children[2], args, obj_id, state, lib, einfo, :register)
         reg = get_register(lib, register)
         state.objs[reg, obj_id]
+    elseif head === :load_const
+        register = unwrap(e.children[2])
+        # register ~ exec(e.children[2], args, obj_id, state, lib, einfo, :register)
+        # reg = get_register(lib, register)
+        state.consts[register]
     elseif head === :arg
         i = unwrap(e.children[2])
         # println(join(einfo.path, " -> "))
@@ -475,8 +491,8 @@ end
         #     dt
         # elseif head === :elapsed
         #     elapsed
-    elseif head === :const
-        unwrap(e.children[2])
+    # elseif head === :const
+    #     unwrap(e.children[2])
     elseif head === :+
         a ~ exec(e.children[2], args, obj_id, state, lib, einfo, :a)
         b ~ exec(e.children[3], args, obj_id, state, lib, einfo, :b)

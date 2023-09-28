@@ -2,6 +2,9 @@ using Atari
 using Gen
 import Atari: State
 import JSON
+# using ForwardDiff
+import DynamicForwardDiff as DFD
+
 
 # const G_Y = 1
 # const G_X = 2
@@ -17,8 +20,9 @@ function redux(;save=nothing,load=nothing)
     # Random.seed!(1)
 
 
-    N = 2
-    T = 10
+    N = 10
+    M = 30
+    T = 100
     H,W = 400,400
     canvas = zeros(Float64, 3, H, W)
     transmittances = zeros(Float32, H, W)
@@ -77,7 +81,8 @@ function redux(;save=nothing,load=nothing)
     func_production(dsl, :move_y, [:float], :nothing, 1.)
 
     # dists
-    dist_production(dsl, :const_float, :float, Gen.uniform, [0.,1.], 1.)
+    dist_production(dsl, :const_float, :float, Gen.normal, [0.,2.], 1.)
+    # dist_production(dsl, :const_float, :float, Gen.uniform, [-2.,2.], 1.)
     dist_production(dsl, :const_addr, :addr, labeled_cat, [[:vx,:vy],[.5,.5]], 2.)
 
 
@@ -111,7 +116,7 @@ function redux(;save=nothing,load=nothing)
     # lr = 0.001
     # dgaussians = similar(objs)
 
-    add_fn(lib, "(move_y -.05)", :target)
+    # add_fn(lib, "(move_y -.05)", :target)
     # html_body("<br><code> $name: $e </code><br>")
 
     # observations[x_or_y, obj_id, t]
@@ -128,20 +133,44 @@ function redux(;save=nothing,load=nothing)
         end
     end
 
+    einfo = Atari.ExecInfo(choicemap(), [], false)
+    objs = Atari.rand_gauss(1,1,K,N)
+    # consts = Float32[]
 
-    @time for j in 1:1
+    dcfg = DFD.DiffConfig()
+    init_objs = DFD.new_dual.(Ref(dcfg), objs)
+    objs_dual_ids = reshape(collect(1:length(objs)), size(objs))
+    # consts = DFD.new_dual.(Ref(dcfg), consts)
+
+
+    @time for j in 1:2
+
+        objs = init_objs[:,:]
 
         # e = uniform_sexpr(:nothing, 10, dsl)
         # name = Symbol("candidate_$j")
         # add_fn(lib, e, name)
         # html_body("<br><code> $name: $e </code><br>")
+        # objs = Float32[0.4; 0.4; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.;;
+        #                0.6; 0.6; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.]
 
-        einfo = Atari.ExecInfo(choicemap(), [], false)
-        objs = Atari.rand_gauss(1,1,K,N)
-        objs = Float32[0.4; 0.4; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.;;
-                       0.6; 0.6; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.]
 
-        state = State(objs, [lib.abbreviations[:target] for _ in 1:N])
+        # for i in eachindex(objs)
+        #     @show (i,objs[i].partials)
+        # end
+
+
+        # ForwardDiff.GradientConfig(nothing, objs, )
+
+
+        # orig_objs = objs
+        # obj_partials = ForwardDiff.construct_seeds(ForwardDiff.Partials{length(objs),eltype(objs)})
+        # objs = similar(objs, ForwardDiff.Dual{nothing,eltype(objs),length(objs)})
+        # ForwardDiff.seed!(objs, orig_objs, obj_partials)
+
+        # @show typeof(obj_partials)
+
+        state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
 
         anim = zeros(Float64, 3, H, W, T)
         target_anim = zeros(Float64, 3, H, W, T)
@@ -156,7 +185,8 @@ function redux(;save=nothing,load=nothing)
 
                 # Atari.grad_step_reverse_mode(canvas, target, objs, transmittances, dgaussians, lr, 0,1,0,1)
             end
-            draw_region(canvas, objs, transmittances, 0, 1, 0, 1)
+
+            draw_region(canvas, DFD.value.(objs), transmittances, 0, 1, 0, 1)
             anim[:,:,:,t] .= canvas
 
             if load !== nothing
@@ -168,6 +198,16 @@ function redux(;save=nothing,load=nothing)
                 states[:,:,t] .= objs
             end
         end
+
+
+        lr = .1
+        for i in objs_dual_ids[get_register(lib,:x),:]
+            for (j, di) in pairs(DFD.partials(objs[i]))
+                # todo filter out ones we dont want derivs for
+                init_objs[j] = DFD.Dual(DFD.value(init_objs[j]) + lr * di, DFD.partials(init_objs[j]))
+            end
+        end
+
         # html_body(html_img(canvas, width="400px"))
         html_body(html_gif(anim, width="400px"))
         if load !== nothing
@@ -182,6 +222,8 @@ function redux(;save=nothing,load=nothing)
             JSON.print(f, dict, 4)
         end
     end
+
+
 
 
     # for t in 1:100

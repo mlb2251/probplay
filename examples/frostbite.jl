@@ -15,15 +15,12 @@ import DynamicForwardDiff as DFD
 
 using Random
 
-function redux(;save=nothing,load=nothing)
+function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=100, N=10, H=400, W=400)
 
     # Random.seed!(1)
 
-
-    N = 10
     M = 30
-    T = 100
-    H,W = 400,400
+
     canvas = zeros(Float64, 3, H, W)
     transmittances = zeros(Float32, H, W)
 
@@ -79,10 +76,12 @@ function redux(;save=nothing,load=nothing)
     func_production(dsl, :load, [:addr], :float, 1.)
     func_production(dsl, :move_x, [:float], :nothing, 1.)
     func_production(dsl, :move_y, [:float], :nothing, 1.)
+    func_production(dsl, :seq, [:nothing, :nothing], :nothing, 1.)
+    # func_production(dsl, :ifelse, [:bool, :nothing, :nothing], :nothing, 1.)
+    # func_production(dsl, :add_in_place, [:addr, :float], :nothing, 1.)
 
     # dists
-    dist_production(dsl, :const_float, :float, Gen.normal, [0.,2.], 1.)
-    # dist_production(dsl, :const_float, :float, Gen.uniform, [-2.,2.], 1.)
+    dist_production(dsl, :const_float, :float, Gen.normal, [0.,1.], 1.)
     dist_production(dsl, :const_addr, :addr, labeled_cat, [[:vx,:vy],[.5,.5]], 2.)
 
 
@@ -137,22 +136,34 @@ function redux(;save=nothing,load=nothing)
     objs = Atari.rand_gauss(1,1,K,N)
     # consts = Float32[]
 
-    dcfg = DFD.DiffConfig()
-    init_objs = DFD.new_dual.(Ref(dcfg), objs)
-    objs_dual_ids = reshape(collect(1:length(objs)), size(objs))
+    if ad
+        dcfg = DFD.DiffConfig()
+        init_objs = DFD.new_dual.(Ref(dcfg), objs)
+        objs_dual_ids = reshape(collect(1:length(objs)), size(objs))
+    else
+        init_objs = objs
+    end
     # consts = DFD.new_dual.(Ref(dcfg), consts)
 
 
-    @time for j in 1:2
+    @time for j in 1:iters
 
         objs = init_objs[:,:]
 
-        # e = uniform_sexpr(:nothing, 10, dsl)
-        # name = Symbol("candidate_$j")
-        # add_fn(lib, e, name)
-        # html_body("<br><code> $name: $e </code><br>")
-        # objs = Float32[0.4; 0.4; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.;;
-        #                0.6; 0.6; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.]
+        if sample
+            e = uniform_sexpr(:nothing, 10, dsl)
+            name = Symbol("candidate_$j")
+            add_fn(lib, e, name)
+            html_body("<br><code> $name: $e </code><br>")
+            # objs = Float32[0.4; 0.4; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.;;
+            #             0.6; 0.6; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.]
+            func = name
+        else
+            func = :bounce
+        end
+
+        state = State(objs, [lib.abbreviations[func] for _ in 1:N])
+
 
 
         # for i in eachindex(objs)
@@ -169,8 +180,6 @@ function redux(;save=nothing,load=nothing)
         # ForwardDiff.seed!(objs, orig_objs, obj_partials)
 
         # @show typeof(obj_partials)
-
-        state = State(objs, [lib.abbreviations[:bounce] for _ in 1:N])
 
         anim = zeros(Float64, 3, H, W, T)
         target_anim = zeros(Float64, 3, H, W, T)
@@ -200,11 +209,13 @@ function redux(;save=nothing,load=nothing)
         end
 
 
-        lr = .1
-        for i in objs_dual_ids[get_register(lib,:x),:]
-            for (j, di) in pairs(DFD.partials(objs[i]))
-                # todo filter out ones we dont want derivs for
-                init_objs[j] = DFD.Dual(DFD.value(init_objs[j]) + lr * di, DFD.partials(init_objs[j]))
+        if ad
+            lr = .1
+            for i in objs_dual_ids[get_register(lib,:x),:]
+                for (j, di) in pairs(DFD.partials(objs[i]))
+                    # todo filter out ones we dont want derivs for
+                    init_objs[j] = DFD.Dual(DFD.value(init_objs[j]) + lr * di, DFD.partials(init_objs[j]))
+                end
             end
         end
 

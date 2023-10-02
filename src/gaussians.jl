@@ -69,7 +69,7 @@ function rand_gauss(H, W, K)
             rand(), # g
             rand() # b
         ],
-        rand(Float32, K - G_PARAMS)
+        rand(Float32, K - G_PARAMS) .* 0.1f0 .- 0.05f0 
     )
 end
 

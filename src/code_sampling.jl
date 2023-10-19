@@ -1,6 +1,6 @@
 using Gen
 import Distributions
-export code_prior, new_production, choose_symbol
+export code_prior, new_production, choose_symbol, uniform_sexpr
 
 #inspired by Gen Tutorial: https://www.gen.dev/tutorials/rj/tutorial
 

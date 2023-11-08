@@ -3,7 +3,7 @@ export html_gif, position_particle_filter, code_prior, html_img, html_new, rende
 # include("gen_mods.jl")
 
 
-include("gaussians.jl")
+# include("gaussians.jl")
 
 include("model.jl")
 include("html.jl")

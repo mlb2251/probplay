@@ -292,11 +292,17 @@ end
 #     fns::Vector{CFunc}
 # end
 
-mutable struct State{T <: Real} #stuff that changes across time 
-    objs::Matrix{T}
+mutable struct State #stuff that changes across time 
+    objs::Vector{Object}
     # consts::Vector{T}
     step_of_obj::Vector{Int} # which step function for each object
 end
+
+# mutable struct State{T <: Real} #stuff that changes across time 
+#     objs::Matrix{T}
+#     # consts::Vector{T}
+#     step_of_obj::Vector{Int} # which step function for each object
+# end
 
 # mutable struct DState #stuff that changes across time 
 #     objs::Matrix{T}
@@ -312,13 +318,14 @@ mutable struct ExecInfo
 end
 
 mutable struct Env #stuff that doesn't change accross time
-    # locals::Vector{Any}
+    locals::Vector{Any}
     #state::State
-    # step_of_obj::Vector{Int} # which step function for each object
-    # sprites::Vector{Sprite}
-    # code_library::Vector{CFunc}
-    # exec::ExecInfo
+    step_of_obj::Vector{Int} # which step function for each object
+    sprites::Vector{Sprite}
+    code_library::Vector{CFunc}
+    exec::ExecInfo
 end
+new_env() = Env([], Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
 
 
 mutable struct Library
@@ -363,7 +370,6 @@ function get_register(lib::Library, name::Symbol)
 end
 
 
-# new_env() = Env([], Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
 #state State(Object[],[])
 
 @gen function call_func(func_id, args, obj_id, state, code_library, einfo)
@@ -395,7 +401,8 @@ end
     return res
 end
 
-@gen function obj_dynamics(obj_id, state, code_library, einfo, with_constraints::ChoiceMap)
+# TODO next: pass Env into obj_dynamics so can do state.step_of_objs
+@gen function obj_dynamics(obj_id, state, code_library, einfo, with_constraints)
     fn = state.step_of_obj[obj_id]
     args = []
     # args = Any[state.objs[obj_id]]

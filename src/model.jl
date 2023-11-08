@@ -1,13 +1,13 @@
 using Gen
 # using LinearAlgebra
 using Images
-# using AutoHashEquals
+using AutoHashEquals
 using Dates
 import Distributions
 # using Revise #maybe? 
 
 
-struct Vec
+@auto_hash_equals struct Vec
     y::Float64
     x::Float64
 end
@@ -60,14 +60,22 @@ struct TyRef
 end
 
 mutable struct Object
-    x :: Float64
-    y :: Float64
-    r :: Float64
-    g :: Float64
-    b :: Float64
-    h :: Float64
-    w :: Float64
+    # x :: Float64
+    # y :: Float64
+    # r :: Float64
+    # g :: Float64
+    # b :: Float64
+    # h :: Float64
+    # w :: Float64
+    # attrs :: Vector{Any}
+
+    # type :: Int
+    sprite_index :: Int
+    pos :: Vec
     attrs :: Vector{Any}
+
+    Object(sprite_index, pos) = new(sprite_index, pos, [])
+    Object(sprite_index, pos, attrs) = new(sprite_index, pos, attrs)
 
     # Object(sprite_index, pos) = new(sprite_index, pos, [])
     # Object(sprite_index, pos, attrs) = new(sprite_index, pos, attrs)
@@ -319,7 +327,7 @@ include("code_library.jl")
     state = deepcopy(prev_state)
     for i in eachindex(state.objs)
         # @show i
-        {:objs => i} ~ obj_dynamics(i, env, state, choicemap())
+        {:objs => i} ~ obj_dynamics(i, state, env.code_library, env.exec, choicemap())
     end
     # for i in eachindex(env.state.objs)
         # pos = {:pos_noise => i} ~ normal_vec(env.state.objs[i].pos, 1.0)

@@ -527,9 +527,9 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         choicemap((:init => :observed_image, observed_images[:,:,:,1]))
     end
 
-    state = pf_initialize(model, (H,W,1), init_obs, num_particles)
+    pfstate = pf_initialize(model, (H,W,1), init_obs, num_particles)
 
-    perception_mh && mh_first_frame(state.traces; steps=mh_steps_init, final_T=T)
+    perception_mh && mh_first_frame(pfstate.traces; steps=mh_steps_init, final_T=T)
 
     # steps
     elapsed=@elapsed for t in 1:T-1
@@ -539,7 +539,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         obs = choicemap((:steps => t => :observed_image, observed_images[:,:,:,t+1]))
 
         # take SMCP3 step
-        @time pf_update!(state, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
+        @time pf_update!(pfstate, (H,W,t+1), (NoChange(),NoChange(),UnknownChange()),
             obs, SMCP3Update(
                 fwd_proposal_naive,
                 bwd_proposal_naive,
@@ -554,7 +554,8 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
         for i in 1:num_particles
 
             #COMEBACK 
-            tr = state.traces[i]
+            tr = pfstate.traces[i]
+            state = state_of_trace(tr, t)
             # @show tr 
             #positions is a vector across times across objects giving their positions 
             positions = Array{Vec}(undef, t, length(state.objs))
@@ -619,25 +620,25 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
                 end
 
             end 
-            state.traces[i] = tr
+            pfstate.traces[i] = tr
            
         end 
        
 
         html_body("<h2>Reconstructed Images</h2>")
-        table = fill("", 3, length(state.traces))
-        for (i,trace) in enumerate(state.traces)
-            table[1,i] = "Particle $i ($(round(state.log_weights[i],sigdigits=4)))"
+        table = fill("", 3, length(pfstate.traces))
+        for (i,trace) in enumerate(pfstate.traces)
+            table[1,i] = "Particle $i ($(round(pfstate.log_weights[i],sigdigits=4)))"
             rendered = render_trace(trace)
             table[2,i] = html_gif(rendered, pad_to=T);
             table[3,i] = html_gif(img_diff(rendered, observed_images[:,:,:,1:t+1]), pad_to=T);
-            for obj_id in 1:length(env_of_trace(trace).state.objs)
+            for obj_id in 1:length(state_of_trace(trace,T).objs)
                 
                 html_body(trace[:init => :cfuncs => obj_id => :sampled_code], "<br>")
             end    
         end
 
-        perception_mh && mh_first_frame(state.traces; steps=mh_steps, final_T=T)
+        perception_mh && mh_first_frame(pfstate.traces; steps=mh_steps, final_T=T)
 
         # html_body("<h2>Reconstructed Images</h2>")
         # table = fill("", 3, length(state.traces))
@@ -655,7 +656,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     end
 
 
-    (_, log_normalized_weights) = Gen.normalize_weights(state.log_weights)
+    (_, log_normalized_weights) = Gen.normalize_weights(pfstate.log_weights)
     weights = exp.(log_normalized_weights)
 
     # print and render results
@@ -698,7 +699,7 @@ function particle_filter(num_particles::Int, observed_images::Array{Float64,4}, 
     # end 
 
     
-    return sample_unweighted_traces(state, num_samples)
+    return sample_unweighted_traces(pfstate, num_samples)
 end
 
 # function rejuv(trace)

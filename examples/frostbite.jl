@@ -15,21 +15,39 @@ import DynamicForwardDiff as DFD
 
 using Random
 
-function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=100, N=10, H=400, W=400)
+Base.@kwdef mutable struct Config
+    H::Int = 400
+    W::Int = 400
+    K::Int = G_PARAMS + 2
+    N::Int = 10
+    T::Int = 100
+end
 
-    # Random.seed!(1)
 
-    M = 30
+function load_config(load)
+    open(load) do f
+        dict = JSON.parse(f)
+        return Config(dict["H"], dict["W"], dict["K"], dict["N"], dict["T"])
+    end
+end
 
-    canvas = zeros(Float64, 3, H, W)
-    transmittances = zeros(Float32, H, W)
+function make_state(cfg)
+    zeros(Float64, cfg.K, cfg.N, cfg.T)
+end
 
+function make_canvas(cfg)
+    zeros(Float64, 3, cfg.H, cfg.W)
+end
 
-    html_body("<script>tMax=$T</script>")
+function make_anim(cfg)
+    zeros(Float64, 3, cfg.H, cfg.W, cfg.T)
+end
 
-    K = G_PARAMS + 2
+function make_transmittances(cfg)
+    zeros(Float32, cfg.H, cfg.W)
+end
 
-    lib = Library(K)
+function default_registers!(lib)
     add_reg(lib, :y, G_Y)
     add_reg(lib, :x, G_X)
     add_reg(lib, :scale_y, G_SCALE_Y)
@@ -43,35 +61,38 @@ function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=10
 
     add_reg(lib, :vy, G_PARAMS+1)
     add_reg(lib, :vx, G_PARAMS+2)
+    lib
+end
 
+function default_fns!(lib)
+    # x += y
     add_fn(lib, "(store (arg 1) (+ (load (arg 1)) (arg 2)))", :add_in_place)
+    # x = -x
     add_fn(lib, "(store (arg 1) (- 0. (load (arg 1))))", :neg_in_place)
-    
+
+    # y/x movement
     add_fn(lib, "(add_in_place y (arg 1))", :move_y)
     add_fn(lib, "(add_in_place x (arg 1))", :move_x)
 
-    # add_fn(lib, "(move_y -.05)", :const_vel)
-    # add_fn(lib, "(move_x (normal 0. .02))", :random_walk)
-    # add_fn(lib, "(move_y (* .1 (load x)))", :vel_prop_to_x_pos)
-    # add_fn(lib, "(move_y (* (ifelse (< (load x) .5) .05 -.05) (load x)))", :up_down)
-    # add_fn(lib, "(seq (random_walk) (up_down))", :random_walk_up_down)
-
-    add_fn(lib, "(move_y (* .05 (load vy)))", :latent_vy)
-    add_fn(lib, "(move_x (* .05 (load vx)))", :latent_vx)
-
+    # latent velocity based movement
+    add_fn(lib, "(move_y (* .5 (load vy)))", :latent_vy)
+    add_fn(lib, "(move_x (* .5 (load vx)))", :latent_vx)
     add_fn(lib, "(seq (latent_vy) (latent_vx))", :latent_vel)
 
-    # too low/high flip vx/vy
+    # basic bouncing off of walls: flipping latent velocity as needed
     add_fn(lib, "(ifelse (< (load y) 0.) (neg_in_place vy) pass)", :bounce_top)
     add_fn(lib, "(ifelse (> (load y) 1.) (neg_in_place vy) pass)", :bounce_bottom)
     add_fn(lib, "(ifelse (< (load x) 0.) (neg_in_place vx) pass)", :bounce_left)
     add_fn(lib, "(ifelse (> (load x) 1.) (neg_in_place vx) pass)", :bounce_right)
-
     add_fn(lib, "(seq (bounce_top) (seq (bounce_bottom) (seq (bounce_left) (bounce_right))))", :wall_bounces)
 
+    # constant velocity bouncing motion
     add_fn(lib, "(seq (wall_bounces) (latent_vel))", :bounce)
 
-    dsl = DSL()
+    lib
+end
+
+function default_productions!(dsl)
     func_production(dsl, :*, [:float, :float], :float, 1.)
     func_production(dsl, :load, [:addr], :float, 1.)
     func_production(dsl, :move_x, [:float], :nothing, 1.)
@@ -83,6 +104,45 @@ function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=10
     # dists
     dist_production(dsl, :const_float, :float, Gen.normal, [0.,1.], 1.)
     dist_production(dsl, :const_addr, :addr, labeled_cat, [[:vx,:vy],[.5,.5]], 2.)
+    dsl
+end
+
+
+function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=100, N=10, H=400, W=400)
+
+    # Random.seed!(1)
+
+    canvas = make_canvas(cfg)
+    transmittances = make_transmittances(cfg)
+
+    html_body("<script>tMax=$T</script>")
+
+    lib = Library(K)
+    default_registers!(lib)
+    default_fns!(lib)
+
+    dsl = DSL()
+    default_productions!(dsl)
+
+    einfo = Atari.ExecInfo(choicemap(), [], false)
+    objs = Atari.rand_gauss(1,1,cfg.K,cfg.N)
+
+    # possibly set up AD
+    if ad
+        dcfg = DFD.DiffConfig()
+        init_objs = DFD.new_dual.(Ref(dcfg), objs)
+        objs_dual_ids = reshape(collect(1:length(objs)), size(objs))
+    else
+        init_objs = objs
+    end
+
+    # add_fn(lib, "(move_y -.05)", :const_vel)
+    # add_fn(lib, "(move_x (normal 0. .02))", :random_walk)
+    # add_fn(lib, "(move_y (* .1 (load x)))", :vel_prop_to_x_pos)
+    # add_fn(lib, "(move_y (* (ifelse (< (load x) .5) .05 -.05) (load x)))", :up_down)
+    # add_fn(lib, "(seq (random_walk) (up_down))", :random_walk_up_down)
+
+
 
 
     # e = parse(SExpr,"(move_y (* (* 0.7260728987638994 (* bottom bottom)) (* 0.745933944667155 0.7080628918140206)))")
@@ -119,30 +179,11 @@ function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=10
     # html_body("<br><code> $name: $e </code><br>")
 
     # observations[x_or_y, obj_id, t]
-    states = zeros(Float64, K, N, T)
 
-    # read it back to make sure it worked and demonstrate reading
-    if load !== nothing
-        open(load) do f
-            dict = JSON.parse(f)
-            @assert T == dict["T"]
-            @assert N == dict["N"]
-            @assert K == dict["K"]
-            states .= reshape(dict["states"], K, N, T)
-        end
-    end
-
-    einfo = Atari.ExecInfo(choicemap(), [], false)
-    objs = Atari.rand_gauss(1,1,K,N)
+   
     # consts = Float32[]
 
-    if ad
-        dcfg = DFD.DiffConfig()
-        init_objs = DFD.new_dual.(Ref(dcfg), objs)
-        objs_dual_ids = reshape(collect(1:length(objs)), size(objs))
-    else
-        init_objs = objs
-    end
+
     # consts = DFD.new_dual.(Ref(dcfg), consts)
 
 
@@ -155,16 +196,12 @@ function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=10
             name = Symbol("candidate_$j")
             add_fn(lib, e, name)
             html_body("<br><code> $name: $e </code><br>")
-            # objs = Float32[0.4; 0.4; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.;;
-            #             0.6; 0.6; 0.02; 0.02; 0.6; -0.7; 1.0; 0.8; 0.; 0.; 0.; 0.]
             func = name
         else
             func = :bounce
         end
 
         state = State(objs, [lib.abbreviations[func] for _ in 1:N])
-
-
 
         # for i in eachindex(objs)
         #     @show (i,objs[i].partials)
@@ -181,8 +218,10 @@ function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=10
 
         # @show typeof(obj_partials)
 
-        anim = zeros(Float64, 3, H, W, T)
-        target_anim = zeros(Float64, 3, H, W, T)
+        anim = make_anim(cfg)
+        target_anim = make_anim(cfg)
+
+        loss = 0.
 
         for t in 1:T
             t % 10 == 0 && @show t
@@ -206,17 +245,26 @@ function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=10
             if save !== nothing
                 states[:,:,t] .= objs
             end
+
+            loss += sum(abs.(objs[get_register(lib,:x),:] .- states[get_register(lib,:x),:,t]))
+            loss += sum(abs.(objs[get_register(lib,:y),:] .- states[get_register(lib,:y),:,t]))
         end
 
 
         if ad
-            lr = .1
-            for i in objs_dual_ids[get_register(lib,:x),:]
-                for (j, di) in pairs(DFD.partials(objs[i]))
-                    # todo filter out ones we dont want derivs for
-                    init_objs[j] = DFD.Dual(DFD.value(init_objs[j]) + lr * di, DFD.partials(init_objs[j]))
-                end
+            lr = .0001
+
+            for (j, di) in pairs(DFD.partials(loss))
+                # todo filter out ones we dont want derivs for
+                init_objs[j] = DFD.Dual(DFD.value(init_objs[j]) + lr * di, DFD.partials(init_objs[j]))
             end
+
+            # for i in objs_dual_ids[get_register(lib,:x),:]
+            #     for (j, di) in pairs(DFD.partials(objs[i]))
+            #         # todo filter out ones we dont want derivs for
+            #         init_objs[j] = DFD.Dual(DFD.value(init_objs[j]) + lr * di, DFD.partials(init_objs[j]))
+            #     end
+            # end
         end
 
         # html_body(html_img(canvas, width="400px"))
@@ -229,7 +277,7 @@ function redux(;save=nothing,load=nothing, ad=false, iters=1, sample=false, T=10
     # write to json
     if save !== nothing
         open(save, "w") do f
-            dict = Dict("T" => T, "N" => N, "K" => K, "states" => reshape(states,:))
+            dict = Dict("T" => cfg.T, "N" => cfg.N, "K" => cfg.K, "states" => reshape(states,:))
             JSON.print(f, dict, 4)
         end
     end

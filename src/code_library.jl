@@ -322,10 +322,10 @@ mutable struct Env #stuff that doesn't change accross time
     #state::State
     step_of_obj::Vector{Int} # which step function for each object
     sprites::Vector{Sprite}
-    code_library::Vector{CFunc}
+    code_library::Library
     exec::ExecInfo
 end
-new_env() = Env([], Int[], Sprite[], CFunc[], ExecInfo(choicemap(), Symbol[], false))
+new_env() = Env([], Int[], Sprite[], Library(10), ExecInfo(choicemap(), Symbol[], false))
 
 
 mutable struct Library
@@ -402,8 +402,9 @@ end
 end
 
 # TODO next: pass Env into obj_dynamics so can do state.step_of_objs
-@gen function obj_dynamics(obj_id, state, code_library, einfo, with_constraints)
-    fn = state.step_of_obj[obj_id]
+@gen function obj_dynamics(obj_id, env, state, with_constraints)
+    fn = env.step_of_obj[obj_id]
+    einfo = env.exec
     args = []
     # args = Any[state.objs[obj_id]]
 
@@ -413,7 +414,7 @@ end
 
     # if fn.runs
     # try
-    step ~ call_func(fn, args, obj_id, state, code_library, einfo)
+    step ~ call_func(fn, args, obj_id, state, env.code_library, einfo)
     # catch e
     # fn.runs = false
     # end 

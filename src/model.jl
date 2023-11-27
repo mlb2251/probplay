@@ -440,41 +440,50 @@ sample_cfuncs = Map(sample_cfunc)
     #     end
     # end 
 
-    cfuncs ~ sample_cfuncs(collect(1:length(state.objs)))
+    # cfuncs ~ sample_cfuncs(collect(1:length(state.objs)))
 
 
-    env.code_library = cfuncs 
-    env.code_library = [
-        # cfuncs[1],
-        # cfuncs[2],
-        # cfuncs[3],
-        # cfuncs[4],
+    # env.code_library = cfuncs 
+    # env.code_library = [
+    #     # cfuncs[1],
+    #     # cfuncs[2],
+    #     # cfuncs[3],
+    #     # cfuncs[4],
 
-        # move with local latent velocity
-        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
+    #     # move with local latent velocity
+    #     # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (normal_vec (get_attr (get_local 1) pos) 0.3) (get_attr (get_local 1) 1)))")),
 
-        # random walk
-        ####CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
-        # stationary
-        # CFunc(parse(SExpr,"(pass)")),
-        # move const vel down right
-        CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))"), true)
-        for i in 1:length(state.objs)
-        # move const vel down
-        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
+    #     # random walk
+    #     ####CFunc(parse(SExpr,"(set_attr (get_local 1) pos (normal_vec (get_attr (get_local 1) pos) 1.0))")),
+    #     # stationary
+    #     # CFunc(parse(SExpr,"(pass)")),
+    #     # move const vel down right
+    #     CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0.5 0.5)))"), true)
+    #     for i in 1:length(state.objs)
+    #     # move const vel down
+    #     # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec -2 0)))")),
 
-        # #a little left
-        # ##CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -0.5)))")),
-        # #perfect left 
-        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -2.3)))")),
-        #  #move const vel right a little for frostbite
-        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 5)))")),
+    #     # #a little left
+    #     # ##CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -0.5)))")),
+    #     # #perfect left 
+    #     # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 -2.3)))")),
+    #     #  #move const vel right a little for frostbite
+    #     # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 5)))")),
         
 
-        #goal get one const velocity func where velocity is a learned latent var pretty lit
-        #add a list of attributes it needs
-        # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
-    ]
+    #     #goal get one const velocity func where velocity is a learned latent var pretty lit
+    #     #add a list of attributes it needs
+    #     # CFunc(parse(SExpr,"(set_attr (get_local 1) pos (+ (get_attr (get_local 1) pos) (vec 0 (get_attr (get_local 1) 1))))")),#velocity attribute is first
+    # ]
+
+    lib = env.library
+    add_fn(lib, "(store (arg 1) (+ (load (arg 1)) (arg 2)))", :add_in_place)
+    add_fn(lib, "(store (arg 1) (- 0. (load (arg 1))))", :neg_in_place)
+    
+    add_fn(lib, "(add_in_place y (arg 1))", :move_y)
+    add_fn(lib, "(add_in_place x (arg 1))", :move_x)
+
+    add_fn(lib, "(move_y -.05)", :const_vel)
 
     #env.code_lib_reqs = [[], [1]] #addr 1 needed for the velocity code version 
 

@@ -317,6 +317,17 @@ mutable struct ExecInfo
     has_constraints::Bool
 end
 
+mutable struct Library
+    fns::Vector{CFunc}
+    abbreviations::Dict{Symbol,Int}
+
+    register_of_name::Dict{Symbol,Int}
+    name_of_register::Vector{Symbol}
+    register_aliases::Dict{Symbol,Int}
+
+    Library(num_registers) = new(Vector{CFunc}(), Dict{Symbol,Int}(), Dict{Symbol,Int}(), [Symbol("&$i") for i in 1:num_registers], Dict{Symbol,Int}())
+end
+
 mutable struct Env #stuff that doesn't change accross time
     locals::Vector{Any}
     #state::State
@@ -328,16 +339,7 @@ end
 new_env() = Env([], Int[], Sprite[], Library(10), ExecInfo(choicemap(), Symbol[], false))
 
 
-mutable struct Library
-    fns::Vector{CFunc}
-    abbreviations::Dict{Symbol,Int}
 
-    register_of_name::Dict{Symbol,Int}
-    name_of_register::Vector{Symbol}
-    register_aliases::Dict{Symbol,Int}
-
-    Library(num_registers) = new(Vector{CFunc}(), Dict{Symbol,Int}(), Dict{Symbol,Int}(), [Symbol("&$i") for i in 1:num_registers], Dict{Symbol,Int}())
-end
 
 function add_fn(lib::Library, func::CFunc, name=nothing)
     push!(lib.fns, func)
